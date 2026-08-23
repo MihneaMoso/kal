@@ -1,0 +1,13 @@
+[application]
+# Chrono — local-first calendar
+default_platform = "desktop"
+
+[app]
+name = "chrono"
+title = "Chrono"
+
+[web.app]
+title = "Chrono"
+
+[desktop]
+# Window defaults for the desktop shell

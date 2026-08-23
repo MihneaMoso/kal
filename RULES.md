@@ -62,7 +62,25 @@ bite you again if ignored, plus the exact state to resume from.
   event/task/birthday editor modal (create/edit/delete), task checkboxes,
   calendar visibility toggles, light/dark theme, single shared
   items/calendars resources via context.
-- ✅ Phase 3 COMPLETE: `rrule` crate (v0.14) in chrono-core;
+- ✅ **Dioxus upgraded to 0.7.10** (app + `dx` CLI match); `cd app && dx serve`
+  works (builds in ~50s cold, launches desktop window). Dioxus.toml added.
+  Code needed NO changes for the 0.6→0.7 jump — all APIs used still exist
+  (`use_context_provider`, `use_resource().value()`, `Signal::new`,
+  `e.stop_propagation()`, `dangerous_inner_html`).
+- ✅ Phase 4a/4b COMPLETE: `chrono-core::reminders::compute_firings(items,
+  from, horizon)` (+tests) and `chrono-notify` crate: `Notifier` trait,
+  NullNotifier, DesktopNotifier (notify-rust, feature "desktop"),
+  ThreadScheduler implementing ReminderScheduler { reschedule/clear/
+  pending_count } with cancel-flag threads (+tests with CollectingNotifier).
+- ▶ NEXT: Phase 4c — wire into app:
+  1. Editor modal: reminder preset chips (10m/30m/1h/1d/1w/custom minutes)
+     stored via EditorState → Vec<Reminder> on item; save maps minutes to
+     Reminder::minutes_before.
+  2. App startup/use_effect on items change: compute_firings(all visible
+     items, now, horizon=14d) → ThreadScheduler.reschedule. Provide scheduler
+     as context from App (Arc<ThreadScheduler<DesktopNotifier>>).
+  3. Notification tap deep-linking deferred to mobile phase.
+- THEN Phase 5 (.ics import/export), etc. `rrule` crate (v0.14) in chrono-core;
   `viewmodel::expand_occurrences` / `occurrences_by_date` (rrule + exdate
   aware) + tests; views render recurring instances; editor has Repeat selector
   (none/daily/weekly/monthly/yearly); per-instance edit scoping implemented in

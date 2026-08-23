@@ -4,7 +4,7 @@
 //! the platform scheduler should materialize. The platform layer
 //! (`chrono-notify`) turns these into OS-native local notifications.
 
-use chrono::{DateTime, NaiveDate};
+use chrono::NaiveDate;
 
 use crate::models::{CalendarItem, ItemKind, Occurrence};
 use crate::viewmodel::expand_occurrences;
@@ -80,7 +80,7 @@ mod tests {
     use crate::models::{
         datetime_from_parts, Calendar, ItemKind, Reminder, ReminderOffset,
     };
-    use chrono::{FixedOffset, TimeZone, Timelike};
+    use chrono::{DateTime, FixedOffset, Timelike};
 
     fn cal() -> Calendar {
         Calendar::local("Test", crate::models::Color("#3366cc".into()))

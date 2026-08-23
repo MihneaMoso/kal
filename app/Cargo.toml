@@ -12,7 +12,7 @@ path = "src/main.rs"
 [dependencies]
 chrono-core = { path = "../crates/chrono-core" }
 chrono-storage = { path = "../crates/chrono-storage" }
-dioxus = { version = "0.6", features = ["desktop"] }
+dioxus = { version = "0.7", features = ["desktop"] }
 tokio = { workspace = true }
 chrono = { workspace = true }
 ulid = { workspace = true }
