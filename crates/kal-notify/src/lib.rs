@@ -1,4 +1,4 @@
-//! Cross-platform reminder scheduling for Chrono (spec §5.3).
+//! Cross-platform reminder scheduling for Kal (spec §5.3).
 //!
 //! Reminders are computed locally from the calendar database and materialized
 //! as platform-native local notifications — no push server, no network.
@@ -15,7 +15,7 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
 
-use chrono_core::reminders::ReminderFiring;
+use kal_core::reminders::ReminderFiring;
 
 /// Platform notification backend.
 pub trait Notifier: Send + Sync + 'static {
@@ -41,7 +41,7 @@ impl Notifier for DesktopNotifier {
         let _ = notify_rust::Notification::new()
             .summary(title)
             .body(body)
-            .appname("Chrono")
+            .appname("Kal")
             .show();
     }
 }
@@ -94,7 +94,7 @@ impl<N: Notifier> ReminderScheduler for ThreadScheduler<N> {
             let cancelled = cancel.clone();
             let notifier = self.notifier.clone();
             let fire_at_utc = firing.fire_at.with_timezone(&chrono::Utc);
-            let title = format!("Chrono — {}", firing.title);
+            let title = format!("Kal — {}", firing.title);
             let body = firing.title.clone();
             let now_fn = &self.now;
 
@@ -199,14 +199,14 @@ mod tests {
 
         let soon = Utc::now() + chrono::Duration::milliseconds(120);
         let later = Utc::now() + chrono::Duration::seconds(60);
-        sched.reschedule(&[firing("a", later)]);
-        sched.reschedule(&[firing("b", soon)]);
+        sched.reschedule(&[firing("stale-one", later)]);
+        sched.reschedule(&[firing("fresh-two", soon)]);
 
         thread::sleep(Duration::from_millis(500));
         let titles = shown.lock().unwrap();
         assert_eq!(titles.len(), 1);
-        assert!(titles[0].contains("b"));
-        assert!(!titles.iter().any(|t| t.contains("a")));
+        assert!(titles[0].contains("fresh-two"));
+        assert!(!titles.iter().any(|t| t.contains("stale-one")));
     }
 
     fn firing(name: &str, at: DateTime<Utc>) -> ReminderFiring {

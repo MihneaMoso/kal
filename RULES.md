@@ -1,11 +1,17 @@
 # RULES.md — Environment Quirks & Continuation Guide
 
+> NOTE: The app was RENAMED from "Chrono" to "Kal" (user request). Crate names
+> are kal-core/kal-storage/kal-sync/kal-notify/kal-import/kal-ffi, binary is
+> `kal`, package `kal-app`. ICS extension headers are X-KAL-*. Docs may still
+> say Chrono in historical entries. Old DB dir ~/.local/share/Kal is orphaned;
+> new DB lives in ~/.local/share/kal/calendar.db.
+
 Read this FIRST when resuming work. It contains hard-won discoveries that will
 bite you again if ignored, plus the exact state to resume from.
 
 ## Hard-won toolchain facts (do not relearn these)
 
-1. **chrono 0.4.42+**: `TimeZone::with_ymd_and_hms` returns `MappedLocalTime`,
+1. **Kal 0.4.42+**: `TimeZone::with_ymd_and_hms` returns `MappedLocalTime`,
    whose method is `.single()` — NOT `into_option()` (removed). Also
    `LocalResult` is deprecated/renamed; don't import it.
 2. **serde**: internally-tagged enums (`#[serde(tag = "type")]`) CANNOT
@@ -14,7 +20,7 @@ bite you again if ignored, plus the exact state to resume from.
    variants (`MinutesBefore { minutes: i64 }`).
 3. **rusqlite `query_map`** row-mapping functions must return
    `rusqlite::Result<T>`, not a custom error type. Pattern used in
-   chrono-storage: internal helpers return `StorageError`, converted via a
+   kal-storage: internal helpers return `StorageError`, converted via a
    blanket `impl From<StorageError> for rusqlite::Error`
    (`Error::ToSqlConversionFailure`). And collect with
    `rows.collect::<rusqlite::Result<Vec<_>>>()?` then wrap in `Ok(...)` —
@@ -43,9 +49,9 @@ bite you again if ignored, plus the exact state to resume from.
 
 ## Project conventions
 
-- Workspace crates under `crates/`, app in `app/`. `chrono-core` must stay UI-free.
+- Workspace crates under `crates/`, app in `app/`. `kal-core` must stay UI-free.
 - Migrations: append-only array `MIGRATIONS` in
-  `crates/chrono-storage/src/lib.rs`; NEVER edit applied migrations.
+  `crates/kal-storage/src/lib.rs`; NEVER edit applied migrations.
 - All item/calendar writes go through `upsert_*` (sync-ready full-row replace).
 - Deletes are soft (tombstones): never `DELETE FROM items`.
 - Tests live in `crates/*/tests/*.rs` + inline `#[cfg(test)]`. Run:
@@ -54,10 +60,10 @@ bite you again if ignored, plus the exact state to resume from.
 
 ## Where we left off / resume plan
 
-- ✅ Phase 1 COMPLETE: workspace scaffolded; chrono-core models +
-  chrono-storage (migrations, repository) tested; Dioxus desktop shell builds &
-  runs (`cargo run -p chrono-app`); 15 tests green.
-- ✅ Phase 2 COMPLETE: chrono-core `viewmodel` module (month_grid,
+- ✅ Phase 1 COMPLETE: workspace scaffolded; kal-core models +
+  kal-storage (migrations, repository) tested; Dioxus desktop shell builds &
+  runs (`cargo run -p kal-app`); 15 tests green.
+- ✅ Phase 2 COMPLETE: kal-core `viewmodel` module (month_grid,
   items_on_date, agenda_range) + tests; app has month/week/day/agenda views,
   event/task/birthday editor modal (create/edit/delete), task checkboxes,
   calendar visibility toggles, light/dark theme, single shared
@@ -67,8 +73,8 @@ bite you again if ignored, plus the exact state to resume from.
   Code needed NO changes for the 0.6→0.7 jump — all APIs used still exist
   (`use_context_provider`, `use_resource().value()`, `Signal::new`,
   `e.stop_propagation()`, `dangerous_inner_html`).
-- ✅ Phase 4a/4b COMPLETE: `chrono-core::reminders::compute_firings(items,
-  from, horizon)` (+tests) and `chrono-notify` crate: `Notifier` trait,
+- ✅ Phase 4a/4b COMPLETE: `kal-core::reminders::compute_firings(items,
+  from, horizon)` (+tests) and `kal-notify` crate: `Notifier` trait,
   NullNotifier, DesktopNotifier (notify-rust, feature "desktop"),
   ThreadScheduler implementing ReminderScheduler { reschedule/clear/
   pending_count } with cancel-flag threads (+tests with CollectingNotifier).
@@ -76,29 +82,29 @@ bite you again if ignored, plus the exact state to resume from.
   custom minutes field; App provides `SchedulerHandle` context; a use_effect
   reconciles `compute_firings(items, now, 14d)` → `ThreadScheduler.reschedule`
   whenever the items resource length changes.
-- ✅ Phase 5a/5b COMPLETE: chrono-import implements export_calendar/
+- ✅ Phase 5a/5b COMPLETE: kal-import implements export_calendar/
   export_all/import_ics with VALARM reminders, RRULE/EXDATE, VTODO tasks,
   birthday CATEGORIES/X-CHRONO extensions; 5 round-trip tests incl. a
   Google-shaped TZID payload. App sidebar has Import .ics / Export all buttons
-  via rfd file dialogs. `icalendar` v0.17 with "chrono-tz" feature enabled.
-- ✅ Phase 5c COMPLETE: chrono-import::google — wire types with camelCase serde
+  via rfd file dialogs. `icalendar` v0.17 with "Kal-tz" feature enabled.
+- ✅ Phase 5c COMPLETE: kal-import::google — wire types with camelCase serde
   renames, map_event/map_calendars into GoogleImport calendars, deterministic
   ULIDs from google ids (FNV-1a), events_url/start_device_flow/
   poll_device_token behind `Transport` trait (UreqTransport under feature
   "google"); 4 offline tests. NOTE: raw strings containing `"#` need r##"..."##.
 - ▶ NEXT: Phase 6 — mobile targets (Android/iOS via dioxus-mobile / xtask),
-  birthdays module polish, then Phase 7 widgets (chrono-ffi C ABI).
+  birthdays module polish, then Phase 7 widgets (kal-ffi C ABI).
   Context budget: consider committing + summarizing RULES.md before starting
-  each new phase. `rrule` crate (v0.14) in chrono-core;
+  each new phase. `rrule` crate (v0.14) in kal-core;
   `viewmodel::expand_occurrences` / `occurrences_by_date` (rrule + exdate
   aware) + tests; views render recurring instances; editor has Repeat selector
   (none/daily/weekly/monthly/yearly); per-instance edit scoping implemented in
   `app/src/ui.rs::db_apply_scoped_edit` (This-only → EXDATE+new single item,
   …and-following → UNTIL-truncate + new series, All-events → edit base).
 - ▶ NEXT: Phase 4 — reminders & notifications:
-  1. Implement `crates/chrono-notify`: trait abstraction over platform
+  1. Implement `crates/kal-notify`: trait abstraction over platform
      notification scheduling; desktop impl via `notify-rust`; a pure
-     `compute_next_firings(items, from, n)` helper lives in chrono-core or
+     `compute_next_firings(items, from, n)` helper lives in kal-core or
      notify crate.
   2. App: on startup/foreground + after mutations, schedule next N firings of
      all visible items' reminders; notification click deep-links (desktop:
@@ -111,5 +117,5 @@ bite you again if ignored, plus the exact state to resume from.
 
 - `cargo test --workspace` green
 - `cargo build --workspace` warning-free (fix or justify warnings)
-- Desktop app still launches: `timeout 8 ./target/debug/chrono; echo $?`
+- Desktop app still launches: `timeout 8 ./target/debug/Kal; echo $?`
 - Update DECISIONS.md with any judgment calls made during the phase

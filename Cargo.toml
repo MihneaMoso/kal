@@ -1,12 +1,12 @@
 [workspace]
 resolver = "2"
 members = [
-    "crates/chrono-core",
-    "crates/chrono-storage",
-    "crates/chrono-sync",
-    "crates/chrono-notify",
-    "crates/chrono-import",
-    "crates/chrono-ffi",
+    "crates/kal-core",
+    "crates/kal-storage",
+    "crates/kal-sync",
+    "crates/kal-notify",
+    "crates/kal-import",
+    "crates/kal-ffi",
     "app",
 ]
 

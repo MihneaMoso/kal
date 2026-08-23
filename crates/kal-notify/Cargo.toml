@@ -1,9 +1,9 @@
 [package]
-name = "chrono-notify"
+name = "kal-notify"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
-description = "Cross-platform reminder scheduling and local notifications for Chrono."
+description = "Cross-platform reminder scheduling and local notifications for Kal."
 
 [features]
 default = []
@@ -12,6 +12,6 @@ desktop = ["dep:notify-rust"]
 
 [dependencies]
 ulid = { workspace = true }
-chrono-core = { path = "../chrono-core" }
+kal-core = { path = "../kal-core" }
 chrono = { workspace = true }
 notify-rust = { version = "4", optional = true }

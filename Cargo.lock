@@ -544,79 +544,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "chrono-app"
-version = "0.1.0"
-dependencies = [
- "chrono",
- "chrono-core",
- "chrono-import",
- "chrono-notify",
- "chrono-storage",
- "dioxus",
- "dirs-next",
- "rfd 0.15.4",
- "tokio",
- "ulid",
-]
-
-[[package]]
-name = "chrono-core"
-version = "0.1.0"
-dependencies = [
- "chrono",
- "rrule",
- "serde",
- "serde_json",
- "thiserror 2.0.20",
- "ulid",
-]
-
-[[package]]
-name = "chrono-ffi"
-version = "0.1.0"
-
-[[package]]
-name = "chrono-import"
-version = "0.1.0"
-dependencies = [
- "chrono",
- "chrono-core",
- "icalendar",
- "serde",
- "serde_json",
- "thiserror 2.0.20",
- "ulid",
- "ureq",
-]
-
-[[package]]
-name = "chrono-notify"
-version = "0.1.0"
-dependencies = [
- "chrono",
- "chrono-core",
- "notify-rust",
- "ulid",
-]
-
-[[package]]
-name = "chrono-storage"
-version = "0.1.0"
-dependencies = [
- "chrono",
- "chrono-core",
- "rusqlite",
- "serde_json",
- "tempfile",
- "thiserror 2.0.20",
- "ulid",
-]
-
-[[package]]
-name = "chrono-sync"
-version = "0.1.0"
-
-[[package]]
 name = "chrono-tz"
 version = "0.10.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2657,6 +2584,79 @@ dependencies = [
  "futures-util",
  "wasm-bindgen",
 ]
+
+[[package]]
+name = "kal-app"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "dioxus",
+ "dirs-next",
+ "kal-core",
+ "kal-import",
+ "kal-notify",
+ "kal-storage",
+ "rfd 0.15.4",
+ "tokio",
+ "ulid",
+]
+
+[[package]]
+name = "kal-core"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "rrule",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.20",
+ "ulid",
+]
+
+[[package]]
+name = "kal-ffi"
+version = "0.1.0"
+
+[[package]]
+name = "kal-import"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "icalendar",
+ "kal-core",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.20",
+ "ulid",
+ "ureq",
+]
+
+[[package]]
+name = "kal-notify"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "kal-core",
+ "notify-rust",
+ "ulid",
+]
+
+[[package]]
+name = "kal-storage"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "kal-core",
+ "rusqlite",
+ "serde_json",
+ "tempfile",
+ "thiserror 2.0.20",
+ "ulid",
+]
+
+[[package]]
+name = "kal-sync"
+version = "0.1.0"
 
 [[package]]
 name = "keyboard-types"

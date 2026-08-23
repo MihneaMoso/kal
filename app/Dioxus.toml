@@ -1,13 +1,13 @@
 [application]
-# Chrono — local-first calendar
+# Kal — local-first calendar
 default_platform = "desktop"
 
 [app]
-name = "chrono"
-title = "Chrono"
+name = "kal"
+title = "Kal"
 
 [web.app]
-title = "Chrono"
+title = "Kal"
 
 [desktop]
 # Window defaults for the desktop shell

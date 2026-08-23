@@ -2,7 +2,7 @@
 //!
 //! Pure logic: given items and a time window, produce the reminder firings
 //! the platform scheduler should materialize. The platform layer
-//! (`chrono-notify`) turns these into OS-native local notifications.
+//! (`kal-notify`) turns these into OS-native local notifications.
 
 use chrono::NaiveDate;
 

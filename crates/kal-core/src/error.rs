@@ -1,4 +1,4 @@
-//! Domain error type for chrono-core.
+//! Domain error type for kal-core.
 
 use thiserror::Error;
 

@@ -1,15 +1,15 @@
 use std::str::FromStr;
 
-use chrono_import::{export_all, export_calendar, import_ics};
+use kal_import::{export_all, export_calendar, import_ics};
 use icalendar::Calendar as IcsCalendar;
 use ulid::Ulid;
 
-use chrono_core::models::{
+use kal_core::models::{
     datetime_from_parts, Calendar, CalendarItem, CalendarSource, Color, ItemKind,
     ItemMetadata, NotifyMethod, Reminder, ReminderOffset,
 };
 
-fn ts(y: i32, m: u32, d: u32, h: u32) -> chrono_core::models::DateTimeTz {
+fn ts(y: i32, m: u32, d: u32, h: u32) -> kal_core::models::DateTimeTz {
     datetime_from_parts(y, m, d, h, 30, 0).unwrap()
 }
 
@@ -188,7 +188,7 @@ END:VCALENDAR\r\n";
     // UID is not a ULID → a fresh one was minted.
     assert_ne!(it.id.to_string(), "abc123@google.com");
     // Recurrence expands against the imported rule.
-    let occs = chrono_core::viewmodel::expand_occurrences(
+    let occs = kal_core::viewmodel::expand_occurrences(
         it,
         chrono::NaiveDate::from_ymd_opt(2026, 9, 1).unwrap(),
         chrono::NaiveDate::from_ymd_opt(2026, 10, 1).unwrap(),

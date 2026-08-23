@@ -1,16 +1,16 @@
 [package]
-name = "chrono-import"
+name = "kal-import"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
-description = "Chrono chrono-import crate (stub — implemented in later phases)."
+description = "Kal kal-import crate (stub — implemented in later phases)."
 
 [features]
 default = []
 google = ["dep:ureq"]
 
 [dependencies]
-chrono-core = { path = "../chrono-core" }
+kal-core = { path = "../kal-core" }
 chrono = { workspace = true }
 ulid = { workspace = true }
 thiserror = { workspace = true }

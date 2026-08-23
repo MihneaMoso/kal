@@ -2,12 +2,12 @@
 //!
 //! The HTTP transport is abstracted (`Transport`) so all parsing/mapping is
 //! unit-testable without network. Tokens are held in memory / local config
-//! only — Chrono runs no backend, nothing else ever receives them.
+//! only — Kal runs no backend, nothing else ever receives them.
 
 use chrono::{DateTime, NaiveDate, NaiveTime, TimeZone as _};
 use serde::Deserialize;
 
-use chrono_core::models::{
+use kal_core::models::{
     Calendar, CalendarItem, CalendarSource, Color, DateTimeTz, ItemKind,
 };
 
@@ -20,7 +20,7 @@ pub const GOOGLE_DEVICE_CODE_URL: &str = "https://oauth2.googleapis.com/device/c
 pub const GOOGLE_SCOPE: &str = "https://www.googleapis.com/auth/calendar.readonly";
 
 // ---------------------------------------------------------------------------
-// Wire types (subset used by Chrono)
+// Wire types (subset used by Kal)
 // ---------------------------------------------------------------------------
 
 #[derive(Debug, Deserialize)]
@@ -117,7 +117,7 @@ fn ulid_from_google_id(google_id: &str) -> ulid::Ulid {
     })
 }
 
-/// Map one Google event onto a Chrono item destined for `calendar_id`.
+/// Map one Google event onto a Kal item destined for `calendar_id`.
 pub fn map_event(event: &GoogleEvent, calendar_id: ulid::Ulid) -> Option<CalendarItem> {
     if event.is_cancelled() {
         return None;
@@ -139,7 +139,7 @@ pub fn map_event(event: &GoogleEvent, calendar_id: ulid::Ulid) -> Option<Calenda
     Some(item)
 }
 
-/// Map a calendar-list response into Chrono calendars tagged `GoogleImport`.
+/// Map a calendar-list response into Kal calendars tagged `GoogleImport`.
 pub fn map_calendars(list: &[GoogleCalendar]) -> Vec<Calendar> {
     list.iter()
         .map(|g| Calendar {

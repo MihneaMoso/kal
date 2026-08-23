@@ -1,4 +1,4 @@
-# Chrono
+# Kal
 
 Free, open-source, local-first calendar for desktop & mobile. Events, tasks and
 birthdays; full RFC 5545 recurrence; unlimited local reminders; `.ics`
@@ -11,18 +11,18 @@ See `RULES.md` for exact resume state and `DECISIONS.md` for design choices.
 
 | Crate | Purpose |
 |---|---|
-| `crates/chrono-core` | Pure domain models & logic (no UI deps) |
-| `crates/chrono-storage` | SQLite schema, migrations, repository |
-| `crates/chrono-sync` | P2P sync chain (phase 8) |
-| `crates/chrono-notify` | Reminder scheduling (phase 4) |
-| `crates/chrono-import` | ICS + Google import (phase 5) |
-| `crates/chrono-ffi` | C ABI for native widget shims (phase 7) |
+| `crates/kal-core` | Pure domain models & logic (no UI deps) |
+| `crates/kal-storage` | SQLite schema, migrations, repository |
+| `crates/kal-sync` | P2P sync chain (phase 8) |
+| `crates/kal-notify` | Reminder scheduling (phase 4) |
+| `crates/kal-import` | ICS + Google import (phase 5) |
+| `crates/kal-ffi` | C ABI for native widget shims (phase 7) |
 | `app` | Dioxus 0.6 application |
 
 ## Build & run (desktop)
 
 ```sh
-cargo run -p chrono-app        # Dioxus desktop shell
+cargo run -p kal-app        # Dioxus desktop shell
 cargo test --workspace         # test suite
 ```
 
@@ -37,7 +37,7 @@ Linux desktop builds need GTK/webkit dev packages (`libgtk-3-dev`,
 4. Reminders & notifications
 5. .ics import/export, Google Calendar import
 6. Mobile targets (Android/iOS)
-7. Widgets via chrono-ffi
+7. Widgets via kal-ffi
 8. P2P sync (CRDT + sync chain)
 9. Polish (theming, a11y, i18n)
 10. Release engineering & packaging

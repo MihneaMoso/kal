@@ -1,19 +1,19 @@
 [package]
-name = "chrono-app"
+name = "kal-app"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
-description = "Dioxus application shell for Chrono."
+description = "Dioxus application shell for Kal."
 
 [[bin]]
-name = "chrono"
+name = "kal"
 path = "src/main.rs"
 
 [dependencies]
-chrono-core = { path = "../crates/chrono-core" }
-chrono-storage = { path = "../crates/chrono-storage" }
-chrono-notify = { path = "../crates/chrono-notify", features = ["desktop"] }
-chrono-import = { path = "../crates/chrono-import" }
+kal-core = { path = "../crates/kal-core" }
+kal-storage = { path = "../crates/kal-storage" }
+kal-notify = { path = "../crates/kal-notify", features = ["desktop"] }
+kal-import = { path = "../crates/kal-import" }
 dioxus = { version = "0.7", features = ["desktop"] }
 tokio = { workspace = true }
 chrono = { workspace = true }

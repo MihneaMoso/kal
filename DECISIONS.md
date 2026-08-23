@@ -1,6 +1,6 @@
 # Decision Log
 
-Judgment calls made while implementing ambiguous parts of the Chrono spec.
+Judgment calls made while implementing ambiguous parts of the Kal spec.
 Newest decisions may reference later phases; each entry notes the phase.
 
 ## Phase 1 — Foundation
@@ -15,7 +15,7 @@ Newest decisions may reference later phases; each entry notes the phase.
 | D6 | **`Color` is a validated `#RRGGBB` string** | Full-palette custom colors required by §5.7; avoids pulling a palette crate into core. |
 | D7 | **Birthday contact link is free-form `metadata.birthday_of: Option<String>`** | Contacts/vCard module arrives in phase 6; a loose ID avoids coupling core to a contact model now. |
 | D8 | **Migrations tracked via `PRAGMA user_version` with an ordered const array** | Zero-dep, adequate for single-file DBs; append-only rule documented in RULES.md. |
-| D9 | **Desktop data dir via `dirs-next` → `<data>/chrono/calendar.db`** | Standard per-platform location; falls back to in-memory DB when no data dir exists (e.g. sandboxes/CI). |
+| D9 | **Desktop data dir via `dirs-next` → `<data>/Kal/calendar.db`** | Standard per-platform location; falls back to in-memory DB when no data dir exists (e.g. sandboxes/CI). |
 | D10 | **Default calendars auto-created on first launch**: "Personal" (Local) + "Birthdays" (source=Birthdays) per §4. | Matches spec's dedicated auto-created birthdays calendar. |
 | D11 | **Dioxus 0.6 entry point uses `dioxus::launch(App)`** | 0.6 idiom replacing `dioxus_desktop::launch`. |
 
@@ -24,7 +24,7 @@ Newest decisions may reference later phases; each entry notes the phase.
 | # | Decision | Rationale |
 |---|----------|-----------|
 | D12 | **`rrule` crate v0.14** | Pure Rust, actively maintained, full RFC 5545 RRULE incl. validation. |
-| D13 | **rrule works in its own `Tz` enum** (Local | chrono-tz), not arbitrary TimeZone — we convert DateTime<FixedOffset> ↔ rrule::Tz via UTC at the boundary (`viewmodel::expand_occurrences`). | API constraint discovered by reading crate source. |
+| D13 | **rrule works in its own `Tz` enum** (Local | Kal-tz), not arbitrary TimeZone — we convert DateTime<FixedOffset> ↔ rrule::Tz via UTC at the boundary (`viewmodel::expand_occurrences`). | API constraint discovered by reading crate source. |
 | D14 | **Editor exposes simplified repeat presets** (none/daily/weekly/monthly/yearly), not full RRULE editing | Simplest option preserving architecture; full BYDAY/interval editing deferred. Presets expand to plain `FREQ=…`. |
 | D15 | **"This event only"** = EXDATE original occurrence on base + new standalone item; **"…and following"** = append `UNTIL` (occurrence −1min) to base + new series from edited occurrence; COUNT-based rules are left untouched for "and following" (falls back to base edit semantics). | Matches Google Calendar scope UX; documented limitation for COUNT rules. |
 | D16 | **Multi-day non-recurring events render one occurrence per covered day.** | Keeps month-grid cells self-contained without cross-cell span logic yet. |
@@ -34,7 +34,7 @@ Newest decisions may reference later phases; each entry notes the phase.
 
 | # | Decision | Rationale |
 |---|----------|-----------|
-| D18 | **Firing computation in chrono-core** (`reminders::compute_firings`), platform scheduling in chrono-notify | Keeps logic headless-testable & reusable by widget FFI; notify crate stays thin. |
+| D18 | **Firing computation in kal-core** (`reminders::compute_firings`), platform scheduling in kal-notify | Keeps logic headless-testable & reusable by widget FFI; notify crate stays thin. |
 | D19 | **Desktop scheduling = thread-per-firing with cancel flags** (ThreadScheduler), only next N firings armed | No daemon needed locally; simple, dependency-free; Android/iOS will use AlarmManager/UNUserNotificationCenter instead. |
 | D20 | **Missed firings are dropped on reconcile** (no catch-up of past reminders) | Matches local-first semantics without background guarantees; avoids notification storms after long offline periods. |
 | D21 | **Reconcile trigger = items resource version change** (len check) in a use_effect | Cheap approximation of "on foreground/mutation/sync"; revisit when sync lands. |
@@ -44,13 +44,19 @@ Newest decisions may reference later phases; each entry notes the phase.
 
 | # | Decision | Rationale |
 |---|----------|-----------|
-| D23 | **`icalendar` crate 0.17** (parser + chrono-tz features) over `ics` | Typed builders AND parser in one crate; actively maintained. |
-| D24 | **Datetimes exported as UTC**, not TZID form | We store fixed offsets without IANA names; UTC is standards-compliant, lossless-in-instant, and simplest. TZID payloads from Google still import correctly via chrono-tz conversion. |
+| D23 | **`icalendar` crate 0.17** (parser + Kal-tz features) over `ics` | Typed builders AND parser in one crate; actively maintained. |
+| D24 | **Datetimes exported as UTC**, not TZID form | We store fixed offsets without IANA names; UTC is standards-compliant, lossless-in-instant, and simplest. TZID payloads from Google still import correctly via Kal-tz conversion. |
 | D25 | **All-day DTEND emitted exclusive (+1 day)** per RFC 5545 §3.6.1; on import converted back to inclusive last-day instant. | Interop correctness with Google/Apple/etc. |
-| D26 | **Reminders round-trip as VALARM DISPLAY with TRIGGER=-PT{n}S plus X-CHRONO-REMINDER-ID** preserving reminder ULIDs; trigger parser accepts S/M/H/D. | Unlimited reminders survive export→import 1:1 while staying readable by other apps. |
+| D26 | **Reminders round-trip as VALARM DISPLAY with TRIGGER=-PT{n}S plus X-KAL-REMINDER-ID** preserving reminder ULIDs; trigger parser accepts S/M/H/D. | Unlimited reminders survive export→import 1:1 while staying readable by other apps. |
 | D27 | **Tasks as VTODO** with STATUS COMPLETED/NEEDS-ACTION + COMPLETED timestamp. | Standard mapping; other clients understand it. |
-| D28 | **Birthdays marked CATEGORIES:BIRTHDAY + X-CHRONO-BIRTHDAY-OF person field.** | Round-trips our metadata through standard containers. |
+| D28 | **Birthdays marked CATEGORIES:BIRTHDAY + X-KAL-BIRTHDAY-OF person field.** | Round-trips our metadata through standard containers. |
 | D29 | **Non-ULID UIDs (e.g. Google) get fresh ULIDs on import.** | Keeps internal id space consistent; provenance lives on the IcsImport calendar. |
+
+## Rename
+
+| # | Decision | Rationale |
+|---|----------|-----------|
+| D30 | **Full rename Chrono → Kal** including crate names (kal-*), binary `kal`, package `kal-app`, ICS extensions `X-KAL-*`, notification appname, and data dir `~/.local/share/kal`. | User request; done wholesale so no mixed branding remains. The external `chrono` Rust date crate keeps its name (it's a dependency, not our product). |
 
 ## Pending decisions for later phases
 

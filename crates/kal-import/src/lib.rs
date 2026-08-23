@@ -1,4 +1,4 @@
-//! .ics (RFC 5545) import/export for Chrono (spec §5.4).
+//! .ics (RFC 5545) import/export for Kal (spec §5.4).
 //!
 //! Export produces standards-compliant VCALENDARs that any other calendar
 //! application can read — data portability is a hard requirement.
@@ -12,7 +12,7 @@ use icalendar::{
     Todo as IcsTodo,
 };
 
-use chrono_core::models::{
+use kal_core::models::{
     Calendar, CalendarItem, CalendarSource, Color, DateTimeTz, ItemKind, Reminder,
     ReminderOffset,
 };
@@ -70,7 +70,7 @@ fn minutes_to_trigger(minutes: i64) -> String {
 // Export
 // ---------------------------------------------------------------------------
 
-/// Serialize one Chrono calendar plus its items as an RFC 5545 VCALENDAR.
+/// Serialize one Kal calendar plus its items as an RFC 5545 VCALENDAR.
 pub fn export_calendar(calendar: &Calendar, items: &[CalendarItem]) -> String {
     let mut out = IcsCalendar::new();
     out.name(&calendar.name);
@@ -84,7 +84,7 @@ pub fn export_calendar(calendar: &Calendar, items: &[CalendarItem]) -> String {
 /// Export every visible calendar into a single combined VCALENDAR.
 pub fn export_all(calendars: &[Calendar], items: &[CalendarItem]) -> String {
     let mut out = IcsCalendar::new();
-    out.name("Chrono");
+    out.name("Kal");
     let visible: Vec<_> = calendars.iter().filter(|c| c.visible).map(|c| c.id).collect();
     for item in items.iter().filter(|i| !i.deleted && visible.contains(&i.calendar_id)) {
         push_item(&mut out, item);
@@ -140,7 +140,7 @@ fn push_item(out: &mut IcsCalendar, item: &CalendarItem) {
             .done();
                     // Keep our reminder identity so imports round-trip 1:1.
                     alarm.append_property(icalendar::Property::new(
-                        "X-CHRONO-REMINDER-ID",
+                        "X-KAL-REMINDER-ID",
                         reminder.id.to_string(),
                     ));
                     event.append_component(alarm);
@@ -170,7 +170,7 @@ fn apply_common<C: Component>(comp: &mut C, item: &CalendarItem) {
     if item.kind == ItemKind::Birthday {
         comp.append_multi_property(icalendar::Property::new("CATEGORIES", "BIRTHDAY"));
         if let Some(person) = &item.metadata.birthday_of {
-            comp.add_property("X-CHRONO-BIRTHDAY-OF", person.clone());
+            comp.add_property("X-KAL-BIRTHDAY-OF", person.clone());
         }
     }
     comp.add_property(
@@ -303,7 +303,7 @@ fn base_item<'a, C: Component>(calendar: &Calendar, comp: &'a C) -> CalendarItem
         item.start = midnight(fallback_start.date_naive(), tz);
         item.end = None;
         item.metadata.birthday_of = comp
-            .property_value("X-CHRONO-BIRTHDAY-OF")
+            .property_value("X-KAL-BIRTHDAY-OF")
             .map(str::to_string)
             .or_else(|| Some(item.title.clone()));
     }
@@ -327,13 +327,13 @@ fn read_exdates_and_reminders<C: Component>(item: &mut CalendarItem, comp: &C) {
         };
         if let Some(minutes) = trigger_to_minutes(trigger) {
             let id = child
-                .property_value("X-CHRONO-REMINDER-ID")
+                .property_value("X-KAL-REMINDER-ID")
                 .and_then(|s| ulid::Ulid::from_string(s).ok())
                 .unwrap_or_else(ulid::Ulid::new);
             item.reminders.push(Reminder {
                 id,
                 offset: ReminderOffset::MinutesBefore { minutes },
-                method: chrono_core::models::NotifyMethod::Push,
+                method: kal_core::models::NotifyMethod::Push,
             });
         }
     }

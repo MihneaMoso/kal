@@ -1,0 +1,8 @@
+[package]
+name = "kal-ffi"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Kal kal-ffi crate (stub — implemented in later phases)."
+
+[dependencies]

@@ -1,11 +1,11 @@
 use chrono::Timelike;
-use chrono_core::models::{
+use kal_core::models::{
     Calendar, CalendarItem, CalendarSource, Color, ItemKind, Reminder,
 };
-use chrono_storage::Database;
+use kal_storage::Database;
 
-fn ts(y: i32, m: u32, d: u32, h: u32) -> chrono_core::models::DateTimeTz {
-    chrono_core::models::datetime_from_parts(y, m, d, h, 0, 0).unwrap()
+fn ts(y: i32, m: u32, d: u32, h: u32) -> kal_core::models::DateTimeTz {
+    kal_core::models::datetime_from_parts(y, m, d, h, 0, 0).unwrap()
 }
 
 fn setup() -> (Database, Calendar) {

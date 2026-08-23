@@ -11,7 +11,7 @@ use chrono::{DateTime, TimeZone, Utc};
 use rusqlite::{params, Connection, OptionalExtension};
 use ulid::Ulid;
 
-use chrono_core::models::{Calendar, CalendarItem, Color, DateTimeTz};
+use kal_core::models::{Calendar, CalendarItem, Color, DateTimeTz};
 
 #[derive(Debug, thiserror::Error)]
 pub enum StorageError {

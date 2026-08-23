@@ -1,6 +1,6 @@
-//! chrono-core: pure Rust domain logic for Chrono.
+//! kal-core: pure Rust domain logic for Kal.
 //! No UI framework dependencies — reused by the app, native widget shims (via
-//! chrono-ffi) and headless tests.
+//! kal-ffi) and headless tests.
 
 pub mod models;
 pub mod error;

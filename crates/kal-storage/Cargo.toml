@@ -1,12 +1,12 @@
 [package]
-name = "chrono-storage"
+name = "kal-storage"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
-description = "SQLite schema, migrations and repository layer for Chrono."
+description = "SQLite schema, migrations and repository layer for Kal."
 
 [dependencies]
-chrono-core = { path = "../chrono-core" }
+kal-core = { path = "../kal-core" }
 rusqlite = { workspace = true }
 chrono = { workspace = true }
 ulid = { workspace = true }

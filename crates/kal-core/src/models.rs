@@ -1,4 +1,4 @@
-//! Core data model for Chrono (spec §4).
+//! Core data model for Kal (spec §4).
 //!
 //! Every persisted entity is CRDT-friendly: plain serde structs keyed by ULID,
 //! with `updated_at` + `deleted` (tombstone) so a later Automerge/Yrs layer can

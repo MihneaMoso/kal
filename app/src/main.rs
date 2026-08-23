@@ -1,10 +1,10 @@
 mod ui;
 
 use chrono::{Datelike, Local, Months, NaiveDate};
-use chrono_notify::{DesktopNotifier, ReminderScheduler as _, ThreadScheduler};
+use kal_notify::{DesktopNotifier, ReminderScheduler as _, ThreadScheduler};
 use std::sync::Arc;
-use chrono_core::models::{Calendar, CalendarItem, Color};
-use chrono_storage::Database;
+use kal_core::models::{Calendar, CalendarItem, Color};
+use kal_storage::Database;
 use dioxus::prelude::*;
 /// App-wide shared handle to the reminder scheduler.
 pub type SchedulerHandle = Arc<ThreadScheduler<DesktopNotifier>>;
@@ -13,7 +13,7 @@ pub type SchedulerHandle = Arc<ThreadScheduler<DesktopNotifier>>;
 pub type DbHandle = Arc<Database>;
 
 fn default_db_path() -> Option<std::path::PathBuf> {
-    dirs_next::data_dir().map(|d| d.join("chrono").join("calendar.db"))
+    dirs_next::data_dir().map(|d| d.join("kal").join("calendar.db"))
 }
 
 fn open_db() -> DbHandle {
@@ -37,7 +37,7 @@ fn ensure_default_calendars(db: &Database) -> Vec<Calendar> {
             id: ulid::Ulid::new(),
             name: "Birthdays".into(),
             color: Color("#e91e63".into()),
-            source: chrono_core::models::CalendarSource::Birthdays,
+            source: kal_core::models::CalendarSource::Birthdays,
             visible: true,
         })
         .ok();
@@ -82,6 +82,10 @@ fn App() -> Element {
     });
     use_context_provider(|| items_res);
 
+    // Reminder scheduler shared app-wide; reconciled in the effect below.
+    let scheduler: SchedulerHandle = Arc::new(ThreadScheduler::new(DesktopNotifier));
+    use_context_provider(|| scheduler);
+
     // Reload once default calendars are ensured.
     use_effect(move || {
         if cal_res.value().read().is_some() {
@@ -102,7 +106,7 @@ fn App() -> Element {
             if let Some(items) = items_res.value().read().as_ref() {
                 let from = Local::now().fixed_offset();
                 let firings =
-                    chrono_core::reminders::compute_firings(items, from, 14);
+                    kal_core::reminders::compute_firings(items, from, 14);
                 sched.reschedule(&firings);
                 let _ = &db_sched; // reserved: per-item deep-link payload later
             }
@@ -135,7 +139,7 @@ fn TopBar(mut theme: Signal<String>) -> Element {
     let dark = theme() == "dark";
     rsx! {
         header { class: "topbar",
-            h1 { "Chrono" }
+            h1 { "Kal" }
             span { class: "subtitle", "{ui::today_line()}" }
             div { class: "spacer" }
             button {
@@ -147,7 +151,7 @@ fn TopBar(mut theme: Signal<String>) -> Element {
 }
 
 fn source_label(cal: &Calendar) -> &'static str {
-    use chrono_core::models::CalendarSource::*;
+    use kal_core::models::CalendarSource::*;
     match cal.source {
         Local => "",
         GoogleImport => "google",
@@ -202,12 +206,12 @@ fn Sidebar() -> Element {
                     onclick: move |_| {
                         let db2 = db_export.clone();
                         if let Some(path) = rfd::FileDialog::new()
-                            .set_file_name("chrono-export.ics")
+                            .set_file_name("Kal-export.ics")
                             .save_file()
                         {
                             let cals = db2.list_calendars().unwrap_or_default();
                             let items = db2.list_items(false).unwrap_or_default();
-                            let ics = chrono_import::export_all(&cals, &items);
+                            let ics = kal_import::export_all(&cals, &items);
                             if let Err(e) = std::fs::write(path.as_path(), ics) {
                                 eprintln!("write failed: {e}");
                             }
@@ -220,15 +224,15 @@ fn Sidebar() -> Element {
             div { style: "display:flex; flex-direction:column; gap:6px;",
                 button {
                     class: "primary",
-                    onclick: move |_| editor.set(Some(ui::EditorState::new_kind(&db_event, chrono_core::models::ItemKind::Event))),
+                    onclick: move |_| editor.set(Some(ui::EditorState::new_kind(&db_event, kal_core::models::ItemKind::Event))),
                     "+ Event"
                 }
                 button {
-                    onclick: move |_| editor.set(Some(ui::EditorState::new_kind(&db_task, chrono_core::models::ItemKind::Task))),
+                    onclick: move |_| editor.set(Some(ui::EditorState::new_kind(&db_task, kal_core::models::ItemKind::Task))),
                     "+ Task"
                 }
                 button {
-                    onclick: move |_| editor.set(Some(ui::EditorState::new_kind(&db_bday, chrono_core::models::ItemKind::Birthday))),
+                    onclick: move |_| editor.set(Some(ui::EditorState::new_kind(&db_bday, kal_core::models::ItemKind::Birthday))),
                     "+ Birthday"
                 }
             }
@@ -305,7 +309,7 @@ fn ViewNav() -> Element {
 }
 
 fn import_ics_file(db: &DbHandle, text: &str) {
-    match chrono_import::import_ics(text, "Imported") {
+    match kal_import::import_ics(text, "Imported") {
         Ok(result) => {
             db.upsert_calendar(&result.calendar).ok();
             for item in &result.items {

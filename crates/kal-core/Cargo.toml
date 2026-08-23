@@ -1,9 +1,9 @@
 [package]
-name = "chrono-core"
+name = "kal-core"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
-description = "Pure Rust domain logic for Chrono calendar: models, recurrence, view-models. No UI deps."
+description = "Pure Rust domain logic for Kal calendar: models, recurrence, view-models. No UI deps."
 
 [dependencies]
 chrono = { workspace = true }

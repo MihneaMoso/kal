@@ -1,4 +1,4 @@
-/* Chrono base stylesheet — light/dark via data-theme attribute. */
+/* Kal base stylesheet — light/dark via data-theme attribute. */
 
 :root, [data-theme="light"] {
     --bg: #ffffff;

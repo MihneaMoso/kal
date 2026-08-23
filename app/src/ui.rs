@@ -1,8 +1,8 @@
-//! UI components for the Chrono desktop shell (phase 2).
+//! UI components for the Kal desktop shell (phase 2).
 
 use chrono::{Datelike, Local, NaiveDate, NaiveTime, Weekday};
-use chrono_core::models::{CalendarItem, DateTimeTz, ItemKind, Occurrence};
-use chrono_core::viewmodel;
+use kal_core::models::{CalendarItem, DateTimeTz, ItemKind, Occurrence};
+use kal_core::viewmodel;
 use dioxus::prelude::*;
 use std::collections::BTreeMap;
 use ulid::Ulid;
@@ -38,7 +38,7 @@ pub fn today_line() -> String {
 /// Items filtered down to visible calendars — shared by all views.
 pub fn use_visible_items() -> Vec<CalendarItem> {
     let items_res = use_context::<Resource<Vec<CalendarItem>>>();
-    let cals_res = use_context::<Resource<Vec<chrono_core::models::Calendar>>>();
+    let cals_res = use_context::<Resource<Vec<kal_core::models::Calendar>>>();
     let items = items_res.value().read().clone().unwrap_or_default();
     let cals = cals_res.value().read().clone().unwrap_or_default();
     let hidden: std::collections::HashSet<Ulid> =
@@ -50,7 +50,7 @@ fn local_offset() -> chrono::FixedOffset {
     *Local::now().offset()
 }
 
-fn parse_when(date: &str, time: &str) -> Option<chrono_core::models::DateTimeTz> {
+fn parse_when(date: &str, time: &str) -> Option<kal_core::models::DateTimeTz> {
     let d = NaiveDate::parse_from_str(date, "%Y-%m-%d").ok()?;
     let t = if time.is_empty() {
         NaiveTime::from_hms_opt(0, 0, 0)?
@@ -478,7 +478,7 @@ impl EditorState {
             .reminders
             .iter()
             .filter_map(|r| match r.offset {
-                chrono_core::models::ReminderOffset::MinutesBefore { minutes } => Some(minutes),
+                kal_core::models::ReminderOffset::MinutesBefore { minutes } => Some(minutes),
                 _ => None,
             })
             .collect();
@@ -645,7 +645,7 @@ pub fn EditorModal(state: EditorState) -> Element {
             mins.sort();
             mins.dedup();
             mins.into_iter()
-                .map(chrono_core::models::Reminder::minutes_before)
+                .map(kal_core::models::Reminder::minutes_before)
                 .collect()
         };
         item.updated_at = Local::now().fixed_offset();
