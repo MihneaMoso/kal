@@ -5,6 +5,10 @@ edition.workspace = true
 license.workspace = true
 description = "Chrono chrono-import crate (stub — implemented in later phases)."
 
+[features]
+default = []
+google = ["dep:ureq"]
+
 [dependencies]
 chrono-core = { path = "../chrono-core" }
 chrono = { workspace = true }
@@ -13,3 +17,4 @@ thiserror = { workspace = true }
 icalendar = { version = "0.17", features = ["chrono-tz"] }
 serde = { workspace = true }
 serde_json = { workspace = true }
+ureq = { version = "2", optional = true }
