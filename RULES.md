@@ -81,9 +81,15 @@ bite you again if ignored, plus the exact state to resume from.
   birthday CATEGORIES/X-CHRONO extensions; 5 round-trip tests incl. a
   Google-shaped TZID payload. App sidebar has Import .ics / Export all buttons
   via rfd file dialogs. `icalendar` v0.17 with "chrono-tz" feature enabled.
-- ▶ NEXT: Phase 5c — Google Calendar import (OAuth + REST), or skip ahead to
-  Phase 6 (mobile) if time-boxed; ICS path already covers the FOSS-critical
-  portability requirement. `rrule` crate (v0.14) in chrono-core;
+- ✅ Phase 5c COMPLETE: chrono-import::google — wire types with camelCase serde
+  renames, map_event/map_calendars into GoogleImport calendars, deterministic
+  ULIDs from google ids (FNV-1a), events_url/start_device_flow/
+  poll_device_token behind `Transport` trait (UreqTransport under feature
+  "google"); 4 offline tests. NOTE: raw strings containing `"#` need r##"..."##.
+- ▶ NEXT: Phase 6 — mobile targets (Android/iOS via dioxus-mobile / xtask),
+  birthdays module polish, then Phase 7 widgets (chrono-ffi C ABI).
+  Context budget: consider committing + summarizing RULES.md before starting
+  each new phase. `rrule` crate (v0.14) in chrono-core;
   `viewmodel::expand_occurrences` / `occurrences_by_date` (rrule + exdate
   aware) + tests; views render recurring instances; editor has Repeat selector
   (none/daily/weekly/monthly/yearly); per-instance edit scoping implemented in
