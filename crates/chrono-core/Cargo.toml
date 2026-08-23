@@ -1,0 +1,15 @@
+[package]
+name = "chrono-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Pure Rust domain logic for Chrono calendar: models, recurrence, view-models. No UI deps."
+
+[dependencies]
+chrono = { workspace = true }
+serde = { workspace = true }
+ulid = { workspace = true }
+thiserror = { workspace = true }
+
+[dev-dependencies]
+serde_json = { workspace = true }

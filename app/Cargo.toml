@@ -1,0 +1,19 @@
+[package]
+name = "chrono-app"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Dioxus application shell for Chrono."
+
+[[bin]]
+name = "chrono"
+path = "src/main.rs"
+
+[dependencies]
+chrono-core = { path = "../crates/chrono-core" }
+chrono-storage = { path = "../crates/chrono-storage" }
+dioxus = { version = "0.6", features = ["desktop"] }
+tokio = { workspace = true }
+chrono = { workspace = true }
+ulid = { workspace = true }
+dirs-next = "2"

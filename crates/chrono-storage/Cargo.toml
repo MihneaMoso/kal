@@ -1,0 +1,17 @@
+[package]
+name = "chrono-storage"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "SQLite schema, migrations and repository layer for Chrono."
+
+[dependencies]
+chrono-core = { path = "../chrono-core" }
+rusqlite = { workspace = true }
+chrono = { workspace = true }
+ulid = { workspace = true }
+thiserror = { workspace = true }
+serde_json = { workspace = true }
+
+[dev-dependencies]
+tempfile = "3"
