@@ -92,7 +92,18 @@ bite you again if ignored, plus the exact state to resume from.
   ULIDs from google ids (FNV-1a), events_url/start_device_flow/
   poll_device_token behind `Transport` trait (UreqTransport under feature
   "google"); 4 offline tests. NOTE: raw strings containing `"#` need r##"..."##.
-- ▶ NEXT: Phase 6 — mobile targets (Android/iOS via dioxus-mobile / xtask),
+- ✅ Phase 7a COMPLETE: kal-ffi C ABI (kal_open/kal_close(out-param,
+  double-close-safe)/kal_free/kal_upcoming_json/kal_month_grid_json), all
+  panic-guarded returning NULL; JSON contract documented in widgets/kal_ffi.h;
+  ABI tests incl. NULL-safety. Upcoming-json expands occurrences (yearly
+  birthdays surface).
+- ✅ Phase 7b: widgets/kal_ffi.h + android Glance + iOS WidgetKit shim sources
+  (not compiled here — need SDKs).
+- ✅ Phase 6 partial: birthday age badges ("Name · 36") in chips and rows.
+- ▶ NEXT: Phase 8 — P2P sync in crates/kal-sync: LWW-CRDT merge + sync-chain
+  key derivation (bip39 phrase → x25519/chacha20poly1305) + Transport trait
+  with loopback tests. UI pairing screen after lib is solid.
+- THEN Phase 9 polish, Phase 10 release. (Android/iOS via dioxus-mobile / xtask),
   birthdays module polish, then Phase 7 widgets (kal-ffi C ABI).
   Context budget: consider committing + summarizing RULES.md before starting
   each new phase. `rrule` crate (v0.14) in kal-core;

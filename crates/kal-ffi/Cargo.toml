@@ -3,6 +3,18 @@ name = "kal-ffi"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
-description = "Kal kal-ffi crate (stub — implemented in later phases)."
+description = "Stable C ABI for Kal's Rust core, consumed by native widget shims (Swift/Kotlin)."
+
+[lib]
+name = "kal_ffi"
+crate-type = ["rlib", "cdylib", "staticlib"]
 
 [dependencies]
+kal-core = { path = "../kal-core" }
+kal-storage = { path = "../kal-storage" }
+chrono = { workspace = true }
+serde_json = { workspace = true }
+
+[dev-dependencies]
+tempfile = "3"
+ulid = { workspace = true }

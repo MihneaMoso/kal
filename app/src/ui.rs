@@ -174,17 +174,26 @@ fn EventChip(item: CalendarItem, occ_start: DateTimeTz) -> Element {
         .map(|c| c.to_string())
         .unwrap_or_else(|| "var(--accent)".into());
     let item_id = item.id;
+    // Birthday age badge (§5.1): computed against this occurrence's date.
+    let chip_label = if item.kind == ItemKind::Birthday {
+        match item.birthday_age_at(occ_start) {
+            Some(age) => format!("{label} · {age}"),
+            None => label,
+        }
+    } else {
+        label
+    };
 
     rsx! {
         div {
             class: "event-chip",
             style: "background:{bg}",
-            title: "{label}",
+            title: "{chip_label}",
             onclick: move |e| {
                 e.stop_propagation();
                 editor.set(Some(EditorState::edit_existing(&db, item_id, Some(occ_start))));
             },
-            "{label}"
+            "{chip_label}"
         }
     }
 }
@@ -211,6 +220,15 @@ fn ItemRow(date: Option<NaiveDate>, item: CalendarItem, occ_start: DateTimeTz) -
         )
     };
     let date_str = date.map(|d| d.format("%a %b %d").to_string()).unwrap_or_default();
+    // Age shown for birthdays next to the title.
+    let title_suffix = if item.kind == ItemKind::Birthday {
+        match item.birthday_age_at(occ_start) {
+            Some(age) => format!(" · {age}"),
+            None => String::new(),
+        }
+    } else {
+        String::new()
+    };
 
     rsx! {
         li {
@@ -238,7 +256,7 @@ fn ItemRow(date: Option<NaiveDate>, item: CalendarItem, occ_start: DateTimeTz) -
                     },
                 }
             }
-            strong { style: if done { "text-decoration:line-through;color:var(--fg-muted)" }, "{item.title}" }
+            strong { style: if done { "text-decoration:line-through;color:var(--fg-muted)" }, "{item.title}{title_suffix}" }
             span { class: "when", "{when}" }
         }
     }

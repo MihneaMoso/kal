@@ -58,6 +58,14 @@ Newest decisions may reference later phases; each entry notes the phase.
 |---|----------|-----------|
 | D30 | **Full rename Chrono → Kal** including crate names (kal-*), binary `kal`, package `kal-app`, ICS extensions `X-KAL-*`, notification appname, and data dir `~/.local/share/kal`. | User request; done wholesale so no mixed branding remains. The external `chrono` Rust date crate keeps its name (it's a dependency, not our product). |
 
+## Phases 6–7 (partial)
+
+| # | Decision | Rationale |
+|---|----------|-----------|
+| D31 | **kal-ffi speaks JSON strings over a C ABI** (not #[repr(C)] structs) | Schema evolution without breaking shims; JSON parsing is trivial on iOS/Android; panic-guarded boundaries return NULL. |
+| D32 | **kal_close takes a `*mut *mut KalDb` out-param** and nulls it | Makes double-close safe at the ABI level (plain double-free segfaulted in tests — caught early). |
+| D33 | **Widget queries expand occurrences server-side (in Rust)** so yearly birthdays appear even though their base row is decades old. | Raw range SQL missed recurring items. |
+
 ## Pending decisions for later phases
 
 - Sync CRDT engine: automerge vs yrs (phase 8).

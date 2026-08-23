@@ -2616,6 +2616,14 @@ dependencies = [
 [[package]]
 name = "kal-ffi"
 version = "0.1.0"
+dependencies = [
+ "chrono",
+ "kal-core",
+ "kal-storage",
+ "serde_json",
+ "tempfile",
+ "ulid",
+]
 
 [[package]]
 name = "kal-import"
