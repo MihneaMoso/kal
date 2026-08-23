@@ -160,10 +160,13 @@ fn source_label(cal: &Calendar) -> &'static str {
 fn Sidebar() -> Element {
     let db = use_context::<DbHandle>();
     let mut editor = use_context::<Signal<Option<ui::EditorState>>>();
+    let mut items_res = use_context::<Resource<Vec<CalendarItem>>>();
 
-    let cal_res = use_context::<Resource<Vec<Calendar>>>();
+    let mut cal_res = use_context::<Resource<Vec<Calendar>>>();
     let calendars = cal_res.value().read().clone().unwrap_or_default();
 
+    let db_import = db.clone();
+    let db_export = db.clone();
     let db_event = db.clone();
     let db_task = db.clone();
     let db_bday = db.clone();
@@ -174,6 +177,43 @@ fn Sidebar() -> Element {
             ul {
                 for cal in calendars.iter().cloned() {
                     CalendarRow { key: "{cal.id}", calendar: cal }
+                }
+            }
+            h2 { "Import / Export" }
+            div { style: "display:flex; flex-direction:column; gap:6px;",
+                button {
+                    onclick: move |_| {
+                        let db2 = db_import.clone();
+                        if let Some(path) = rfd::FileDialog::new()
+                            .add_filter("iCalendar", &["ics"])
+                            .pick_file()
+                        {
+                            match std::fs::read_to_string(path.as_path()) {
+                                Ok(text) => import_ics_file(&db2, &text),
+                                Err(e) => eprintln!("read failed: {e}"),
+                            }
+                            cal_res.restart();
+                            items_res.restart();
+                        }
+                    },
+                    "Import .ics…"
+                }
+                button {
+                    onclick: move |_| {
+                        let db2 = db_export.clone();
+                        if let Some(path) = rfd::FileDialog::new()
+                            .set_file_name("chrono-export.ics")
+                            .save_file()
+                        {
+                            let cals = db2.list_calendars().unwrap_or_default();
+                            let items = db2.list_items(false).unwrap_or_default();
+                            let ics = chrono_import::export_all(&cals, &items);
+                            if let Err(e) = std::fs::write(path.as_path(), ics) {
+                                eprintln!("write failed: {e}");
+                            }
+                        }
+                    },
+                    "Export all (.ics)"
                 }
             }
             h2 { "New item" }
@@ -261,6 +301,20 @@ fn ViewNav() -> Element {
                 }
             }
         }
+    }
+}
+
+fn import_ics_file(db: &DbHandle, text: &str) {
+    match chrono_import::import_ics(text, "Imported") {
+        Ok(result) => {
+            db.upsert_calendar(&result.calendar).ok();
+            for item in &result.items {
+                if let Err(e) = db.upsert_item(item) {
+                    eprintln!("skipped item {:?}: {e}", item.title);
+                }
+            }
+        }
+        Err(e) => eprintln!("import failed: {e}"),
     }
 }
 

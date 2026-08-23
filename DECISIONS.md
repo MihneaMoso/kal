@@ -40,6 +40,18 @@ Newest decisions may reference later phases; each entry notes the phase.
 | D21 | **Reconcile trigger = items resource version change** (len check) in a use_effect | Cheap approximation of "on foreground/mutation/sync"; revisit when sync lands. |
 | D22 | **notify-rust behind `desktop` feature** | Keeps mobile/web builds compiling before their native FFI backends exist. |
 
+## Phase 5 — Import/Export
+
+| # | Decision | Rationale |
+|---|----------|-----------|
+| D23 | **`icalendar` crate 0.17** (parser + chrono-tz features) over `ics` | Typed builders AND parser in one crate; actively maintained. |
+| D24 | **Datetimes exported as UTC**, not TZID form | We store fixed offsets without IANA names; UTC is standards-compliant, lossless-in-instant, and simplest. TZID payloads from Google still import correctly via chrono-tz conversion. |
+| D25 | **All-day DTEND emitted exclusive (+1 day)** per RFC 5545 §3.6.1; on import converted back to inclusive last-day instant. | Interop correctness with Google/Apple/etc. |
+| D26 | **Reminders round-trip as VALARM DISPLAY with TRIGGER=-PT{n}S plus X-CHRONO-REMINDER-ID** preserving reminder ULIDs; trigger parser accepts S/M/H/D. | Unlimited reminders survive export→import 1:1 while staying readable by other apps. |
+| D27 | **Tasks as VTODO** with STATUS COMPLETED/NEEDS-ACTION + COMPLETED timestamp. | Standard mapping; other clients understand it. |
+| D28 | **Birthdays marked CATEGORIES:BIRTHDAY + X-CHRONO-BIRTHDAY-OF person field.** | Round-trips our metadata through standard containers. |
+| D29 | **Non-ULID UIDs (e.g. Google) get fresh ULIDs on import.** | Keeps internal id space consistent; provenance lives on the IcsImport calendar. |
+
 ## Pending decisions for later phases
 
 - Sync CRDT engine: automerge vs yrs (phase 8).

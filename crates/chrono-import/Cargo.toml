@@ -6,3 +6,10 @@ license.workspace = true
 description = "Chrono chrono-import crate (stub — implemented in later phases)."
 
 [dependencies]
+chrono-core = { path = "../chrono-core" }
+chrono = { workspace = true }
+ulid = { workspace = true }
+thiserror = { workspace = true }
+icalendar = { version = "0.17", features = ["chrono-tz"] }
+serde = { workspace = true }
+serde_json = { workspace = true }
