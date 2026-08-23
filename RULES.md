@@ -62,17 +62,23 @@ bite you again if ignored, plus the exact state to resume from.
   event/task/birthday editor modal (create/edit/delete), task checkboxes,
   calendar visibility toggles, light/dark theme, single shared
   items/calendars resources via context.
-- ▶ NEXT: Phase 3 — recurrence:
-  1. Add `rrule` crate dep to chrono-core; extend viewmodel with
-     `expand_occurrences(item, range_start, range_end)` honoring rrule +
-     exdates; update views/agenda to use it.
-  2. Editor: add repeat selector (none/daily/weekly/monthly/yearly + interval).
-  3. Per-instance edit scoping (this event only → EXDATE + new item;
-     this-and-following → UNTIL + new series; all → edit base) — needs UI
-     choice dialog on save of a recurring item.
-  4. Storage already has `rrule`/`exdates_json` columns — no migration needed.
-- Then Phase 4 (chrono-notify: notify-rust desktop first), Phase 5 (.ics),
-  etc. Full plan: README.md §Roadmap and master prompt §7.
+- ✅ Phase 3 COMPLETE: `rrule` crate (v0.14) in chrono-core;
+  `viewmodel::expand_occurrences` / `occurrences_by_date` (rrule + exdate
+  aware) + tests; views render recurring instances; editor has Repeat selector
+  (none/daily/weekly/monthly/yearly); per-instance edit scoping implemented in
+  `app/src/ui.rs::db_apply_scoped_edit` (This-only → EXDATE+new single item,
+  …and-following → UNTIL-truncate + new series, All-events → edit base).
+- ▶ NEXT: Phase 4 — reminders & notifications:
+  1. Implement `crates/chrono-notify`: trait abstraction over platform
+     notification scheduling; desktop impl via `notify-rust`; a pure
+     `compute_next_firings(items, from, n)` helper lives in chrono-core or
+     notify crate.
+  2. App: on startup/foreground + after mutations, schedule next N firings of
+     all visible items' reminders; notification click deep-links (desktop:
+     just focus; deep-link routing later).
+  3. Reminder presets UI in editor (10m/30m/1h/1d/1w/custom minutes).
+- Then Phase 5 (.ics import/export via `icalendar` crate + Google OAuth),
+  Phase 6 mobile, etc. Full plan: README.md §Roadmap and master prompt §7.
 
 ## Verification checklist before declaring a phase done
 

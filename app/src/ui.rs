@@ -1,9 +1,10 @@
 //! UI components for the Chrono desktop shell (phase 2).
 
 use chrono::{Datelike, Local, NaiveDate, NaiveTime, Weekday};
-use chrono_core::models::{CalendarItem, ItemKind};
+use chrono_core::models::{CalendarItem, DateTimeTz, ItemKind, Occurrence};
 use chrono_core::viewmodel;
 use dioxus::prelude::*;
+use std::collections::BTreeMap;
 use ulid::Ulid;
 
 use crate::DbHandle;
@@ -75,10 +76,22 @@ pub fn MonthView() -> Element {
     let grid = viewmodel::month_grid(c.year(), c.month(), Weekday::Mon);
     let today = Local::now().date_naive();
 
-    let rows: Vec<(String, Vec<NaiveDate>)> = grid
+    let first = grid[0][0];
+    let last = grid[viewmodel::MONTH_GRID_WEEKS - 1][6];
+    let occ_map = viewmodel::occurrences_by_date(&items, first, last);
+
+    let rows: Vec<(String, Vec<(NaiveDate, Vec<Occurrence>)>)> = grid
         .into_iter()
         .enumerate()
-        .map(|(w, row)| (format!("{}-{}-{w}", c.year(), c.month()), row))
+        .map(|(w, row)| {
+            (
+                format!("{}-{}-{w}", c.year(), c.month()),
+                row.into_iter().map(|d| {
+                    let occs = occ_map.get(&d).cloned().unwrap_or_default();
+                    (d, occs)
+                }).collect(),
+            )
+        })
         .collect();
 
     rsx! {
@@ -90,12 +103,13 @@ pub fn MonthView() -> Element {
             }
             for (row_key, row) in rows {
                 div { class: "month-row", key: "{row_key}",
-                    for date in row {
+                    for (date, cell_occs) in row {
                         MonthCell {
                             key: "{date}",
                             date,
                             today,
                             in_month: date.month() == c.month(),
+                            occurrences: cell_occs,
                             items: items.clone(),
                         }
                     }
@@ -112,6 +126,7 @@ fn MonthCell(
     date: NaiveDate,
     today: NaiveDate,
     in_month: bool,
+    occurrences: Vec<Occurrence>,
     items: Vec<CalendarItem>,
 ) -> Element {
     let mut editor = use_context::<Signal<Option<EditorState>>>();
@@ -125,18 +140,16 @@ fn MonthCell(
     } else {
         "month-cell"
     };
-    let occs = viewmodel::items_on_date(&items, date);
-
     rsx! {
         div {
             class: "{class}",
             onclick: move |_| editor.set(Some(EditorState::new_on(&db_new, date))),
             span { class: "day-num", "{date.day()}" }
-            for occ in occs {
+            for occ in occurrences.iter().cloned() {
                 {
                     let item = items.iter().find(|i| i.id == occ.item_id).cloned();
                     match item {
-                        Some(it) => rsx! { EventChip { item: it } },
+                        Some(it) => rsx! { EventChip { item: it, occ_start: occ.start } },
                         None => rsx! {},
                     }
                 }
@@ -146,7 +159,7 @@ fn MonthCell(
 }
 
 #[component]
-fn EventChip(item: CalendarItem) -> Element {
+fn EventChip(item: CalendarItem, occ_start: DateTimeTz) -> Element {
     let mut editor = use_context::<Signal<Option<EditorState>>>();
     let db = use_context::<DbHandle>();
 
@@ -169,7 +182,7 @@ fn EventChip(item: CalendarItem) -> Element {
             title: "{label}",
             onclick: move |e| {
                 e.stop_propagation();
-                editor.set(Some(EditorState::edit_existing(&db, item_id)));
+                editor.set(Some(EditorState::edit_existing(&db, item_id, Some(occ_start))));
             },
             "{label}"
         }
@@ -178,7 +191,7 @@ fn EventChip(item: CalendarItem) -> Element {
 
 /// One row in day/week/agenda lists.
 #[component]
-fn ItemRow(date: Option<NaiveDate>, item: CalendarItem) -> Element {
+fn ItemRow(date: Option<NaiveDate>, item: CalendarItem, occ_start: DateTimeTz) -> Element {
     let mut editor = use_context::<Signal<Option<EditorState>>>();
     let mut items_res = use_context::<Resource<Vec<CalendarItem>>>();
     let db = use_context::<DbHandle>();
@@ -202,7 +215,7 @@ fn ItemRow(date: Option<NaiveDate>, item: CalendarItem) -> Element {
     rsx! {
         li {
             key: "{item_id}",
-            onclick: move |_| editor.set(Some(EditorState::edit_existing(&db_edit, item_id))),
+            onclick: move |_| editor.set(Some(EditorState::edit_existing(&db_edit, item_id, Some(occ_start)))),
             if !date_str.is_empty() {
                 span { class: "agenda-date", "{date_str}" }
             }
@@ -236,20 +249,28 @@ pub fn DayView() -> Element {
     let cursor = use_context::<Signal<NaiveDate>>();
     let items = use_visible_items();
     let d = *cursor.read();
-    let occs = viewmodel::items_on_date(&items, d);
-
-    let rows: Vec<CalendarItem> = occs
-        .iter()
-        .filter_map(|o| items.iter().find(|i| i.id == o.item_id).cloned())
-        .collect();
+    let empty = BTreeMap::new();
+    let map = if items.is_empty() {
+        &empty
+    } else {
+        &viewmodel::occurrences_by_date(&items, d, d)
+    };
+    let rows: Vec<(Occurrence, CalendarItem)> = map
+        .get(&d)
+        .map(|occs| {
+            occs.iter()
+                .filter_map(|o| items.iter().find(|i| i.id == o.item_id).cloned().map(|i| (o.clone(), i)))
+                .collect()
+        })
+        .unwrap_or_default();
 
     rsx! {
         ul { class: "day-list",
             if rows.is_empty() {
                 li { class: "empty", "Nothing scheduled." }
             }
-            for it in rows {
-                ItemRow { key: "{it.id}", date: None, item: it }
+            for (occ, it) in rows {
+                ItemRow { key: "{it.id}-{occ.start}", date: None, item: it, occ_start: occ.start }
             }
         }
     }
@@ -261,14 +282,19 @@ pub fn WeekView() -> Element {
     let items = use_visible_items();
     let c = *cursor.read();
     let week_start = c - chrono::Duration::days(c.weekday().num_days_from_monday() as i64);
+    let map = viewmodel::occurrences_by_date(&items, week_start, week_start + chrono::Duration::days(6));
 
-    let days: Vec<(String, Vec<CalendarItem>)> = (0..7)
+    let days: Vec<(String, Vec<(Occurrence, CalendarItem)>)> = (0..7)
         .map(|i| {
             let d = week_start + chrono::Duration::days(i);
-            let day_items: Vec<CalendarItem> = viewmodel::items_on_date(&items, d)
-                .iter()
-                .filter_map(|o| items.iter().find(|it| it.id == o.item_id).cloned())
-                .collect();
+            let day_items: Vec<(Occurrence, CalendarItem)> = map
+                .get(&d)
+                .map(|occs| {
+                    occs.iter()
+                        .filter_map(|o| items.iter().find(|it| it.id == o.item_id).cloned().map(|it| (o.clone(), it)))
+                        .collect()
+                })
+                .unwrap_or_default();
             (d.format("%a %b %d").to_string(), day_items)
         })
         .collect();
@@ -281,8 +307,8 @@ pub fn WeekView() -> Element {
                     if day_items.is_empty() {
                         span { class: "when", "—" }
                     }
-                    for it in day_items {
-                        ItemRow { key: "{it.id}", date: None, item: it }
+                    for (occ, it) in day_items {
+                        ItemRow { key: "{it.id}-{occ.start}", date: None, item: it, occ_start: occ.start }
                     }
                 }
             }
@@ -294,21 +320,24 @@ pub fn WeekView() -> Element {
 pub fn AgendaView() -> Element {
     let items = use_visible_items();
     let today = Local::now().date_naive();
-    let entries = viewmodel::agenda_range(&items, today, today + chrono::Duration::days(30));
-
-    let rows: Vec<(NaiveDate, CalendarItem)> = entries
-        .iter()
-        .take(100)
-        .filter_map(|(d, o)| items.iter().find(|i| i.id == o.item_id).cloned().map(|i| (*d, i)))
-        .collect();
+    let map = viewmodel::occurrences_by_date(&items, today, today + chrono::Duration::days(30));
+    let mut rows: Vec<(NaiveDate, Occurrence, CalendarItem)> = Vec::new();
+    for (d, occs) in &map {
+        for o in occs {
+            if let Some(it) = items.iter().find(|i| i.id == o.item_id).cloned() {
+                rows.push((*d, o.clone(), it));
+            }
+        }
+    }
+    rows.truncate(100);
 
     rsx! {
         ul { class: "agenda-list",
             if rows.is_empty() {
                 li { class: "empty", "Nothing in the next 30 days." }
             }
-            for (d, it) in rows {
-                ItemRow { key: "{it.id}-{d}", date: Some(d), item: it }
+            for (d, occ, it) in rows {
+                ItemRow { key: "{it.id}-{occ.start}-{d}", date: Some(d), item: it, occ_start: occ.start }
             }
         }
     }
@@ -322,6 +351,9 @@ pub fn AgendaView() -> Element {
 #[derive(Clone, PartialEq)]
 pub struct EditorState {
     pub id: Option<Ulid>,
+    /// Start instant of the clicked occurrence (differs from item.start for
+    /// recurring series) — drives per-instance edit scoping.
+    pub occurrence_start: Option<DateTimeTz>,
     pub kind: ItemKind,
     pub title: String,
     pub date: String,
@@ -330,6 +362,58 @@ pub struct EditorState {
     pub all_day: bool,
     pub calendar_id: Ulid,
     pub location: String,
+    /// Editor-side recurrence choice; expanded into an RRULE string on save.
+    pub rrule_preset: RrulePreset,
+}
+
+/// Simplified recurrence picker (full custom RRULE editing comes later).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RrulePreset {
+    None,
+    Daily,
+    Weekly,
+    Monthly,
+    Yearly,
+}
+
+impl RrulePreset {
+    fn to_rrule(self) -> Option<&'static str> {
+        match self {
+            RrulePreset::None => None,
+            RrulePreset::Daily => Some("FREQ=DAILY"),
+            RrulePreset::Weekly => Some("FREQ=WEEKLY"),
+            RrulePreset::Monthly => Some("FREQ=MONTHLY"),
+            RrulePreset::Yearly => Some("FREQ=YEARLY"),
+        }
+    }
+
+    const ALL: [RrulePreset; 5] = [
+        RrulePreset::None,
+        RrulePreset::Daily,
+        RrulePreset::Weekly,
+        RrulePreset::Monthly,
+        RrulePreset::Yearly,
+    ];
+
+    fn label(self) -> &'static str {
+        match self {
+            RrulePreset::None => "Doesn't repeat",
+            RrulePreset::Daily => "Daily",
+            RrulePreset::Weekly => "Weekly",
+            RrulePreset::Monthly => "Monthly",
+            RrulePreset::Yearly => "Annually",
+        }
+    }
+}
+
+fn rrule_to_preset(rule: Option<&str>) -> RrulePreset {
+    match rule.unwrap_or("") {
+        r if r.starts_with("FREQ=DAILY") => RrulePreset::Daily,
+        r if r.starts_with("FREQ=WEEKLY") => RrulePreset::Weekly,
+        r if r.starts_with("FREQ=MONTHLY") => RrulePreset::Monthly,
+        r if r.starts_with("FREQ=YEARLY") => RrulePreset::Yearly,
+        _ => RrulePreset::None,
+    }
 }
 
 impl EditorState {
@@ -352,6 +436,7 @@ impl EditorState {
         let birthday = kind == ItemKind::Birthday;
         Self {
             id: None,
+            occurrence_start: None,
             kind,
             title: String::new(),
             date: date.format("%Y-%m-%d").to_string(),
@@ -364,15 +449,18 @@ impl EditorState {
             all_day: birthday,
             calendar_id,
             location: String::new(),
+            rrule_preset: if kind == ItemKind::Birthday { RrulePreset::Yearly } else { RrulePreset::None },
         }
     }
 
-    pub fn edit_existing(db: &DbHandle, id: Ulid) -> Self {
+    pub fn edit_existing(db: &DbHandle, id: Ulid, occ_start: Option<DateTimeTz>) -> Self {
         let start = Local::now().fixed_offset();
         let blank = || CalendarItem::new(ItemKind::Event, "", Ulid::nil(), start);
         let item = db.get_item(id).ok().flatten().unwrap_or_else(blank);
         Self {
             id: Some(item.id),
+            occurrence_start: occ_start,
+            rrule_preset: rrule_to_preset(item.rrule.as_deref()),
             kind: item.kind,
             title: item.title,
             date: item.start.date_naive().format("%Y-%m-%d").to_string(),
@@ -386,6 +474,66 @@ impl EditorState {
             location: item.location.unwrap_or_default(),
         }
     }
+}
+
+/// Edit scope for recurring-series changes (Google Calendar semantics).
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum Scope {
+    All,
+    ThisOnly,
+    ThisAndFollowing,
+}
+
+/// Apply a scoped edit to a recurring series.
+///
+/// - `ThisOnly`: EXDATE the original occurrence out of the base series and
+///   create a new single item with the edited values.
+/// - `ThisAndFollowing`: truncate the base series with an UNTIL just before
+///   `occ_start` and create a new series starting at the edited occurrence.
+///
+/// Returns true on success (all writes applied).
+fn db_apply_scoped_edit(
+    db: &DbHandle,
+    base_id: Ulid,
+    edited: &CalendarItem,
+    occ_start: DateTimeTz,
+    and_following: bool,
+) -> bool {
+    let now = Local::now().fixed_offset();
+    let Some(mut base) = db.get_item(base_id).ok().flatten() else {
+        return false;
+    };
+
+    if and_following {
+        // Truncate base series right before the edited occurrence.
+        if !base.rrule.as_deref().unwrap_or("").contains("COUNT=")
+            && !base.rrule.as_deref().unwrap_or("").contains("UNTIL=")
+        {
+            let until_utc = (occ_start - chrono::Duration::minutes(1))
+                .with_timezone(&chrono::Utc);
+            let until = until_utc.format("%Y%m%dT%H%M%SZ").to_string();
+            let rule = base.rrule.take().unwrap_or_default();
+            base.rrule = Some(format!("{rule};UNTIL={until}"));
+        }
+    } else {
+        // Exclude just this occurrence from the base series.
+        base.exdates.push(occ_start);
+    }
+    base.updated_at = now;
+    if db.upsert_item(&base).is_err() {
+        return false;
+    }
+
+    // New item/series carries the edited values.
+    let mut new_item = edited.clone();
+    new_item.id = Ulid::new();
+    new_item.created_at = now;
+    new_item.updated_at = now;
+    if !and_following {
+        new_item.rrule = None;
+        new_item.exdates.clear();
+    }
+    db.upsert_item(&new_item).is_ok()
 }
 
 #[component]
@@ -417,15 +565,26 @@ pub fn EditorModal(state: EditorState) -> Element {
     let mut calendar_id = use_signal(move || state.calendar_id);
     let mut location = use_signal(move || init_location);
     let mut person = use_signal(move || init_person);
+    let mut rrule_choice = use_signal(move || state.rrule_preset);
 
-    let save = move |_| {
+    // Editing a recurring series instance? Then saving needs a scope choice.
+    let is_recurring_edit = state
+        .id
+        .and_then(|id| db.get_item(id).ok().flatten())
+        .and_then(|i| i.rrule)
+        .is_some();
+
+    // Signal captures are Copy in Dioxus, so we build one handler per scope.
+    // Signal captures are Copy in Dioxus; each scope gets its own handler
+    // with its own DB handle clone.
+    let mk_save = |scope: Scope, db_save: DbHandle| move |_| {
         let Some(start) = parse_when(&date.read(), &start_time.read()) else {
             return;
         };
         let end = parse_when(&date.read(), &end_time.read());
 
         // Load-or-create base item so editing preserves fields not shown here
-        // (reminders, rrule, …) once later phases introduce them.
+        // (reminders, …) once later phases introduce them.
         let mut item = match state.id {
             Some(id) => db_save.get_item(id).ok().flatten().unwrap_or_else(|| {
                 CalendarItem::new(state.kind, "", *calendar_id.read(), start)
@@ -446,13 +605,29 @@ pub fn EditorModal(state: EditorState) -> Element {
         if state.kind == ItemKind::Birthday {
             item.metadata.birthday_of = Some(person.read().clone());
         }
+        item.rrule = rrule_choice.read().to_rrule().map(str::to_string);
         item.updated_at = Local::now().fixed_offset();
 
-        if db_save.upsert_item(&item).is_ok() {
-            items_res.restart();
-            editor.set(None);
+        let and_following = scope == Scope::ThisAndFollowing;
+        match (scope, state.id, state.occurrence_start) {
+            (Scope::ThisOnly | Scope::ThisAndFollowing, Some(base_id), Some(occ_start)) => {
+                if !db_apply_scoped_edit(&db_save, base_id, &item, occ_start, and_following) {
+                    return;
+                }
+            }
+            _ => {
+                if db_save.upsert_item(&item).is_err() {
+                    return;
+                }
+            }
         }
+
+        items_res.restart();
+        editor.set(None);
     };
+    let save_all = mk_save(Scope::All, db_save.clone());
+    let save_following = mk_save(Scope::ThisAndFollowing, db_save.clone());
+    let save_this_only = mk_save(Scope::ThisOnly, db_save);
 
     let delete = move |_| {
         if let Some(id) = state.id {
@@ -540,15 +715,42 @@ pub fn EditorModal(state: EditorState) -> Element {
                         }
                     }
                 }
+                label { "Repeat"
+                    select {
+                        onchange: move |e| {
+                            match e.value().as_str() {
+                                "daily" => rrule_choice.set(RrulePreset::Daily),
+                                "weekly" => rrule_choice.set(RrulePreset::Weekly),
+                                "monthly" => rrule_choice.set(RrulePreset::Monthly),
+                                "yearly" => rrule_choice.set(RrulePreset::Yearly),
+                                _ => rrule_choice.set(RrulePreset::None),
+                            }
+                        },
+                        for p in RrulePreset::ALL {
+                            option {
+                                key: "{p:?}",
+                                value: "{preset_value(p)}",
+                                selected: *rrule_choice.read() == p,
+                                "{p.label()}"
+                            }
+                        }
+                    }
+                }
                 div { class: "modal-actions",
                     if is_edit {
                         button { class: "danger", onclick: delete, "Delete" }
                     } else {
                         span {}
                     }
-                    div { style: "display:flex;gap:8px",
+                    div { style: "display:flex;gap:8px;flex-wrap:wrap;",
                         button { onclick: move |_| editor.set(None), "Cancel" }
-                        button { class: "primary", onclick: save, "Save" }
+                        if is_recurring_edit {
+                            button { class: "primary", onclick: save_all, "All events" }
+                            button { onclick: save_following, "…and following" }
+                            button { class: "primary", onclick: save_this_only, "This event" }
+                        } else {
+                            button { class: "primary", onclick: save_all, "Save" }
+                        }
                     }
                 }
             }
@@ -569,5 +771,15 @@ fn modal_title(state: &EditorState) -> String {
                 ItemKind::Birthday => "birthday",
             }
         ),
+    }
+}
+
+fn preset_value(p: RrulePreset) -> &'static str {
+    match p {
+        RrulePreset::None => "none",
+        RrulePreset::Daily => "daily",
+        RrulePreset::Weekly => "weekly",
+        RrulePreset::Monthly => "monthly",
+        RrulePreset::Yearly => "yearly",
     }
 }

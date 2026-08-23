@@ -2,12 +2,19 @@
 //! The Dioxus app renders these directly; widgets will reuse them via FFI.
 
 use chrono::{Datelike, NaiveDate, Weekday};
+use rrule::Tz as RRuleTz;
+use std::str::FromStr;
 
-use crate::models::{CalendarItem, Occurrence};
+use crate::models::{CalendarItem, DateTimeTz, Occurrence};
+use rrule::RRule;
+use std::collections::BTreeMap;
 
 /// Number of weeks shown in a month grid row set (always render 6 rows so the
 /// grid never changes height while navigating).
 pub const MONTH_GRID_WEEKS: usize = 6;
+
+/// Upper bound on expanded recurrences per item per query window.
+const MAX_OCCURRENCES: u16 = 1000;
 
 /// A rectangular grid of dates covering `year-month` (and spilling into
 /// neighbouring months), starting on `first_day_of_week`, always
@@ -74,6 +81,97 @@ pub fn agenda_range(items: &[CalendarItem], from: NaiveDate, to: NaiveDate) -> V
         d += chrono::Duration::days(1);
     }
     out
+}
+
+/// Expand an item's occurrences (base + RRULE series minus EXDATEs) that fall
+/// within `[from, to]` (inclusive by day).
+///
+/// Multi-day non-recurring events produce one occurrence per covered day so
+/// they appear on every grid cell they span. Recurring occurrences keep the
+/// original start time and duration.
+pub fn expand_occurrences(
+    item: &CalendarItem,
+    from: NaiveDate,
+    to: NaiveDate,
+) -> Vec<Occurrence> {
+    if item.deleted {
+        return Vec::new();
+    }
+    // rrule 0.14 works in its own Tz enum; convert through UTC.
+    let to_rrule = |dt: &DateTimeTz| dt.with_timezone(&chrono::Utc).with_timezone(&RRuleTz::UTC);
+    let window_end_dt = to_rrule(&(item.start + (to - item.start.date_naive()) + chrono::Duration::days(1)));
+
+    let mut out = Vec::new();
+    match &item.rrule {
+        None => {
+            // Non-recurring: one occurrence per covered day in range.
+            let start_date = item.start.date_naive();
+            let end_date = item
+                .end
+                .as_ref()
+                .map(|e| e.date_naive())
+                .unwrap_or(start_date);
+            let first = from.max(start_date);
+            let last = to.min(end_date);
+            let mut d = first;
+            while d <= last {
+                let offset_days = (d - start_date).num_days();
+                let occ_start = item.start + chrono::Duration::days(offset_days);
+                let occ_end = item.end.map(|e| e + chrono::Duration::days(offset_days));
+                out.push(Occurrence { item_id: item.id, start: occ_start, end: occ_end });
+                d += chrono::Duration::days(1);
+            }
+        }
+        Some(rule_str) => {
+            let Ok(unvalidated) = RRule::from_str(rule_str) else {
+                return Vec::new();
+            };
+            let Ok(rule) = unvalidated.validate(to_rrule(&item.start)) else {
+                return Vec::new();
+            };
+            let mut set = rrule::RRuleSet::new(to_rrule(&item.start)).rrule(rule);
+            for ex in &item.exdates {
+                if *ex >= item.start {
+                    set = set.exdate(to_rrule(ex));
+                }
+            }
+            let result = set.before(window_end_dt).all(MAX_OCCURRENCES);
+            let duration = item.end.map(|e| e - item.start);
+            for dt in result.dates {
+                let dt = dt.with_timezone(item.start.offset());
+                let d = dt.date_naive();
+                if d < from || d > to {
+                    continue;
+                }
+                out.push(Occurrence {
+                    item_id: item.id,
+                    start: dt,
+                    end: duration.map(|dur| dt + dur),
+                });
+            }
+        }
+    }
+    out.sort_by_key(|o| o.start);
+    out
+}
+
+/// Group expanded occurrences of `items` by the day each starts on.
+/// Days with no occurrences are absent; each day's list is time-sorted.
+pub fn occurrences_by_date(
+    items: &[CalendarItem],
+    from: NaiveDate,
+    to: NaiveDate,
+) -> BTreeMap<NaiveDate, Vec<Occurrence>> {
+    let mut map: BTreeMap<NaiveDate, Vec<Occurrence>> = BTreeMap::new();
+    for item in items {
+        for occ in expand_occurrences(item, from, to) {
+            map.entry(occ.start.date_naive()).or_default().push(occ);
+        }
+    }
+    for occs in map.values_mut() {
+        occs.sort_by_key(|o| o.start);
+    }
+    map
 }
 
 #[cfg(test)]
@@ -152,4 +250,122 @@ mod tests {
         assert_eq!(out[0].1.start.hour(), 9);
         assert_eq!(out[2].0, from + chrono::Duration::days(1));
     }
+}
+
+#[cfg(test)]
+mod recurrence_tests {
+    use super::*;
+    use crate::models::{datetime_from_parts, Calendar, Color, DateTimeTz};
+
+    fn cal() -> Calendar {
+        Calendar::local("Test", Color("#3366cc".into()))
+    }
+
+    fn item(y: i32, m: u32, d: u32) -> CalendarItem {
+        let start: DateTimeTz = datetime_from_parts(y, m, d, 9, 0, 0).unwrap();
+        let mut it = CalendarItem::new(crate::models::ItemKind::Event, "e", cal().id, start);
+        it.end = Some(start + chrono::Duration::hours(1));
+        it
+    }
+
+    fn date(y: i32, m: u32, d: u32) -> NaiveDate {
+        NaiveDate::from_ymd_opt(y, m, d).unwrap()
+    }
+
+    #[test]
+    fn daily_rule_expands() {
+        let mut it = item(2026, 8, 24);
+        it.rrule = Some("FREQ=DAILY;COUNT=3".into());
+        let occs = expand_occurrences(&it, date(2026, 8, 1), date(2026, 9, 30));
+        assert_eq!(occs.len(), 3);
+        assert_eq!(occs[0].start.date_naive(), date(2026, 8, 24));
+        assert_eq!(occs[2].start.date_naive(), date(2026, 8, 26));
+        // Duration preserved per occurrence.
+        assert_eq!(Some(occs[0].start + chrono::Duration::hours(1)), occs[0].end);
+    }
+
+    #[test]
+    fn weekly_byday_expansion() {
+        let mut it = item(2026, 8, 24); // Monday
+        it.rrule = Some("FREQ=WEEKLY;BYDAY=MO,WE".into());
+        let occs = expand_occurrences(&it, date(2026, 8, 24), date(2026, 8, 31));
+        let days: Vec<NaiveDate> = occs.iter().map(|o| o.start.date_naive()).collect();
+        assert_eq!(days, vec![date(2026, 8, 24), date(2026, 8, 26), date(2026, 8, 31)]);
+    }
+
+    #[test]
+    fn exdate_removes_instance() {
+        let mut it = item(2026, 8, 24);
+        it.rrule = Some("FREQ=DAILY;COUNT=5".into());
+        assert_eq!(expand_occurrences(&it, date(2026, 8, 1), date(2026, 12, 1)).len(), 5);
+        it.exdates.push(datetime_from_parts(2026, 8, 25, 9, 0, 0).unwrap());
+        let occs = expand_occurrences(&it, date(2026, 8, 1), date(2026, 12, 1));
+        assert_eq!(occs.len(), 4);
+        assert!(!occs.iter().any(|o| o.start.date_naive() == date(2026, 8, 25)));
+    }
+
+    #[test]
+    fn until_bounds_expansion() {
+        let mut it = item(2026, 8, 24);
+        it.rrule = Some("FREQ=DAILY;UNTIL=20260826T000000Z".into());
+        let occs = expand_occurrences(&it, date(2026, 8, 1), date(2027, 1, 1));
+        assert!(occs.len() <= 3);
+    }
+
+    #[test]
+    fn window_filters_recurrences() {
+        let mut it = item(2026, 8, 24);
+        it.rrule = Some("FREQ=DAILY".into()); // unbounded
+        let occs = expand_occurrences(&it, date(2026, 9, 1), date(2026, 9, 7));
+        assert_eq!(occs.len(), 7);
+        assert_eq!(occs[0].start.date_naive(), date(2026, 9, 1));
+    }
+
+    #[test]
+    fn invalid_rrule_yields_base_only_or_empty() {
+        let mut it = item(2026, 8, 24);
+        it.rrule = Some("NOT A RULE".into());
+        assert!(expand_occurrences(&it, date(2026, 8, 1), date(2026, 12, 1)).is_empty());
+    }
+
+    #[test]
+    fn multiday_nonrecurring_spans_days() {
+        let mut it = item(2026, 8, 24);
+        it.end = Some(datetime_from_parts(2026, 8, 27, 11, 0, 0).unwrap());
+        for d in [24u32, 25, 26] {
+            assert_eq!(
+                expand_occurrences(&it, date(2026, 8, d), date(2026, 8, d)).len(),
+                1
+            );
+        }
+        assert!(expand_occurrences(&it, date(2026, 8, 28), date(2026, 8, 28)).is_empty());
+    }
+
+    #[test]
+    fn grouped_map_is_sorted_and_complete() {
+        let a = item(2026, 8, 24); // 09:00
+        let mut b = item(2026, 8, 24);
+        b.start = datetime_from_parts(2026, 8, 24, 8, 0, 0).unwrap();
+        b.end = None;
+        let mut c = item(2026, 8, 25);
+        c.rrule = Some("FREQ=WEEKLY;COUNT=2".into());
+
+        let map = occurrences_by_date(&[a.clone(), b.clone(), c], date(2026, 8, 23), date(2026, 9, 10));
+        assert_eq!(map.get(&date(2026, 8, 24)).unwrap().len(), 2);
+        let day = &map[&date(2026, 8, 24)];
+        assert_eq!(day[0].start.hour(), 8); // sorted
+        // Weekly COUNT=2 → two Tuesdays (weekday of dtstart).
+        assert_eq!(map.get(&date(2026, 9, 1)).unwrap().len(), 1);
+        assert!(map.get(&date(2026, 9, 8)).is_none());
+    }
+
+    #[test]
+    fn deleted_items_never_expand() {
+        let mut it = item(2026, 8, 24);
+        it.rrule = Some("FREQ=DAILY;COUNT=5".into());
+        it.deleted = true;
+        assert!(expand_occurrences(&it, date(2026, 8, 1), date(2026, 12, 1)).is_empty());
+    }
+
+    use chrono::Timelike as _;
 }
