@@ -364,6 +364,22 @@ pub struct EditorState {
     pub location: String,
     /// Editor-side recurrence choice; expanded into an RRULE string on save.
     pub rrule_preset: RrulePreset,
+    /// Selected reminder offsets in minutes before start.
+    pub reminder_minutes: Vec<i64>,
+}
+
+/// Default reminder presets offered in the editor (§5.3).
+pub const REMINDER_PRESETS: [i64; 5] = [10, 30, 60, 1440, 10080];
+
+pub fn preset_label(minutes: i64) -> &'static str {
+    match minutes {
+        10 => "10 min",
+        30 => "30 min",
+        60 => "1 hour",
+        1440 => "1 day",
+        10080 => "1 week",
+        _ => "custom",
+    }
 }
 
 /// Simplified recurrence picker (full custom RRULE editing comes later).
@@ -450,6 +466,7 @@ impl EditorState {
             calendar_id,
             location: String::new(),
             rrule_preset: if kind == ItemKind::Birthday { RrulePreset::Yearly } else { RrulePreset::None },
+            reminder_minutes: Vec::new(),
         }
     }
 
@@ -457,10 +474,19 @@ impl EditorState {
         let start = Local::now().fixed_offset();
         let blank = || CalendarItem::new(ItemKind::Event, "", Ulid::nil(), start);
         let item = db.get_item(id).ok().flatten().unwrap_or_else(blank);
+        let reminder_minutes = item
+            .reminders
+            .iter()
+            .filter_map(|r| match r.offset {
+                chrono_core::models::ReminderOffset::MinutesBefore { minutes } => Some(minutes),
+                _ => None,
+            })
+            .collect();
         Self {
             id: Some(item.id),
             occurrence_start: occ_start,
             rrule_preset: rrule_to_preset(item.rrule.as_deref()),
+            reminder_minutes,
             kind: item.kind,
             title: item.title,
             date: item.start.date_naive().format("%Y-%m-%d").to_string(),
@@ -566,6 +592,9 @@ pub fn EditorModal(state: EditorState) -> Element {
     let mut location = use_signal(move || init_location);
     let mut person = use_signal(move || init_person);
     let mut rrule_choice = use_signal(move || state.rrule_preset);
+    let init_reminders = state.reminder_minutes.clone();
+    let mut reminder_minutes = use_signal(move || init_reminders);
+    let mut custom_reminder = use_signal(String::new);
 
     // Editing a recurring series instance? Then saving needs a scope choice.
     let is_recurring_edit = state
@@ -606,6 +635,19 @@ pub fn EditorModal(state: EditorState) -> Element {
             item.metadata.birthday_of = Some(person.read().clone());
         }
         item.rrule = rrule_choice.read().to_rrule().map(str::to_string);
+        item.reminders = {
+            let mut mins = reminder_minutes.read().clone();
+            if let Ok(m) = custom_reminder.read().trim().parse::<i64>() {
+                if m > 0 && !mins.contains(&m) {
+                    mins.push(m);
+                }
+            }
+            mins.sort();
+            mins.dedup();
+            mins.into_iter()
+                .map(chrono_core::models::Reminder::minutes_before)
+                .collect()
+        };
         item.updated_at = Local::now().fixed_offset();
 
         let and_following = scope == Scope::ThisAndFollowing;
@@ -689,6 +731,40 @@ pub fn EditorModal(state: EditorState) -> Element {
                             input { r#type: "time", value: "{end_time}",
                                 oninput: move |e| end_time.set(e.value()), }
                         }
+                    }
+                }
+                label { "Remind me"
+                    div { style: "display:flex;gap:6px;flex-wrap:wrap;",
+                        for m in REMINDER_PRESETS {
+                            {
+                                let active = reminder_minutes.read().contains(&m);
+                                rsx! {
+                                    button {
+                                        key: "{m}",
+                                        class: if active { "primary" } else { "" },
+                                        style: "font-size:12px;padding:2px 8px;",
+                                        onclick: move |_| {
+                                            let mut list = reminder_minutes.read().clone();
+                                            if list.contains(&m) {
+                                                list.retain(|x| *x != m);
+                                            } else {
+                                                list.push(m);
+                                            }
+                                            reminder_minutes.set(list);
+                                        },
+                                        "{preset_label(m)}"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                label { "Custom reminder (minutes before)"
+                    input {
+                        r#type: "text",
+                        value: "{custom_reminder}",
+                        placeholder: "e.g. 45",
+                        oninput: move |e| custom_reminder.set(e.value()),
                     }
                 }
                 label { "Location (optional)"

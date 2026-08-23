@@ -1,10 +1,13 @@
 mod ui;
 
 use chrono::{Datelike, Local, Months, NaiveDate};
+use chrono_notify::{DesktopNotifier, ReminderScheduler as _, ThreadScheduler};
+use std::sync::Arc;
 use chrono_core::models::{Calendar, CalendarItem, Color};
 use chrono_storage::Database;
 use dioxus::prelude::*;
-use std::sync::Arc;
+/// App-wide shared handle to the reminder scheduler.
+pub type SchedulerHandle = Arc<ThreadScheduler<DesktopNotifier>>;
 
 /// App-wide shared handle to the SQLite database.
 pub type DbHandle = Arc<Database>;
@@ -52,6 +55,7 @@ fn App() -> Element {
 
     let db = use_context::<DbHandle>();
     let db_seed = db.clone();
+    let db_items = db.clone();
     let cal_res = use_resource(move || {
         let db = db_seed.clone();
         async move { ensure_default_calendars(&db) }
@@ -73,7 +77,7 @@ fn App() -> Element {
     // Single shared item list; views read it via context and restart it after
     // mutations.
     let mut items_res = use_resource(move || {
-        let db = db.clone();
+        let db = db_items.clone();
         async move { db.list_items(false).unwrap_or_default() }
     });
     use_context_provider(|| items_res);
@@ -83,6 +87,25 @@ fn App() -> Element {
         if cal_res.value().read().is_some() {
             calendars_res.restart();
             items_res.restart();
+        }
+    });
+
+    // Reconcile scheduled reminders whenever items change (§5.3: reschedule
+    // on foreground / after mutations / after sync merges).
+    let db_sched = db.clone();
+    let sched = use_context::<SchedulerHandle>();
+    let mut last_items_len = use_signal(|| 0usize);
+    use_effect(move || {
+        let version = items_res.value().read().as_ref().map(|v| v.len()).unwrap_or(0);
+        if version != *last_items_len.read() {
+            last_items_len.set(version);
+            if let Some(items) = items_res.value().read().as_ref() {
+                let from = Local::now().fixed_offset();
+                let firings =
+                    chrono_core::reminders::compute_firings(items, from, 14);
+                sched.reschedule(&firings);
+                let _ = &db_sched; // reserved: per-item deep-link payload later
+            }
         }
     });
 

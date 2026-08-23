@@ -72,15 +72,22 @@ bite you again if ignored, plus the exact state to resume from.
   NullNotifier, DesktopNotifier (notify-rust, feature "desktop"),
   ThreadScheduler implementing ReminderScheduler { reschedule/clear/
   pending_count } with cancel-flag threads (+tests with CollectingNotifier).
-- ▶ NEXT: Phase 4c — wire into app:
-  1. Editor modal: reminder preset chips (10m/30m/1h/1d/1w/custom minutes)
-     stored via EditorState → Vec<Reminder> on item; save maps minutes to
-     Reminder::minutes_before.
-  2. App startup/use_effect on items change: compute_firings(all visible
-     items, now, horizon=14d) → ThreadScheduler.reschedule. Provide scheduler
-     as context from App (Arc<ThreadScheduler<DesktopNotifier>>).
-  3. Notification tap deep-linking deferred to mobile phase.
-- THEN Phase 5 (.ics import/export), etc. `rrule` crate (v0.14) in chrono-core;
+- ✅ Phase 4 COMPLETE: editor has reminder preset chips (10m/30m/1h/1d/1w) +
+  custom minutes field; App provides `SchedulerHandle` context; a use_effect
+  reconciles `compute_firings(items, now, 14d)` → `ThreadScheduler.reschedule`
+  whenever the items resource length changes.
+- ▶ NEXT: Phase 5 — chrono-import (.ics + Google):
+  1. Add `icalendar` crate to chrono-import (verify current API — read crate
+     source under ~/.cargo/registry before writing code).
+  2. Export: calendars/items → VCALENDAR with VEVENT (+VTODO for tasks,
+     RRULE/EXDATE passthrough); write unit round-trip tests.
+  3. Import: parse .ics → Vec<(Calendar, Vec<CalendarItem>)> with source =
+     IcsImport; UI: "Import .ics" button in sidebar using rfd file dialog
+     (add rfd dep to app).
+  4. Google: OAuth device flow or loopback redirect via open::that + tiny HTTP
+     listener; REST list events w/ sync tokens. Defer if time-boxed; ICS path
+     is the FOSS-critical one.
+- THEN Phase 6 mobile builds, etc. `rrule` crate (v0.14) in chrono-core;
   `viewmodel::expand_occurrences` / `occurrences_by_date` (rrule + exdate
   aware) + tests; views render recurring instances; editor has Repeat selector
   (none/daily/weekly/monthly/yearly); per-instance edit scoping implemented in

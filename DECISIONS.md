@@ -30,6 +30,16 @@ Newest decisions may reference later phases; each entry notes the phase.
 | D16 | **Multi-day non-recurring events render one occurrence per covered day.** | Keeps month-grid cells self-contained without cross-cell span logic yet. |
 | D17 | **Week/day/agenda/month views consume one shared `occurrences_by_date` map** instead of querying per cell | Single expansion pass per render; O(items×window). |
 
+## Phase 4 — Reminders
+
+| # | Decision | Rationale |
+|---|----------|-----------|
+| D18 | **Firing computation in chrono-core** (`reminders::compute_firings`), platform scheduling in chrono-notify | Keeps logic headless-testable & reusable by widget FFI; notify crate stays thin. |
+| D19 | **Desktop scheduling = thread-per-firing with cancel flags** (ThreadScheduler), only next N firings armed | No daemon needed locally; simple, dependency-free; Android/iOS will use AlarmManager/UNUserNotificationCenter instead. |
+| D20 | **Missed firings are dropped on reconcile** (no catch-up of past reminders) | Matches local-first semantics without background guarantees; avoids notification storms after long offline periods. |
+| D21 | **Reconcile trigger = items resource version change** (len check) in a use_effect | Cheap approximation of "on foreground/mutation/sync"; revisit when sync lands. |
+| D22 | **notify-rust behind `desktop` feature** | Keeps mobile/web builds compiling before their native FFI backends exist. |
+
 ## Pending decisions for later phases
 
 - Sync CRDT engine: automerge vs yrs (phase 8).
