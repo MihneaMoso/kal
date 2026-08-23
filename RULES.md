@@ -22,6 +22,20 @@ bite you again if ignored, plus the exact state to resume from.
 4. **dioxus 0.6 desktop**: entry is `dioxus::launch(App)`. In RSX,
    `{expr.format(...)}` with escaped quotes fails to parse ("Expected Ident or
    Expression") — precompute strings into locals before rsx.
+   - **`let` statements are NOT allowed inside rsx `for` loop bodies** (only
+     top-level in the fn before `rsx!`, or inside `{ ... }` expression blocks).
+   - Every closure inside rsx must own its captures: clone `Arc<Database>`
+     handles into locals per use BEFORE rsx; a variable moved into one
+     handler can't be moved again by another.
+   - A component's `for x in list { <Component/> }` body is itself an FnMut
+     closure — per-iteration state must live in a child COMPONENT (props are
+     moved per iteration legally), not in inline lets.
+   - Component props require `Clone + PartialEq` on custom prop structs.
+   - Match a signal in rsx via `match *view.read() { ... }` (deref!);
+     string interpolation `"{c.year}"` is FIELD access only — methods fail.
+   - Shared state pattern that works: App creates ONE `use_resource` per
+     dataset, provides via `use_context_provider`; child components read it
+     from context and `.restart()` it after mutations.
 5. **crates.io reality check**: `dirs-next` latest major is **2**, not 5.
 6. Build takes ~3–5 min cold (dioxus-desktop pulls GTK/webkit deps on Linux);
    incremental after that. Use `cargo build 2>&1 | grep -E "^error" -A10` to
@@ -43,16 +57,22 @@ bite you again if ignored, plus the exact state to resume from.
 - ✅ Phase 1 COMPLETE: workspace scaffolded; chrono-core models +
   chrono-storage (migrations, repository) tested; Dioxus desktop shell builds &
   runs (`cargo run -p chrono-app`); 15 tests green.
-- ▶ NEXT: Phase 2 — CRUD + views:
-  1. Repository additions needed by UI: none blocking (items_in_range exists).
-  2. app/: event/task editor modal component, month grid view (virtualize
-     later), week/day time-grid, agenda list; calendar visibility toggles;
-     light/dark theme via CSS variables in `app/assets/` (create stylesheet;
-     check how dioxus-desktop loads assets — `Asset` / manganis in 0.6).
-  3. State: keep `DbHandle = Arc<Database>` context pattern; invalidate
-     `use_resource`s after mutations.
-- Then Phase 3 (rrule crate), Phase 4 (notify-rust on desktop first), Phase 5
-  (.ics round-trip), etc. Full plan: README.md §Roadmap and master prompt §7.
+- ✅ Phase 2 COMPLETE: chrono-core `viewmodel` module (month_grid,
+  items_on_date, agenda_range) + tests; app has month/week/day/agenda views,
+  event/task/birthday editor modal (create/edit/delete), task checkboxes,
+  calendar visibility toggles, light/dark theme, single shared
+  items/calendars resources via context.
+- ▶ NEXT: Phase 3 — recurrence:
+  1. Add `rrule` crate dep to chrono-core; extend viewmodel with
+     `expand_occurrences(item, range_start, range_end)` honoring rrule +
+     exdates; update views/agenda to use it.
+  2. Editor: add repeat selector (none/daily/weekly/monthly/yearly + interval).
+  3. Per-instance edit scoping (this event only → EXDATE + new item;
+     this-and-following → UNTIL + new series; all → edit base) — needs UI
+     choice dialog on save of a recurring item.
+  4. Storage already has `rrule`/`exdates_json` columns — no migration needed.
+- Then Phase 4 (chrono-notify: notify-rust desktop first), Phase 5 (.ics),
+  etc. Full plan: README.md §Roadmap and master prompt §7.
 
 ## Verification checklist before declaring a phase done
 

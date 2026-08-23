@@ -4,6 +4,7 @@
 
 pub mod models;
 pub mod error;
+pub mod viewmodel;
 
 pub use error::Error;
 pub type Result<T> = std::result::Result<T, Error>;
