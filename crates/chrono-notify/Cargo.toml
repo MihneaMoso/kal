@@ -3,6 +3,15 @@ name = "chrono-notify"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
-description = "Chrono chrono-notify crate (stub — implemented in later phases)."
+description = "Cross-platform reminder scheduling and local notifications for Chrono."
+
+[features]
+default = []
+# Native OS notifications on desktop (Linux/Windows/macOS) via notify-rust.
+desktop = ["dep:notify-rust"]
 
 [dependencies]
+ulid = { workspace = true }
+chrono-core = { path = "../chrono-core" }
+chrono = { workspace = true }
+notify-rust = { version = "4", optional = true }

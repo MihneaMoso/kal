@@ -4,6 +4,7 @@
 
 pub mod models;
 pub mod error;
+pub mod reminders;
 pub mod viewmodel;
 
 pub use error::Error;
