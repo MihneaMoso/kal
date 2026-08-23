@@ -100,7 +100,22 @@ bite you again if ignored, plus the exact state to resume from.
 - ✅ Phase 7b: widgets/kal_ffi.h + android Glance + iOS WidgetKit shim sources
   (not compiled here — need SDKs).
 - ✅ Phase 6 partial: birthday age badges ("Name · 36") in chips and rows.
-- ▶ NEXT: Phase 8 — P2P sync in crates/kal-sync: LWW-CRDT merge + sync-chain
+- ✅ Phase 8a–8c COMPLETE (crates/kal-sync, 18 tests):
+  - crdt.rs: SyncState/SyncEnvelope, whole-record LWW merge ordered by
+    (updated_at, tombstone-flag, content) → convergent under gossip.
+  - keys.rs: ChainIdentity — 24-word BIP39 phrase (feature "rand" needed!) →
+    seed → XChaCha20Poly1305 payload key + X25519 identity/fingerprint.
+    encrypt→nonce‖ct; decrypt errors as KeyError::Decrypt.
+  - session.rs: SyncSession { seal_state/accept_blob/revoked list } +
+    Transport trait; loopback tests prove two-replica convergence,
+    intruder rejection, revocation, corruption handling.
+  - GOTCHA: Calendar model gained updated_at (+ storage migration v2);
+    any new Calendar literal must set it.
+  - bip39 gotcha: phrases must be valid word counts (12/15/18/21/24); the
+    classic test vector is 11×"abandon"+"about".
+- ▶ NEXT: Phase 8d — pairing/settings UI in app (generate phrase screen,
+  join-by-phrase input, device fingerprint display), then wire a periodic
+  reschedule of reminders after merges. Then Phase 9 polish.: LWW-CRDT merge + sync-chain
   key derivation (bip39 phrase → x25519/chacha20poly1305) + Transport trait
   with loopback tests. UI pairing screen after lib is solid.
 - THEN Phase 9 polish, Phase 10 release. (Android/iOS via dioxus-mobile / xtask),

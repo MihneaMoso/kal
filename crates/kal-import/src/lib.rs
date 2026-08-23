@@ -200,6 +200,7 @@ pub fn import_ics(ics: &str, calendar_name: &str) -> Result<ImportedCalendar> {
         color: Color("#7a6ff0".into()),
         source: CalendarSource::IcsImport,
         visible: true,
+        updated_at: Utc::now().fixed_offset(),
     };
 
     let mut items = Vec::new();

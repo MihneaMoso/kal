@@ -39,6 +39,7 @@ fn ensure_default_calendars(db: &Database) -> Vec<Calendar> {
             color: Color("#e91e63".into()),
             source: kal_core::models::CalendarSource::Birthdays,
             visible: true,
+            updated_at: Local::now().fixed_offset(),
         })
         .ok();
     }

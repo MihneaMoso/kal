@@ -4,7 +4,7 @@
 //! unit-testable without network. Tokens are held in memory / local config
 //! only — Kal runs no backend, nothing else ever receives them.
 
-use chrono::{DateTime, NaiveDate, NaiveTime, TimeZone as _};
+use chrono::{DateTime, NaiveDate, NaiveTime, TimeZone as _, Utc};
 use serde::Deserialize;
 
 use kal_core::models::{
@@ -148,6 +148,7 @@ pub fn map_calendars(list: &[GoogleCalendar]) -> Vec<Calendar> {
             color: Color(g.background_color.clone().unwrap_or_else(|| "#1a73e8".into())),
             source: CalendarSource::GoogleImport,
             visible: true,
+            updated_at: Utc::now().fixed_offset(),
         })
         .collect()
 }

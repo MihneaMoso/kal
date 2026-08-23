@@ -72,6 +72,11 @@ CREATE TABLE items (
 
 CREATE INDEX idx_items_start ON items(start_epoch);
 CREATE INDEX idx_items_calendar ON items(calendar_id);
+"#,
+// v2: calendar LWW timestamp for sync.
+r#"
+ALTER TABLE calendars ADD COLUMN updated_epoch INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE calendars ADD COLUMN updated_rfc3339 TEXT NOT NULL DEFAULT '';
 "#];
 
 impl Database {
@@ -113,13 +118,15 @@ impl Database {
 
     pub fn upsert_calendar(&self, cal: &Calendar) -> Result<()> {
         self.conn.execute(
-            "INSERT INTO calendars (id, name, color, source, visible)
-             VALUES (?1, ?2, ?3, ?4, ?5)
+            "INSERT INTO calendars (id, name, color, source, visible, updated_epoch, updated_rfc3339)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
              ON CONFLICT(id) DO UPDATE SET
                 name=excluded.name, color=excluded.color,
-                source=excluded.source, visible=excluded.visible",
+                source=excluded.source, visible=excluded.visible,
+                updated_epoch=excluded.updated_epoch, updated_rfc3339=excluded.updated_rfc3339",
             params![cal.id.to_string(), cal.name, cal.color.as_str(),
-                    serde_json::to_string(&cal.source).unwrap(), cal.visible as i64],
+                    serde_json::to_string(&cal.source).unwrap(), cal.visible as i64,
+                    epoch(&cal.updated_at), cal.updated_at.to_rfc3339()],
         )?;
         Ok(())
     }
@@ -127,7 +134,7 @@ impl Database {
     pub fn get_calendar(&self, id: Ulid) -> Result<Option<Calendar>> {
         self.conn
             .query_row(
-                "SELECT id, name, color, source, visible FROM calendars WHERE id = ?1",
+                "SELECT id, name, color, source, visible, updated_epoch, updated_rfc3339 FROM calendars WHERE id = ?1",
                 params![id.to_string()],
                 row_to_calendar,
             )
@@ -138,7 +145,7 @@ impl Database {
     pub fn list_calendars(&self) -> Result<Vec<Calendar>> {
         let mut stmt = self
             .conn
-            .prepare("SELECT id, name, color, source, visible FROM calendars ORDER BY name")?;
+            .prepare("SELECT id, name, color, source, visible, updated_epoch, updated_rfc3339 FROM calendars ORDER BY name")?;
         let rows = stmt.query_map([], row_to_calendar)?;
         Ok(rows
             .collect::<rusqlite::Result<Vec<_>>>()?
@@ -265,6 +272,15 @@ fn from_epoch(secs: i64, rfc3339: &str) -> Result<DateTimeTz> {
 
 fn row_to_calendar(row: &rusqlite::Row<'_>) -> rusqlite::Result<Calendar> {
     let id: String = row.get(0)?;
+    // v2 columns may be absent in legacy rows; fall back to epoch 0.
+    let upd_e: Option<i64> = row.get(5).ok();
+    let upd_s: Option<String> = row.get(6).ok();
+    let updated_at = match (upd_e, upd_s) {
+        (_, Some(ref r)) => DateTime::parse_from_rfc3339(r)
+            .map_err(|e| StorageError::Corrupt(e.to_string()))
+            .map_err(rusqlite::Error::from)?,
+        _ => Utc.timestamp_opt(0, 0).single().unwrap().fixed_offset(),
+    };
     Ok(Calendar {
         id: Ulid::from_str(&id).map_err(|e| StorageError::Corrupt(e.to_string()))?,
         name: row.get(1)?,
@@ -272,6 +288,7 @@ fn row_to_calendar(row: &rusqlite::Row<'_>) -> rusqlite::Result<Calendar> {
         source: serde_json::from_str(&row.get::<_, String>(3)?)
             .map_err(|e| StorageError::Corrupt(e.to_string()))?,
         visible: row.get::<_, i64>(4)? != 0,
+        updated_at,
     })
 }
 

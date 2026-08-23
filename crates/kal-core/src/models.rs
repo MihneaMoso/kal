@@ -114,6 +114,8 @@ pub struct Calendar {
     pub color: Color,
     pub source: CalendarSource,
     pub visible: bool,
+    /// LWW timestamp for CRDT merge (sync phase).
+    pub updated_at: DateTimeTz,
 }
 
 impl Calendar {
@@ -124,6 +126,7 @@ impl Calendar {
             color,
             source: CalendarSource::Local,
             visible: true,
+            updated_at: Utc::now().fixed_offset(),
         }
     }
 }

@@ -133,6 +133,7 @@ fn birthday_item_round_trip_with_metadata() {
         color: Color("#e91e63".into()),
         source: CalendarSource::Birthdays,
         visible: true,
+        updated_at: ts(2020, 1, 1, 0),
     };
     db.upsert_calendar(&bd_cal).unwrap();
 

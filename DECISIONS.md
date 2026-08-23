@@ -66,6 +66,16 @@ Newest decisions may reference later phases; each entry notes the phase.
 | D32 | **kal_close takes a `*mut *mut KalDb` out-param** and nulls it | Makes double-close safe at the ABI level (plain double-free segfaulted in tests — caught early). |
 | D33 | **Widget queries expand occurrences server-side (in Rust)** so yearly birthdays appear even though their base row is decades old. | Raw range SQL missed recurring items. |
 
+## Phase 8 — P2P sync
+
+| # | Decision | Rationale |
+|---|----------|-----------|
+| D34 | **Whole-item/calendar LWW registers** instead of Automerge/Yrs | Spec allows "simplest option preserving architecture": state-based LWW converges under arbitrary reordering, needs no op-log GC, and the envelope format survives an upgrade to field-level or Automerge CRDTs later. |
+| D35 | **Total order tie-breaks**: newer timestamp → tombstone flag → lexicographic content | Guarantees all replicas pick the same winner even when timestamps collide (clock skew). |
+| D36 | **Key derivation**: BIP39 seed → SHA-256 domain-separated stretch → XChaCha20-Poly1305 payload key + X25519 identity. Fingerprint = first 8 bytes of SHA-256(pubkey) hex. | No extra KDF dep; XChaCha avoids nonce-reuse risk without counter management. |
+| D37 | **Revocation = fingerprint blocklist per device**, not key rotation (spec's full re-pair flow deferred) | Simplest correct behavior: revoked peers' envelopes are dropped; key rotation requires re-pairing UX which lands with the settings UI phase. |
+| D38 | **Transport is a trait** (`send`/`recv` opaque blobs); iroh/mDNS implementations plug in later behind features. | Protocol logic fully tested offline via LoopbackTransport; real transports are drop-in. |
+
 ## Pending decisions for later phases
 
 - Sync CRDT engine: automerge vs yrs (phase 8).

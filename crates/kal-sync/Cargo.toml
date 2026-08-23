@@ -3,6 +3,19 @@ name = "kal-sync"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
-description = "Kal kal-sync crate (stub — implemented in later phases)."
+description = "Account-free peer-to-peer sync for Kal: CRDT merge, sync-chain keys, encrypted transport."
 
 [dependencies]
+kal-core = { path = "../kal-core" }
+bip39 = { version = "2", features = ["rand"] }
+chacha20poly1305 = "0.10"
+sha2 = "0.10"
+x25519-dalek = { version = "2", features = ["static_secrets"] }
+chrono = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+ulid = { workspace = true }
+thiserror = { workspace = true }
+
+[dev-dependencies]
+rand = "0.8"
