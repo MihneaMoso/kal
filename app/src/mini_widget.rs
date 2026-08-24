@@ -18,7 +18,8 @@ pub fn launch_mini_window() {
                 .with_title("Kal — mini")
                 .with_always_on_top(true)
                 .with_resizable(false)
-                .with_inner_size(LogicalSize::new(280.0_f64, 320.0_f64)),
+                .with_inner_size(LogicalSize::new(280.0_f64, 320.0_f64))
+                .with_decorations(false),
         );
         let dom = VirtualDom::new(MiniCalendar);
         let _ = dioxus::desktop::window().new_window(dom, cfg).await;
@@ -49,10 +50,24 @@ fn MiniCalendar() -> Element {
     );
     let today = now.date_naive();
 
+    // Frameless popup needs its own move/close affordances.
+    let ctx = dioxus::desktop::window();
+    let ctx_close = ctx.clone();
+    let ctx_drag = ctx.clone();
+
     rsx! {
-        div { style: "font-family:system-ui;padding:8px;background:#fff;color:#111;",
-            div { style: "font-size:13px;font-weight:600;margin-bottom:4px;",
-                "{c.format(\"%B %Y\")}"
+        div { style: "font-family:system-ui;padding:8px;background:#fff;color:#111;height:100vh;display:flex;flex-direction:column;",
+            div { style: "display:flex;align-items:center;margin:-8px -8px 6px -8px;padding:2px 4px;background:#f1f3f5;border-bottom:1px solid #ddd;",
+                span {
+                    style: "flex:1;font-size:11px;color:#555;user-select:none;",
+                    onmousedown: move |_| ctx_drag.drag(),
+                    "{c.format(\"%B %Y\")}"
+                }
+                button {
+                    onclick: move |_| ctx_close.close(),
+                    style: "border:none;background:transparent;cursor:pointer;font-size:12px;",
+                    "\u{2715}"
+                }
             }
             for row in grid.iter() {
                 div { style: "display:grid;grid-template-columns:repeat(7,1fr);gap:2px;margin-bottom:2px;",

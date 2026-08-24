@@ -5,6 +5,7 @@ mod ui;
 
 use chrono::{Datelike, Local, Months, NaiveDate};
 use dioxus::prelude::*;
+use dioxus_desktop::{Config, WindowBuilder};
 use kal_core::models::{Calendar, CalendarItem, Color};
 use kal_notify::{DesktopNotifier, ReminderScheduler as _, ThreadScheduler};
 use kal_storage::Database;
@@ -50,7 +51,15 @@ fn ensure_default_calendars(db: &Database) -> Vec<Calendar> {
 }
 
 fn main() {
-    dioxus::launch(App);
+    // Frameless window (spec request): no GTK decorations => no system
+    // menu/titlebar; Kal draws its own title bar (see TitleBar component).
+    let cfg = Config::new().with_window(
+        WindowBuilder::new()
+            .with_title("Kal")
+            .with_decorations(false)
+            .with_maximized(true),
+    );
+    dioxus::LaunchBuilder::new().with_cfg(cfg).launch(App);
 }
 
 #[component]
@@ -74,6 +83,14 @@ fn App() -> Element {
 
     let prefs = ui::Settings::load(&db);
     let default_view = prefs.default_view;
+
+    // Layout state: hamburger/collapse (§ issue 3) and pixel width of the
+    // resizable sidebar.
+    use_context_provider(|| Signal::new(true)); // sidebar_open
+    use_context_provider(|| Signal::new(230u32)); // sidebar_width
+    use_context_provider(|| Signal::new(false)); // sidebar_resizing
+    let prefs_drawer = Signal::new(false);
+    use_context_provider(|| prefs_drawer);
 
     let today: NaiveDate = Local::now().date_naive();
     use_context_provider(|| Signal::new(today));
@@ -138,12 +155,44 @@ fn App() -> Element {
     });
 
     let css = include_str!("../assets/main.css");
+    // Whole-document theming: variables are injected at :root AFTER the base
+    // stylesheet so every element (html/body included) follows the theme.
+    // (Previously vars lived on the .app wrapper, which is why body and the
+    // calendar grid never switched.)
+    let dark = settings.read().theme == "dark";
+    let themed_css = if dark {
+        format!("{css}{DARK_THEME_VARS}")
+    } else {
+        css.to_string()
+    };
+
+    // Sidebar resize dragging (root-level so fast cursor movement can't
+    // escape the handle). The flag is shared with the divider handle.
+    let mut resizing = use_context::<Signal<bool>>();
+    let _ = &mut resizing;
+    let mut sidebar_width = use_context::<Signal<u32>>();
+    let app_class = if *resizing.read() {
+        "app resizing"
+    } else {
+        "app"
+    };
+    let on_root_mousemove = move |e: Event<MouseData>| {
+        if *resizing.read() {
+            let x = e.client_coordinates().x as u32;
+            sidebar_width.set(x.clamp(170, 480));
+        }
+    };
+    let end_resize = move |_| resizing.set(false);
 
     rsx! {
         div {
-            "data-theme": "{settings.read().theme}",
-            style { dangerous_inner_html: "{css}" }
+            class: "{app_class}",
+            onmousemove: on_root_mousemove,
+            onmouseup: end_resize,
+            onmouseleave: end_resize,
+            style { dangerous_inner_html: "{themed_css}" }
 
+            TitleBar {}
             TopBar {}
             div { class: "body",
                 Sidebar {}
@@ -158,8 +207,106 @@ fn App() -> Element {
     }
 }
 
+/// Frameless-window title bar: hamburger toggle, drag-to-move strip and
+/// min/max/close controls replacing the removed GTK decorations.
+#[component]
+fn TitleBar() -> Element {
+    let mut sidebar_open = use_context::<Signal<bool>>();
+    let title_label = i18n::tr("app-title");
+    let ctx_min = dioxus::desktop::window();
+    let ctx_max = dioxus::desktop::window();
+    let ctx_dblmax = ctx_max.clone();
+    let ctx_close = dioxus::desktop::window();
+    let ctx_drag = dioxus::desktop::window();
+
+    rsx! {
+        div { class: "titlebar",
+            button {
+                class: "icon-btn",
+                "aria-label": "Toggle sidebar",
+                onclick: move |_| sidebar_open.toggle(),
+                "☰"
+            }
+            span { class: "tb-title", "{title_label}" }
+            div {
+                class: "drag-area",
+                onmousedown: move |_| ctx_drag.drag(),
+                ondoubleclick: move |_| ctx_dblmax.toggle_maximized(),
+            }
+            button {
+                class: "icon-btn win",
+                "aria-label": "Minimize",
+                onclick: move |_| ctx_min.window.set_minimized(true),
+                "—"
+            }
+            button {
+                class: "icon-btn win",
+                "aria-label": "Maximize / restore",
+                onclick: move |_| ctx_max.toggle_maximized(),
+                "□"
+            }
+            button {
+                class: "icon-btn win close",
+                "aria-label": "Close",
+                onclick: move |_| ctx_close.close(),
+                "×"
+            }
+        }
+    }
+}
+
+const DARK_THEME_VARS: &str = r#"
+:root {
+    --bg: #16191d;
+    --bg-alt: #1f2329;
+    --fg: #e6e8eb;
+    --fg-muted: #9aa4ae;
+    --accent: #6c99f0;
+    --border: #33393f;
+    --today: #22304a;
+}
+"#;
+
 #[component]
 fn TopBar() -> Element {
+    let mut prefs_drawer = use_context::<Signal<bool>>();
+
+    rsx! {
+        header { class: "topbar",
+            h1 { "{title_label()}" }
+            span { class: "subtitle", "{subtitle_label()}" }
+            div { class: "spacer" }
+            nav { class: "tb-controls", "aria-label": "Preferences",
+                PreferencesControls {}
+            }
+            button {
+                class: "icon-btn prefs-toggle",
+                "aria-label": "Preferences menu",
+                "aria-expanded": "{*prefs_drawer.read()}",
+                onclick: move |_| prefs_drawer.toggle(),
+                "\u{2699}"
+            }
+        }
+        if *prefs_drawer.read() {
+            div { class: "prefs-drawer", role: "menu", "aria-label": "Preferences",
+                PreferencesControls {}
+            }
+        }
+    }
+}
+
+fn title_label() -> String {
+    i18n::tr("app-title")
+}
+
+fn subtitle_label() -> String {
+    format!("{} \u{2014} {}", i18n::tr("app-subtitle"), ui::today_line())
+}
+
+/// The preference selects + theme toggle, rendered either inline in the
+/// top bar (wide screens) or inside the drawer (narrow screens).
+#[component]
+fn PreferencesControls() -> Element {
     let db = use_context::<DbHandle>();
     let mut settings = use_context::<Signal<ui::Settings>>();
     let dark = settings.read().theme == "dark";
@@ -168,67 +315,64 @@ fn TopBar() -> Element {
     let db_view = db.clone();
     let db_theme = db.clone();
 
-    // Preferences selector: 12/24h + week start + default view.
     rsx! {
-        header { class: "topbar",
-            h1 { "{i18n::tr(\"app-title\")}" }
-            span { class: "subtitle", "{i18n::tr(\"app-subtitle\")} — {ui::today_line()}" }
-            div { class: "spacer" }
-            select {
-                title: "Time format",
-                value: if settings.read().time_24h { "24h" } else { "12h" },
-                onchange: move |e| {
-                    let mut p = settings.read().clone();
-                    p.time_24h = e.value() == "24h";
-                    p.save(&db_time);
-                    settings.set(p);
-                },
-                option { value: "24h", selected: settings.read().time_24h, "24-hour" }
-                option { value: "12h", selected: !settings.read().time_24h, "12-hour" }
-            }
-            select {
-                title: "First day of week",
-                onchange: move |e| {
-                    let mut p = settings.read().clone();
-                    p.first_day_monday = e.value() == "mon";
-                    p.save(&db_week);
-                    settings.set(p);
-                },
-                option { value: "mon", selected: settings.read().first_day_monday, "Week starts Monday" }
-                option { value: "sun", selected: !settings.read().first_day_monday, "Week starts Sunday" }
-            }
-            select {
-                title: "Default view",
-                onchange: move |e| {
-                    let mut p = settings.read().clone();
-                    p.default_view = match e.value().as_str() {
-                        "week" => ui::ViewMode::Week,
-                        "day" => ui::ViewMode::Day,
-                        "agenda" => ui::ViewMode::Agenda,
-                        _ => ui::ViewMode::Month,
-                    };
-                    p.save(&db_view);
-                    settings.set(p);
-                },
-                for m in ui::ViewMode::ALL {
-                    option {
-                        key: "{m:?}",
-                        value: "{default_view_value(m)}",
-                        selected: settings.read().default_view == m,
-                        "{m.label()}"
-                    }
+        select {
+            title: "Time format",
+            value: if settings.read().time_24h { "24h" } else { "12h" },
+            onchange: move |e| {
+                let mut p = settings.read().clone();
+                p.time_24h = e.value() == "24h";
+                p.save(&db_time);
+                settings.set(p);
+            },
+            option { value: "24h", selected: settings.read().time_24h, "24-hour" }
+            option { value: "12h", selected: !settings.read().time_24h, "12-hour" }
+        }
+        select {
+            title: "First day of week",
+            onchange: move |e| {
+                let mut p = settings.read().clone();
+                p.first_day_monday = e.value() == "mon";
+                p.save(&db_week);
+                settings.set(p);
+            },
+            option { value: "mon", selected: settings.read().first_day_monday, "Week starts Monday" }
+            option { value: "sun", selected: !settings.read().first_day_monday, "Week starts Sunday" }
+        }
+        select {
+            title: "Default view",
+            onchange: move |e| {
+                let mut p = settings.read().clone();
+                p.default_view = match e.value().as_str() {
+                    "week" => ui::ViewMode::Week,
+                    "day" => ui::ViewMode::Day,
+                    "agenda" => ui::ViewMode::Agenda,
+                    _ => ui::ViewMode::Month,
+                };
+                p.save(&db_view);
+                settings.set(p);
+            },
+            for m in ui::ViewMode::ALL {
+                option {
+                    key: "{m:?}",
+                    value: "{default_view_value(m)}",
+                    selected: settings.read().default_view == m,
+                    "{m.label()}"
                 }
             }
-            button {
-                "aria-label": if dark { "Switch to light mode" } else { "Switch to dark mode" },
-                onclick: move |_| {
-                    let mut p = settings.read().clone();
-                    p.theme = if dark { "light".into() } else { "dark".into() };
-                    p.save(&db_theme);
-                    settings.set(p);
-                },
-                {if dark { crate::i18n::tr("theme-toggle-light") } else { crate::i18n::tr("theme-toggle-dark") }}
-            }
+        }
+        button {
+            "aria-label": if dark { "Switch to light mode" } else { "Switch to dark mode" },
+            onclick: move |_| {
+                // Read current theme INSIDE the handler; capturing `dark` at
+                // render time made every click after the first a no-op.
+                let mut p = settings.read().clone();
+                let now_dark = p.theme == "dark";
+                p.theme = if now_dark { "light".into() } else { "dark".into() };
+                p.save(&db_theme);
+                settings.set(p);
+            },
+            {if dark { crate::i18n::tr("theme-toggle-light") } else { crate::i18n::tr("theme-toggle-dark") }}
         }
     }
 }
@@ -254,6 +398,10 @@ fn source_label(cal: &Calendar) -> &'static str {
 
 #[component]
 fn Sidebar() -> Element {
+    let open = use_context::<Signal<bool>>();
+    let width = use_context::<Signal<u32>>();
+    let mut resizing = use_context::<Signal<bool>>();
+
     let db = use_context::<DbHandle>();
     let mut editor = use_context::<Signal<Option<ui::EditorState>>>();
     let mut items_res = use_context::<Resource<Vec<CalendarItem>>>();
@@ -267,8 +415,18 @@ fn Sidebar() -> Element {
     let db_task = db.clone();
     let db_bday = db.clone();
 
+    let style_width = if *open.read() {
+        format!("width:{}px", width)
+    } else {
+        "width:0;padding:0;border-right:none".to_string()
+    };
+
     rsx! {
-        aside { class: "sidebar",
+        aside { class: "sidebar", style: "{style_width}",
+            div { class: "resize-handle",
+                title: "Drag to resize",
+                onmousedown: move |_| resizing.set(true),
+            }
             h2 { "Calendars" }
             ul {
                 for cal in calendars.iter().cloned() {

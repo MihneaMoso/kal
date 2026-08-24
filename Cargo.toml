@@ -27,3 +27,21 @@ tokio = { version = "1", features = ["rt-multi-thread", "macros", "time"] }
 [profile.release]
 lto = "thin"
 codegen-units = 1
+
+# Keep on-disk footprint small (project constraint: builds stay in ./target
+# and total workspace size stays under 1 GB):
+# - no incremental caches (the single biggest offender),
+# - line-tables-only debug info instead of full DWARF,
+# - one codegen unit, no parallel artifact duplication.
+[profile.dev]
+debug = false
+incremental = false
+opt-level = "z"
+strip = true
+codegen-units = 16
+
+[profile.test]
+debug = false
+incremental = false
+opt-level = "z"
+strip = true

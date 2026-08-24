@@ -1,6 +1,0 @@
-# Keep heavy build artifacts out of the repository directory entirely.
-# Relative paths resolve against the workspace root, so this lands in
-# /home/moso/kal-build (outside /home/moso/kal). Delete that folder anytime
-# to reclaim space; cargo will rebuild from scratch.
-[build]
-target-dir = "../kal-build"

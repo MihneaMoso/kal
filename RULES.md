@@ -1,11 +1,12 @@
 # RULES.md — Environment Quirks & Continuation Guide
 
-> BUILD LAYOUT (IMPORTANT): `.cargo/config.toml` sets
-> `target-dir = "../kal-build"` → binaries land in `/home/moso/kal-build/`
-> (OUTSIDE the repo) to keep the project directory tiny. Run the app via
-> `/home/moso/kal-build/debug/kal` or `cd app && dx serve`. NEVER delete the
-> repo thinking builds are inside; to reclaim disk, `rm -rf /home/moso/kal-build`.
-> dx serve uses its own target dir under ~/.cache — unaffected.
+> BUILD LAYOUT (IMPORTANT, user constraint): ALL builds stay inside ~/kal.
+> Never write outside the working directory without explicit permission.
+> Disk budget: target/ ≈ 1.4G steady state is ACCEPTED; keep it there via
+> slim dev/test profiles in Cargo.toml (debug=false, opt-level="z",
+> strip=true, incremental=false — full DWARF debuginfo was 20G).
+> `dx serve` adds ~2G in target/<triple>/ + target/desktop-dev → run
+> `scripts/tidy.sh` afterwards. Binary: ./target/debug/kal.
 
 > NOTE: The app was RENAMED from "Chrono" to "Kal" (user request). Crate names
 > are kal-core/kal-storage/kal-sync/kal-notify/kal-import/kal-ffi, binary is
@@ -199,6 +200,21 @@ bite you again if ignored, plus the exact state to resume from.
 - `cargo build --workspace` warning-free (fix or justify warnings)
 - Desktop app still launches: `timeout 8 ./target/debug/Kal; echo $?`
 - Update DECISIONS.md with any judgment calls made during the phase
+
+## UI notes (frameless window)
+
+- Main + mini windows use `.with_decorations(false)`; Kal draws its own
+  TitleBar (hamburger / drag-area onmousedown→ctx.drag() /
+  min-max-close via DesktopContext). dblclick uses `ondoubleclick`
+  (ondblclick deprecated).
+- Theme: CSS file holds LIGHT vars on :root only; DARK injected from Rust
+  const AFTER the sheet (DARK_THEME_VARS) targeting :root so body+grid
+  follow. Never scope palette vars to a wrapper div (that caused partial
+  switching), and never capture theme bool in onclick closures (stale
+  closure broke toggle-back) — read settings.read() inside handler.
+- Sidebar collapse/resize: signals sidebar_open/sidebar_width/resizing in
+  App context; divider mousedown sets resizing, ROOT onmousemove applies
+  clamp(170..480); class "resizing" disables transitions.
 
 ## Future work (deferred deliberately, with entry points)
 

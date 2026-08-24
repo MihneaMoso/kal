@@ -1,6 +1,9 @@
-/* Kal base stylesheet — light/dark via data-theme attribute. */
+/* Kal base stylesheet.
+ * Light palette lives on :root below; the dark palette is injected as an
+ * additional :root block from Rust (see DARK_THEME_VARS in main.rs) AFTER
+ * this sheet so it wins the cascade for the whole document. */
 
-:root, [data-theme="light"] {
+:root {
     --bg: #ffffff;
     --bg-alt: #f5f6f8;
     --fg: #1b1f24;
@@ -10,26 +13,50 @@
     --today: #eef4ff;
 }
 
-[data-theme="dark"] {
-    --bg: #16191d;
-    --bg-alt: #1f2329;
-    --fg: #e6e8eb;
-    --fg-muted: #9aa4ae;
-    --accent: #6c99f0;
-    --border: #33393f;
-    --today: #22304a;
-}
-
 * { box-sizing: border-box; }
+
+html, body, #main {
+    margin: 0;
+    height: 100%;
+}
 
 body {
     margin: 0;
     font-family: system-ui, -apple-system, sans-serif;
     background: var(--bg);
     color: var(--fg);
+    overflow: hidden; /* the app scrolls its panes, not the page */
 }
 
-.app { display: flex; flex-direction: column; height: 100vh; }
+.app { display: flex; flex-direction: column; height: 100vh; width: 100vw; }
+
+/* ---- Frameless-window title bar (replaces GTK decorations) ---- */
+.titlebar {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    height: 38px;
+    min-height: 38px;
+    padding: 0 6px;
+    background: var(--bg-alt);
+    border-bottom: 1px solid var(--border);
+    user-select: none;
+}
+.tb-title { font-weight: 600; font-size: 14px; margin-right: 4px; }
+.drag-area { flex: 1; align-self: stretch; cursor: default; }
+.icon-btn {
+    background: transparent;
+    border: none;
+    border-radius: 6px;
+    min-width: 30px;
+    height: 28px;
+    font-size: 14px;
+    line-height: 1;
+    cursor: pointer;
+    color: var(--fg);
+}
+.icon-btn:hover { background: var(--border); }
+.icon-btn.win.close:hover { background: #c0392b; color: #fff; }
 
 .topbar {
     display: flex; align-items: center; gap: 12px;
@@ -40,6 +67,29 @@ body {
 .topbar h1 { font-size: 18px; margin: 0; }
 .topbar .spacer { flex: 1; }
 .subtitle { color: var(--fg-muted); font-size: 12px; }
+.tb-controls { display: flex; gap: 8px; align-items: center; }
+.prefs-toggle { display: none; font-size: 16px; }
+.prefs-drawer {
+    position: fixed;
+    top: calc(38px + 45px); /* below titlebar + topbar */
+    right: 8px;
+    z-index: 50;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 10px;
+    background: var(--bg-alt);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    box-shadow: 0 6px 24px rgba(0,0,0,0.25);
+}
+.prefs-drawer select, .prefs-drawer button { width: 100%; }
+
+@media (max-width: 900px) {
+    .tb-controls { display: none; }
+    .prefs-toggle { display: inline-block; }
+    .subtitle { display: none; }
+}
 
 button, select, input[type="text"], input[type="date"], input[type="time"] {
     background: var(--bg);
@@ -59,10 +109,26 @@ button.primary { background: var(--accent); color: #fff; border-color: var(--acc
 .body { display: flex; flex: 1; min-height: 0; }
 
 .sidebar {
-    width: 200px; padding: 12px;
+    position: relative;
+    width: 230px;               /* overridden inline while open/collapsed */
+    padding: 12px;
     border-right: 1px solid var(--border);
     background: var(--bg-alt);
+    overflow-x: hidden;
+    transition: width 0.15s ease;
+    white-space: nowrap;
 }
+.sidebar .resize-handle {
+    position: absolute;
+    top: 0; right: -3px;
+    width: 6px; height: 100%;
+    cursor: col-resize;
+    z-index: 10;
+}
+.sidebar .resize-handle:hover { background: var(--accent); opacity: 0.5; }
+
+.app.resizing { cursor: col-resize; user-select: none; }
+.app.resizing .sidebar { transition: none; }
 .sidebar h2 { font-size: 13px; text-transform: uppercase; color: var(--fg-muted); margin: 8px 0; }
 .sidebar ul { list-style: none; padding: 0; margin: 0; }
 .sidebar li { display: flex; align-items: center; gap: 8px; padding: 4px 2px; cursor: pointer; }
