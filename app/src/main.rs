@@ -51,9 +51,14 @@ fn ensure_default_calendars(db: &Database) -> Vec<Calendar> {
 }
 
 fn main() {
-    // Window manager / DE owns decorations; we just ask for a big window.
-    let cfg =
-        Config::new().with_window(WindowBuilder::new().with_title("Kal").with_maximized(true));
+    // Frameless window: GTK decorations (titlebar + menu) are hidden; Kal
+    // draws its own TitleBar component below.
+    let cfg = Config::new().with_window(
+        WindowBuilder::new()
+            .with_title("Kal")
+            .with_decorations(false)
+            .with_maximized(true),
+    );
     dioxus::LaunchBuilder::new().with_cfg(cfg).launch(App);
 }
 
@@ -187,6 +192,7 @@ fn App() -> Element {
             onmouseleave: end_resize,
             style { dangerous_inner_html: "{themed_css}" }
 
+            TitleBar {}
             TopBar {}
             div { class: "body",
                 Sidebar {}
@@ -196,6 +202,57 @@ fn App() -> Element {
             match editor.read().clone() {
                 Some(state) => rsx! { ui::EditorModal { state } },
                 None => rsx! {},
+            }
+        }
+    }
+}
+
+/// Frameless-window title bar: hamburger toggle, drag-to-move strip and
+/// min/max/close controls replacing the removed GTK decorations.
+#[component]
+fn TitleBar() -> Element {
+    let mut layout = use_context::<Signal<ui::UiLayout>>();
+    let title_label = i18n::tr("app-title");
+    let ctx_min = dioxus::desktop::window();
+    let ctx_max = dioxus::desktop::window();
+    let ctx_dblmax = ctx_max.clone();
+    let ctx_close = dioxus::desktop::window();
+    let ctx_drag = dioxus::desktop::window();
+
+    rsx! {
+        div { class: "titlebar",
+            button {
+                class: "icon-btn",
+                "aria-label": "Toggle sidebar",
+                onclick: move |_| {
+                    let cur = layout.read().sidebar_open;
+                    layout.write().sidebar_open = !cur;
+                },
+                "\u{2630}"
+            }
+            span { class: "tb-title", "{title_label}" }
+            div {
+                class: "drag-area",
+                onmousedown: move |_| ctx_drag.drag(),
+                ondoubleclick: move |_| ctx_dblmax.toggle_maximized(),
+            }
+            button {
+                class: "icon-btn win",
+                "aria-label": "Minimize",
+                onclick: move |_| ctx_min.window.set_minimized(true),
+                "\u{2014}"
+            }
+            button {
+                class: "icon-btn win",
+                "aria-label": "Maximize / restore",
+                onclick: move |_| ctx_max.toggle_maximized(),
+                "\u{25a1}"
+            }
+            button {
+                class: "icon-btn win close",
+                "aria-label": "Close",
+                onclick: move |_| ctx_close.close(),
+                "\u{00d7}"
             }
         }
     }
@@ -216,21 +273,10 @@ const DARK_THEME_VARS: &str = r#"
 
 #[component]
 fn TopBar() -> Element {
-    let mut layout = use_context::<Signal<ui::UiLayout>>();
-    let mut prefs_drawer = layout;
+    let mut prefs_drawer = use_context::<Signal<ui::UiLayout>>();
 
     rsx! {
         header { class: "topbar",
-            button {
-                class: "icon-btn hamburger",
-                "aria-label": "Toggle sidebar",
-                aria_expanded: "{layout.read().sidebar_open}",
-                onclick: move |_| {
-                    let cur = layout.read().sidebar_open;
-                    layout.write().sidebar_open = !cur;
-                },
-                "\u{2630}"
-            }
             h1 { "{i18n::tr(\"app-title\")}" }
             span { class: "subtitle", "{subtitle_label()}" }
             div { class: "spacer" }

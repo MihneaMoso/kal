@@ -31,6 +31,34 @@ body {
 
 .app { display: flex; flex-direction: column; height: 100vh; width: 100vw; }
 
+/* ---- Frameless-window title bar (replaces GTK decorations) ---- */
+.titlebar {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    height: 38px;
+    min-height: 38px;
+    padding: 0 6px;
+    background: var(--bg-alt);
+    border-bottom: 1px solid var(--border);
+    user-select: none;
+}
+.tb-title { font-weight: 600; font-size: 14px; margin-right: 4px; }
+.drag-area { flex: 1; align-self: stretch; cursor: default; }
+.icon-btn {
+    background: transparent;
+    border: none;
+    border-radius: 6px;
+    min-width: 30px;
+    height: 28px;
+    font-size: 14px;
+    line-height: 1;
+    cursor: pointer;
+    color: var(--fg);
+}
+.icon-btn:hover { background: var(--border); }
+.icon-btn.win.close:hover { background: #c0392b; color: #fff; }
+
 .body { display: flex; flex: 1; min-height: 0; }
 
 .sidebar {
