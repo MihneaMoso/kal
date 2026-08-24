@@ -386,7 +386,7 @@ mod recurrence_tests {
         assert_eq!(day[0].start.hour(), 8); // sorted
                                             // Weekly COUNT=2 → two Tuesdays (weekday of dtstart).
         assert_eq!(map.get(&date(2026, 9, 1)).unwrap().len(), 1);
-        assert!(map.get(&date(2026, 9, 8)).is_none());
+        assert!(!map.contains_key(&date(2026, 9, 8)));
     }
 
     #[test]

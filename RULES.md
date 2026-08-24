@@ -153,6 +153,11 @@ bite you again if ignored, plus the exact state to resume from.
   on 3 OSes + release artifact upload); ARCHITECTURE.md; CONTRIBUTING.md;
   README rewritten w/ status table, mobile/widget/packaging sections;
   LICENSE-MIT + LICENSE-APACHE files. Codebase is fmt/clippy-clean.
+- ✅ CLIPPY GATE GREEN: `cargo clippy --workspace --all-targets -- -D warnings`
+  passes. Fixes: Database Send+Sync (Mutex<Connection>), removed
+  NotifyMethod import, from_ref(&x) instead of &[x.clone()], array instead of
+  vec! for fixed replicas, contains_key instead of get().is_none(),
+  constants test replaced dead _refs helper.
 - ✅ kal-storage Database now wraps Connection in std Mutex → Send+Sync,
   fixing a real thread-safety hole under the async runtime (clippy caught it).
 - ▶ PROJECT WRAP-UP: all spec phases either complete or explicitly deferred

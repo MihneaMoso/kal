@@ -6,7 +6,7 @@ use ulid::Ulid;
 
 use kal_core::models::{
     datetime_from_parts, Calendar, CalendarItem, CalendarSource, Color, ItemKind, ItemMetadata,
-    NotifyMethod, Reminder, ReminderOffset,
+    Reminder, ReminderOffset,
 };
 
 fn ts(y: i32, m: u32, d: u32, h: u32) -> kal_core::models::DateTimeTz {
@@ -39,7 +39,7 @@ fn sample_event() -> (Calendar, CalendarItem) {
 #[test]
 fn event_round_trip_preserves_fields() {
     let (calendar, item) = sample_event();
-    let ics = export_calendar(&calendar, &[item.clone()]);
+    let ics = export_calendar(&calendar, std::slice::from_ref(&item));
 
     // Sanity: valid VCALENDAR with our properties.
     assert!(IcsCalendar::from_str(&ics).is_ok());

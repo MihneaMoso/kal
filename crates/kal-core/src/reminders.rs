@@ -100,7 +100,7 @@ mod tests {
     #[test]
     fn single_event_offsets() {
         let it = event(ts(2026, 8, 24, 9), &[30, 1440]);
-        let firings = compute_firings(&[it.clone()], ts(2026, 8, 20, 0), 30);
+        let firings = compute_firings(std::slice::from_ref(&it), ts(2026, 8, 20, 0), 30);
         let times: Vec<_> = firings.iter().map(|f| f.fire_at).collect();
         assert_eq!(times.len(), 2);
         assert_eq!(times[0], ts(2026, 8, 23, 9)); // 24h before
@@ -115,11 +115,11 @@ mod tests {
     fn past_and_out_of_horizon_firings_dropped() {
         let it = event(ts(2026, 8, 24, 9), &[1440]);
         // Window starts after the 24h-before instant (Aug 23 09:00).
-        let firings = compute_firings(&[it.clone()], ts(2026, 8, 24, 0), 7);
+        let firings = compute_firings(std::slice::from_ref(&it), ts(2026, 8, 24, 0), 7);
         assert!(firings.is_empty());
 
         // Horizon ends before the reminder would fire.
-        let firings = compute_firings(&[it], ts(2026, 8, 1, 0), 2);
+        let firings = compute_firings(std::slice::from_ref(&it), ts(2026, 8, 1, 0), 2);
         assert!(firings.is_empty());
     }
 

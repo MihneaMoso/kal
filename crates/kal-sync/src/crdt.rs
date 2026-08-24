@@ -244,7 +244,7 @@ mod tests {
             })
             .collect();
 
-        let mut replicas = vec![
+        let mut replicas = [
             SyncState::default(),
             SyncState::default(),
             SyncState::default(),

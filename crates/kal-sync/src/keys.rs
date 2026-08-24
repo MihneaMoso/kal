@@ -169,7 +169,7 @@ mod tests {
     fn bad_phrases_rejected() {
         assert!(ChainIdentity::from_phrase("not a real phrase at all").is_err());
         // Wrong checksum word.
-        assert!(ChainIdentity::from_phrase(&"abandon ".repeat(11).trim().to_string()).is_err());
+        assert!(ChainIdentity::from_phrase("abandon ".repeat(11).trim()).is_err());
     }
 
     #[test]

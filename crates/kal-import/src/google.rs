@@ -341,9 +341,11 @@ mod tests {
         assert_eq!(urlencode("a b/c"), "a%20b%2Fc");
     }
 
-    #[allow(dead_code)] // silence unused warnings on helper kept for live path
-    fn _refs() {
-        let _: Option<&str> = None::<&str>.into();
-        let _ = (GOOGLE_AUTH_URL, GOOGLE_TOKEN_URL, GOOGLE_DEVICE_CODE_URL);
+    #[test]
+    fn google_constants_are_https_endpoints() {
+        assert!(GOOGLE_AUTH_URL.starts_with("https://"));
+        assert!(GOOGLE_TOKEN_URL.starts_with("https://"));
+        assert!(GOOGLE_DEVICE_CODE_URL.starts_with("https://"));
+        assert!(GOOGLE_SCOPE.ends_with("calendar.readonly"));
     }
 }
