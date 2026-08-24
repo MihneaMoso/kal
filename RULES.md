@@ -136,7 +136,12 @@ bite you again if ignored, plus the exact state to resume from.
   times via Settings::fmt_time; month grid honors week start.
   GOTCHA: Calendar/Settings literals need updated_at/full fields; run
   `cargo build` from REPO ROOT only (workdir matters for sed/python edits).
-- ▶ NEXT: Phase 9b i18n scaffolding (fluent-rs), 9c a11y/perf + desktop
+- ✅ Phase 9b COMPLETE: app/src/i18n.rs — lightweight FTL parser (flat
+  key = value, comments skipped) + tr(key) with visible `<key>` fallback;
+  strings in app/i18n/en-US/main.ftl. ViewMode::label now returns String.
+  NOTE: fluent crate intentionally deferred until a second locale lands — the
+  parser covers current needs and keeps deps light; swap-in documented.
+- ▶ NEXT: Phase 9c a11y pass + desktop mini-widget window, then Phase 10. (fluent-rs), 9c a11y/perf + desktop
   mini-widget window, then Phase 10 release eng. (12/24h, first day of week, default
   view), i18n scaffolding (fluent-rs), a11y pass, desktop mini-widget window.
   Then Phase 10 release eng. Real iroh/mDNS transports remain future work

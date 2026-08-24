@@ -1,3 +1,4 @@
+mod i18n;
 mod sync_ui;
 mod ui;
 
@@ -165,8 +166,8 @@ fn TopBar() -> Element {
     // Preferences selector: 12/24h + week start + default view.
     rsx! {
         header { class: "topbar",
-            h1 { "Kal" }
-            span { class: "subtitle", "{ui::today_line()}" }
+            h1 { "{i18n::tr(\"app-title\")}" }
+            span { class: "subtitle", "{i18n::tr(\"app-subtitle\")} — {ui::today_line()}" }
             div { class: "spacer" }
             select {
                 title: "Time format",

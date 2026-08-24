@@ -65,12 +65,12 @@ impl ViewMode {
     pub const ALL: [ViewMode; 4] =
         [ViewMode::Month, ViewMode::Week, ViewMode::Day, ViewMode::Agenda];
 
-    pub fn label(&self) -> &'static str {
+    pub fn label(&self) -> String {
         match self {
-            ViewMode::Month => "Month",
-            ViewMode::Week => "Week",
-            ViewMode::Day => "Day",
-            ViewMode::Agenda => "Agenda",
+            ViewMode::Month => crate::i18n::tr("view-month"),
+            ViewMode::Week => crate::i18n::tr("view-week"),
+            ViewMode::Day => crate::i18n::tr("view-day"),
+            ViewMode::Agenda => crate::i18n::tr("view-agenda"),
         }
     }
 }
