@@ -1,5 +1,12 @@
 # RULES.md — Environment Quirks & Continuation Guide
 
+> BUILD LAYOUT (IMPORTANT): `.cargo/config.toml` sets
+> `target-dir = "../kal-build"` → binaries land in `/home/moso/kal-build/`
+> (OUTSIDE the repo) to keep the project directory tiny. Run the app via
+> `/home/moso/kal-build/debug/kal` or `cd app && dx serve`. NEVER delete the
+> repo thinking builds are inside; to reclaim disk, `rm -rf /home/moso/kal-build`.
+> dx serve uses its own target dir under ~/.cache — unaffected.
+
 > NOTE: The app was RENAMED from "Chrono" to "Kal" (user request). Crate names
 > are kal-core/kal-storage/kal-sync/kal-notify/kal-import/kal-ffi, binary is
 > `kal`, package `kal-app`. ICS extension headers are X-KAL-*. Docs may still
@@ -113,7 +120,13 @@ bite you again if ignored, plus the exact state to resume from.
     any new Calendar literal must set it.
   - bip39 gotcha: phrases must be valid word counts (12/15/18/21/24); the
     classic test vector is 11×"abandon"+"about".
-- ▶ NEXT: Phase 8d — pairing/settings UI in app (generate phrase screen,
+- ✅ Phase 8d COMPLETE: app/src/sync_ui.rs SyncPanel in sidebar — start chain
+  (24-word phrase shown once in modal grid), join by pasting phrase,
+  fingerprint display; identity persisted to <dbdir>/sync-identity.json with
+  0600 perms.
+- ▶ NEXT: wire sync into the app loop: after merges re-run reminder
+  reconcile + restart items resource; add "Sync now" using a LoopbackTransport
+  placeholder until iroh lands (real transport = phase 8e). Then Phase 9. in app (generate phrase screen,
   join-by-phrase input, device fingerprint display), then wire a periodic
   reschedule of reminders after merges. Then Phase 9 polish.: LWW-CRDT merge + sync-chain
   key derivation (bip39 phrase → x25519/chacha20poly1305) + Transport trait

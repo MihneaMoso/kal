@@ -14,6 +14,9 @@ kal-core = { path = "../crates/kal-core" }
 kal-storage = { path = "../crates/kal-storage" }
 kal-notify = { path = "../crates/kal-notify", features = ["desktop"] }
 kal-import = { path = "../crates/kal-import" }
+kal-sync = { path = "../crates/kal-sync" }
+serde = { workspace = true }
+serde_json = { workspace = true }
 dioxus = { version = "0.7", features = ["desktop"] }
 tokio = { workspace = true }
 chrono = { workspace = true }

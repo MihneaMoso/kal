@@ -76,6 +76,11 @@ Newest decisions may reference later phases; each entry notes the phase.
 | D37 | **Revocation = fingerprint blocklist per device**, not key rotation (spec's full re-pair flow deferred) | Simplest correct behavior: revoked peers' envelopes are dropped; key rotation requires re-pairing UX which lands with the settings UI phase. |
 | D38 | **Transport is a trait** (`send`/`recv` opaque blobs); iroh/mDNS implementations plug in later behind features. | Protocol logic fully tested offline via LoopbackTransport; real transports are drop-in. |
 
+| # | Decision | Rationale |
+|---|----------|-----------|
+| D39 | **Build artifacts live outside the repo** (`../kal-build` via .cargo/config.toml) after target/ ballooned to 20G | Keeps checkout at ~2MB; any dev can override with CARGO_TARGET_DIR. |
+| D40 | **Sync identity persisted as plain JSON next to the DB with 0600 perms**, not in the SQLite file | Widgets/FFI and future mobile shims need path-based access; keeps secrets out of synced data. |
+
 ## Pending decisions for later phases
 
 - Sync CRDT engine: automerge vs yrs (phase 8).

@@ -2714,7 +2714,10 @@ dependencies = [
  "kal-import",
  "kal-notify",
  "kal-storage",
+ "kal-sync",
  "rfd 0.15.4",
+ "serde",
+ "serde_json",
  "tokio",
  "ulid",
 ]

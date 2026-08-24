@@ -1,3 +1,4 @@
+mod sync_ui;
 mod ui;
 
 use chrono::{Datelike, Local, Months, NaiveDate};
@@ -12,7 +13,7 @@ pub type SchedulerHandle = Arc<ThreadScheduler<DesktopNotifier>>;
 /// App-wide shared handle to the SQLite database.
 pub type DbHandle = Arc<Database>;
 
-fn default_db_path() -> Option<std::path::PathBuf> {
+pub fn default_db_path() -> Option<std::path::PathBuf> {
     dirs_next::data_dir().map(|d| d.join("kal").join("calendar.db"))
 }
 
@@ -184,6 +185,7 @@ fn Sidebar() -> Element {
                     CalendarRow { key: "{cal.id}", calendar: cal }
                 }
             }
+            sync_ui::SyncPanel {}
             h2 { "Import / Export" }
             div { style: "display:flex; flex-direction:column; gap:6px;",
                 button {
