@@ -119,11 +119,18 @@ mod tests {
     use kal_core::models::{Color, ItemKind};
 
     fn ts(secs: u64) -> DateTime<FixedOffset> {
-        Utc.timestamp_opt(secs as i64, 0).single().unwrap().fixed_offset()
+        Utc.timestamp_opt(secs as i64, 0)
+            .single()
+            .unwrap()
+            .fixed_offset()
     }
 
     fn item(title: &str, ts_val: u64, deleted: bool) -> CalendarItem {
-        let start = Utc.timestamp_opt(1_785_000_000, 0).single().unwrap().fixed_offset();
+        let start = Utc
+            .timestamp_opt(1_785_000_000, 0)
+            .single()
+            .unwrap()
+            .fixed_offset();
         let mut it = CalendarItem::new(ItemKind::Event, title, Ulid::new(), start);
         it.updated_at = ts(ts_val);
         it.created_at = ts(0);
@@ -237,7 +244,11 @@ mod tests {
             })
             .collect();
 
-        let mut replicas = vec![SyncState::default(), SyncState::default(), SyncState::default()];
+        let mut replicas = vec![
+            SyncState::default(),
+            SyncState::default(),
+            SyncState::default(),
+        ];
         for (r, v) in replicas.iter_mut().zip(variants.iter()) {
             r.items.insert(base.id, v.clone());
         }

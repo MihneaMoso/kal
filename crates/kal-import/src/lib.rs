@@ -13,8 +13,7 @@ use icalendar::{
 };
 
 use kal_core::models::{
-    Calendar, CalendarItem, CalendarSource, Color, DateTimeTz, ItemKind, Reminder,
-    ReminderOffset,
+    Calendar, CalendarItem, CalendarSource, Color, DateTimeTz, ItemKind, Reminder, ReminderOffset,
 };
 
 #[derive(Debug, thiserror::Error)]
@@ -75,7 +74,10 @@ pub fn export_calendar(calendar: &Calendar, items: &[CalendarItem]) -> String {
     let mut out = IcsCalendar::new();
     out.name(&calendar.name);
 
-    for item in items.iter().filter(|i| i.calendar_id == calendar.id && !i.deleted) {
+    for item in items
+        .iter()
+        .filter(|i| i.calendar_id == calendar.id && !i.deleted)
+    {
         push_item(&mut out, item);
     }
     out.to_string()
@@ -85,8 +87,15 @@ pub fn export_calendar(calendar: &Calendar, items: &[CalendarItem]) -> String {
 pub fn export_all(calendars: &[Calendar], items: &[CalendarItem]) -> String {
     let mut out = IcsCalendar::new();
     out.name("Kal");
-    let visible: Vec<_> = calendars.iter().filter(|c| c.visible).map(|c| c.id).collect();
-    for item in items.iter().filter(|i| !i.deleted && visible.contains(&i.calendar_id)) {
+    let visible: Vec<_> = calendars
+        .iter()
+        .filter(|c| c.visible)
+        .map(|c| c.id)
+        .collect();
+    for item in items
+        .iter()
+        .filter(|i| !i.deleted && visible.contains(&i.calendar_id))
+    {
         push_item(&mut out, item);
     }
     out.to_string()
@@ -100,12 +109,14 @@ fn push_item(out: &mut IcsCalendar, item: &CalendarItem) {
             apply_common(&mut todo, item);
             todo.add_property(
                 "STATUS",
-                if item.completed.is_some() { "COMPLETED" } else { "NEEDS-ACTION" },
+                if item.completed.is_some() {
+                    "COMPLETED"
+                } else {
+                    "NEEDS-ACTION"
+                },
             );
             if let Some(done) = item.completed {
-                todo.append_property(
-                    icalendar::Property::new("COMPLETED", fmt_utc(&done)),
-                );
+                todo.append_property(icalendar::Property::new("COMPLETED", fmt_utc(&done)));
             }
             out.push(todo);
         }
@@ -120,8 +131,11 @@ fn push_item(out: &mut IcsCalendar, item: &CalendarItem) {
                 if let Some(end) = &item.end {
                     // DTEND is exclusive in RFC 5545 for DATE values.
                     event.append_property(
-                        icalendar::Property::new("DTEND", fmt_date(&(end.date_naive() + chrono::Duration::days(1))))
-                            .add_parameter("VALUE", "DATE"),
+                        icalendar::Property::new(
+                            "DTEND",
+                            fmt_date(&(end.date_naive() + chrono::Duration::days(1))),
+                        )
+                        .add_parameter("VALUE", "DATE"),
                     );
                 }
             } else {
@@ -133,11 +147,9 @@ fn push_item(out: &mut IcsCalendar, item: &CalendarItem) {
             apply_common(&mut event, item);
             for reminder in &item.reminders {
                 if let ReminderOffset::MinutesBefore { minutes } = reminder.offset {
-                    let mut alarm = icalendar::Alarm::display(
-                &item.title,
-                -chrono::Duration::minutes(minutes),
-            )
-            .done();
+                    let mut alarm =
+                        icalendar::Alarm::display(&item.title, -chrono::Duration::minutes(minutes))
+                            .done();
                     // Keep our reminder identity so imports round-trip 1:1.
                     alarm.append_property(icalendar::Property::new(
                         "X-KAL-REMINDER-ID",
@@ -175,7 +187,10 @@ fn apply_common<C: Component>(comp: &mut C, item: &CalendarItem) {
     }
     comp.add_property(
         "DTSTAMP",
-        item.updated_at.with_timezone(&Utc).format("%Y%m%dT%H%M%SZ").to_string(),
+        item.updated_at
+            .with_timezone(&Utc)
+            .format("%Y%m%dT%H%M%SZ")
+            .to_string(),
     );
 }
 
@@ -191,8 +206,7 @@ pub struct ImportedCalendar {
 }
 
 pub fn import_ics(ics: &str, calendar_name: &str) -> Result<ImportedCalendar> {
-    let parsed =
-        IcsCalendar::from_str(ics).map_err(|e| ImportError::Parse(e.to_string()))?;
+    let parsed = IcsCalendar::from_str(ics).map_err(|e| ImportError::Parse(e.to_string()))?;
 
     let calendar = Calendar {
         id: ulid::Ulid::new(),
@@ -281,7 +295,7 @@ fn multi_values<'a, C: Component>(comp: &'a C, key: &str) -> Vec<&'a str> {
     out
 }
 
-fn base_item<'a, C: Component>(calendar: &Calendar, comp: &'a C) -> CalendarItem {
+fn base_item<C: Component>(calendar: &Calendar, comp: &C) -> CalendarItem {
     let tz = chrono::Local::now().fixed_offset();
     let fallback_start = chrono::Utc::now().with_timezone(tz.offset());
     let mut item = CalendarItem::new(ItemKind::Event, "", calendar.id, fallback_start);

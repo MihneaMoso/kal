@@ -1,47 +1,89 @@
 # Kal
 
-Free, open-source, local-first calendar for desktop & mobile. Events, tasks and
-birthdays; full RFC 5545 recurrence; unlimited local reminders; `.ics`
-import/export; optional account-free peer-to-peer sync (Brave-Sync-style sync
-chain) — all in one Rust codebase.
+Free, open-source, local-first calendar for desktop & mobile. Events, tasks
+and birthdays; full RFC 5545 recurrence; unlimited locally-scheduled
+reminders; `.ics` import/export; Google Calendar import; optional account-free
+peer-to-peer sync — all in one Rust codebase (Dioxus 0.7).
 
-## Status: Phase 1 (Foundation) complete
+## Status
 
-See `RULES.md` for exact resume state and `DECISIONS.md` for design choices.
-
-| Crate | Purpose |
+| Area | State |
 |---|---|
-| `crates/kal-core` | Pure domain models & logic (no UI deps) |
-| `crates/kal-storage` | SQLite schema, migrations, repository |
-| `crates/kal-sync` | P2P sync chain (phase 8) |
-| `crates/kal-notify` | Reminder scheduling (phase 4) |
-| `crates/kal-import` | ICS + Google import (phase 5) |
-| `crates/kal-ffi` | C ABI for native widget shims (phase 7) |
-| `app` | Dioxus 0.6 application |
+| Events / tasks / birthdays, multi-calendar | ✅ |
+| Month / week / day / agenda views | ✅ |
+| RRULE recurrence + per-instance edit scoping | ✅ |
+| Unlimited reminders → OS notifications | ✅ desktop |
+| .ics round-trip + Google Calendar import | ✅ |
+| Sync chain: phrase pairing, encrypted folder-gossip merge | ✅ |
+| Settings (theme, clock, week start, default view) | ✅ |
+| i18n scaffolding (en-US), a11y pass | ✅ |
+| Desktop always-on-top mini-calendar window | ✅ |
+| Widget C ABI (`kal-ffi`) + Android/iOS shim sources | ✅ (shims need SDKs to build) |
+| Live P2P transports (iroh/mDNS), mobile app targets, packaging pipelines | 🔜 |
+
+Design decisions: `DECISIONS.md` · Sync internals: `ARCHITECTURE.md` ·
+Contributing: `CONTRIBUTING.md` · Environment gotchas: `RULES.md`.
 
 ## Build & run (desktop)
 
+Prerequisites: Rust stable.
+
+- Linux: `libgtk-3-dev libwebkit2gtk-4.1-dev`
+- macOS: Xcode command line tools
+- Windows: WebView2 runtime (preinstalled on Win11)
+
 ```sh
-cargo run -p kal-app        # Dioxus desktop shell
-cargo test --workspace         # test suite
+cargo run -p kal-app          # dev build & launch
+cargo test --workspace        # test suite (100+ tests)
+cargo clippy --workspace      # lints (CI enforces -D warnings)
 ```
 
-Linux desktop builds need GTK/webkit dev packages (`libgtk-3-dev`,
-`libwebkit2gtk-4.1-dev`) for `dioxus-desktop`.
+Dev server with hot reload:
 
-## Roadmap
+```sh
+cargo install dioxus-cli --version 0.7   # once
+cd app && dx serve                       # opens the desktop window
+```
 
-1. ✅ Foundation: workspace, core models, SQLite storage, app shell
-2. CRUD + month/week/day/agenda views
-3. RRULE recurrence + per-instance editing
-4. Reminders & notifications
-5. .ics import/export, Google Calendar import
-6. Mobile targets (Android/iOS)
-7. Widgets via kal-ffi
-8. P2P sync (CRDT + sync chain)
-9. Polish (theming, a11y, i18n)
-10. Release engineering & packaging
+Build artifacts live in `../kal-build` by default (see `.cargo/config.toml`);
+override with `CARGO_TARGET_DIR`.
+
+## Mobile
+
+The Rust core compiles for all targets today:
+
+```sh
+rustup target add aarch64-linux-android aarch64-apple-ios
+cargo build -p kal-core -p kal-storage -p kal-ffi \
+  --target aarch64-linux-android     # needs cargo-ndk + NDK
+cargo build -p kal-ffi --target aarch64-apple-ios   # staticlib for XCFramework
+```
+
+The Dioxus mobile shell and platform notification FFI are the remaining work
+tracked under phase 6 in `RULES.md`.
+
+## Widgets
+
+Native widgets read the same SQLite file through the C ABI in
+[`widgets/kal_ffi.h`](widgets/kal_ffi.h):
+
+- **Android**: build `libkal_ffi.so` per ABI into `jniLibs/`, then the Glance
+  widget in [`widgets/android/`](widgets/android/).
+- **iOS**: package the staticlib as an XCFramework for the WidgetKit extension
+  in [`widgets/ios/`](widgets/ios/).
+
+## Packaging
+
+- **Linux**: `cargo deb` config lands with phase 10 polish; F-Droid recipe
+  follows the Android shell.
+- **Windows**: winget manifest points at the CI artifact `kal-windows.exe`.
+- **macOS**: `cargo build --release` produces `kal`; notarization tracked in
+  phase 10.
+- Direct APK / TestFlight come with the mobile shells.
+
+CI (`.github/workflows/ci.yml`) builds and attaches desktop artifacts on every
+push to `main`.
 
 ## License
 
-Dual-licensed under MIT or Apache-2.0.
+Dual-licensed under [MIT](LICENSE-MIT) or [Apache-2.0](LICENSE-APACHE).

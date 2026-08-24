@@ -77,7 +77,10 @@ fn run_sync_once(db: &crate::DbHandle) -> Result<usize, String> {
 
     // Publish our state, then drain peers'.
     transport
-        .send(&device_id.to_string(), &session.seal_state().map_err(|e| e.to_string())?)
+        .send(
+            &device_id.to_string(),
+            &session.seal_state().map_err(|e| e.to_string())?,
+        )
         .map_err(|e| e.to_string())?;
 
     let self_id = device_id.to_string();
@@ -109,7 +112,9 @@ pub enum SyncUiState {
     NotPaired,
     /// Just created/joined; show the recovery phrase once.
     ShowPhrase(String),
-    Paired { fingerprint: String },
+    Paired {
+        fingerprint: String,
+    },
     Error(String),
 }
 
@@ -142,9 +147,7 @@ pub fn SyncPanel() -> Element {
                 Ok(()) => state.set(SyncUiState::ShowPhrase(id.phrase())),
                 Err(e) => state.set(SyncUiState::Error(e)),
             },
-            Err(_) => state.set(SyncUiState::Error(
-                "Invalid recovery phrase".to_string(),
-            )),
+            Err(_) => state.set(SyncUiState::Error("Invalid recovery phrase".to_string())),
         }
     };
 
@@ -202,7 +205,7 @@ pub fn SyncPanel() -> Element {
                                 Ok(merged) => {
                                     if merged > 0 {
                                         // Refresh views + reminder schedule after merge.
-                                        if let Some(items) = db.list_items(false).ok() {
+                                        if let Ok(items) = db.list_items(false) {
                                             let _ = items.len();
                                         }
                                         *RESOURCES_DIRTY.write() += 1;

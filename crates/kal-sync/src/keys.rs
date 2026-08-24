@@ -49,8 +49,8 @@ impl ChainIdentity {
     /// Join an existing chain by entering the recovery phrase.
     pub fn from_phrase(phrase: &str) -> Result<Self> {
         let normalized = phrase.split_whitespace().collect::<Vec<_>>().join(" ");
-        let mnemonic =
-            bip39::Mnemonic::parse_in(bip39::Language::English, normalized).map_err(|_| KeyError::BadPhrase)?;
+        let mnemonic = bip39::Mnemonic::parse_in(bip39::Language::English, normalized)
+            .map_err(|_| KeyError::BadPhrase)?;
         Self::from_mnemonic(&mnemonic)
     }
 
@@ -59,8 +59,8 @@ impl ChainIdentity {
 
         // Symmetric payload key.
         let sym_key: [u8; 32] = Sha256::digest(chain(&seed, b"payload-key")).into();
-        let cipher = XChaCha20Poly1305::new_from_slice(&sym_key)
-            .map_err(|_| KeyError::BadPhrase)?;
+        let cipher =
+            XChaCha20Poly1305::new_from_slice(&sym_key).map_err(|_| KeyError::BadPhrase)?;
 
         // Identity keypair.
         let id_bytes: [u8; 32] = Sha256::digest(chain(&seed, b"identity")).into();
@@ -150,7 +150,10 @@ mod tests {
         let a = ChainIdentity::from_phrase(TEST_PHRASE).unwrap();
         let b = ChainIdentity::from_phrase(TEST_PHRASE).unwrap();
         assert_eq!(a.public_key(), b.public_key());
-        assert_eq!(a.fingerprint().fingerprint_hex, b.fingerprint().fingerprint_hex);
+        assert_eq!(
+            a.fingerprint().fingerprint_hex,
+            b.fingerprint().fingerprint_hex
+        );
     }
 
     #[test]

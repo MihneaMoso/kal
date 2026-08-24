@@ -83,10 +83,11 @@ pub unsafe extern "C" fn kal_upcoming_json(
         let cal_by_id: std::collections::HashMap<_, _> =
             calendars.iter().map(|c| (c.id, c)).collect();
 
-        let occs = kal_core::viewmodel::occurrences_by_date(&items, from.date_naive(), to.date_naive());
+        let occs =
+            kal_core::viewmodel::occurrences_by_date(&items, from.date_naive(), to.date_naive());
         // Flatten grouped occurrences back into display entries.
         let mut entries: Vec<serde_json::Value> = Vec::new();
-        for (_day, day_occs) in &occs {
+        for day_occs in occs.values() {
             for occ in day_occs {
                 if let Some(item) = items.iter().find(|i| i.id == occ.item_id) {
                     let color = item
@@ -139,8 +140,7 @@ pub unsafe extern "C" fn kal_month_grid_json(
         let items = kal.db.list_items(false).map_err(|_| ())?;
         let first = grid[0][0];
         let last = grid[kal_core::viewmodel::MONTH_GRID_WEEKS - 1][6];
-        let occ_map =
-            kal_core::viewmodel::occurrences_by_date(&items, first, last);
+        let occ_map = kal_core::viewmodel::occurrences_by_date(&items, first, last);
 
         let mut rows = Vec::with_capacity(grid.len());
         for week in &grid {

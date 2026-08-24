@@ -20,8 +20,7 @@ const MAX_OCCURRENCES: u16 = 1000;
 /// neighbouring months), starting on `first_day_of_week`, always
 /// [`MONTH_GRID_WEEKS`] rows tall.
 pub fn month_grid(year: i32, month: u32, first_day_of_week: Weekday) -> Vec<Vec<NaiveDate>> {
-    let first_of_month =
-        NaiveDate::from_ymd_opt(year, month, 1).expect("valid year/month");
+    let first_of_month = NaiveDate::from_ymd_opt(year, month, 1).expect("valid year/month");
     // Days back from the 1st to reach the configured week start.
     let offset = (first_of_month.weekday().num_days_from_monday() as i64
         - first_day_of_week.num_days_from_monday() as i64)
@@ -56,7 +55,7 @@ pub fn item_covers_date(item: &CalendarItem, date: NaiveDate) -> bool {
 }
 
 /// Items overlapping a given day, sorted by start time.
-pub fn items_on_date<'a>(items: &'a [CalendarItem], date: NaiveDate) -> Vec<Occurrence> {
+pub fn items_on_date(items: &[CalendarItem], date: NaiveDate) -> Vec<Occurrence> {
     let mut occ: Vec<Occurrence> = items
         .iter()
         .filter(|i| item_covers_date(i, date))
@@ -71,7 +70,11 @@ pub fn items_on_date<'a>(items: &'a [CalendarItem], date: NaiveDate) -> Vec<Occu
 }
 
 /// Flat chronological list of occurrences over `[from, to]` (inclusive days).
-pub fn agenda_range(items: &[CalendarItem], from: NaiveDate, to: NaiveDate) -> Vec<(NaiveDate, Occurrence)> {
+pub fn agenda_range(
+    items: &[CalendarItem],
+    from: NaiveDate,
+    to: NaiveDate,
+) -> Vec<(NaiveDate, Occurrence)> {
     let mut out = Vec::new();
     let mut d = from;
     while d <= to {
@@ -89,17 +92,14 @@ pub fn agenda_range(items: &[CalendarItem], from: NaiveDate, to: NaiveDate) -> V
 /// Multi-day non-recurring events produce one occurrence per covered day so
 /// they appear on every grid cell they span. Recurring occurrences keep the
 /// original start time and duration.
-pub fn expand_occurrences(
-    item: &CalendarItem,
-    from: NaiveDate,
-    to: NaiveDate,
-) -> Vec<Occurrence> {
+pub fn expand_occurrences(item: &CalendarItem, from: NaiveDate, to: NaiveDate) -> Vec<Occurrence> {
     if item.deleted {
         return Vec::new();
     }
     // rrule 0.14 works in its own Tz enum; convert through UTC.
     let to_rrule = |dt: &DateTimeTz| dt.with_timezone(&chrono::Utc).with_timezone(&RRuleTz::UTC);
-    let window_end_dt = to_rrule(&(item.start + (to - item.start.date_naive()) + chrono::Duration::days(1)));
+    let window_end_dt =
+        to_rrule(&(item.start + (to - item.start.date_naive()) + chrono::Duration::days(1)));
 
     let mut out = Vec::new();
     match &item.rrule {
@@ -118,7 +118,11 @@ pub fn expand_occurrences(
                 let offset_days = (d - start_date).num_days();
                 let occ_start = item.start + chrono::Duration::days(offset_days);
                 let occ_end = item.end.map(|e| e + chrono::Duration::days(offset_days));
-                out.push(Occurrence { item_id: item.id, start: occ_start, end: occ_end });
+                out.push(Occurrence {
+                    item_id: item.id,
+                    start: occ_start,
+                    end: occ_end,
+                });
                 d += chrono::Duration::days(1);
             }
         }
@@ -177,10 +181,8 @@ pub fn occurrences_by_date(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::models::{datetime_from_parts, Calendar, Color, DateTimeTz, ItemKind};
     use chrono::Timelike;
-    use crate::models::{
-        datetime_from_parts, Calendar, Color, DateTimeTz, ItemKind,
-    };
 
     fn cal() -> Calendar {
         Calendar::local("Test", Color("#3366cc".into()))
@@ -201,11 +203,17 @@ mod tests {
         }
         // August 2026 starts on a Saturday.
         assert_eq!(grid[0][0], NaiveDate::from_ymd_opt(2026, 7, 27).unwrap());
-        assert!(grid.iter().flatten().any(|&d| d == NaiveDate::from_ymd_opt(2026, 8, 1).unwrap()));
+        assert!(grid
+            .iter()
+            .flatten()
+            .any(|&d| d == NaiveDate::from_ymd_opt(2026, 8, 1).unwrap()));
         // Sunday start shifts the first cell.
         let grid_sun = month_grid(2026, 8, Weekday::Sun);
         assert_eq!(grid_sun[0][0].weekday(), Weekday::Sun);
-        assert_eq!(grid_sun[0][0], NaiveDate::from_ymd_opt(2026, 7, 26).unwrap());
+        assert_eq!(
+            grid_sun[0][0],
+            NaiveDate::from_ymd_opt(2026, 7, 26).unwrap()
+        );
     }
 
     #[test]
@@ -231,9 +239,15 @@ mod tests {
         let mut it = item_at(2026, 8, 24, 9);
         it.end = Some(datetime_from_parts(2026, 8, 27, 11, 0, 0).unwrap());
         for d in [24u32, 25, 26, 27] {
-            assert!(item_covers_date(&it, NaiveDate::from_ymd_opt(2026, 8, d).unwrap()));
+            assert!(item_covers_date(
+                &it,
+                NaiveDate::from_ymd_opt(2026, 8, d).unwrap()
+            ));
         }
-        assert!(!item_covers_date(&it, NaiveDate::from_ymd_opt(2026, 8, 28).unwrap()));
+        assert!(!item_covers_date(
+            &it,
+            NaiveDate::from_ymd_opt(2026, 8, 28).unwrap()
+        ));
     }
 
     #[test]
@@ -281,7 +295,10 @@ mod recurrence_tests {
         assert_eq!(occs[0].start.date_naive(), date(2026, 8, 24));
         assert_eq!(occs[2].start.date_naive(), date(2026, 8, 26));
         // Duration preserved per occurrence.
-        assert_eq!(Some(occs[0].start + chrono::Duration::hours(1)), occs[0].end);
+        assert_eq!(
+            Some(occs[0].start + chrono::Duration::hours(1)),
+            occs[0].end
+        );
     }
 
     #[test]
@@ -290,18 +307,27 @@ mod recurrence_tests {
         it.rrule = Some("FREQ=WEEKLY;BYDAY=MO,WE".into());
         let occs = expand_occurrences(&it, date(2026, 8, 24), date(2026, 8, 31));
         let days: Vec<NaiveDate> = occs.iter().map(|o| o.start.date_naive()).collect();
-        assert_eq!(days, vec![date(2026, 8, 24), date(2026, 8, 26), date(2026, 8, 31)]);
+        assert_eq!(
+            days,
+            vec![date(2026, 8, 24), date(2026, 8, 26), date(2026, 8, 31)]
+        );
     }
 
     #[test]
     fn exdate_removes_instance() {
         let mut it = item(2026, 8, 24);
         it.rrule = Some("FREQ=DAILY;COUNT=5".into());
-        assert_eq!(expand_occurrences(&it, date(2026, 8, 1), date(2026, 12, 1)).len(), 5);
-        it.exdates.push(datetime_from_parts(2026, 8, 25, 9, 0, 0).unwrap());
+        assert_eq!(
+            expand_occurrences(&it, date(2026, 8, 1), date(2026, 12, 1)).len(),
+            5
+        );
+        it.exdates
+            .push(datetime_from_parts(2026, 8, 25, 9, 0, 0).unwrap());
         let occs = expand_occurrences(&it, date(2026, 8, 1), date(2026, 12, 1));
         assert_eq!(occs.len(), 4);
-        assert!(!occs.iter().any(|o| o.start.date_naive() == date(2026, 8, 25)));
+        assert!(!occs
+            .iter()
+            .any(|o| o.start.date_naive() == date(2026, 8, 25)));
     }
 
     #[test]
@@ -350,11 +376,15 @@ mod recurrence_tests {
         let mut c = item(2026, 8, 25);
         c.rrule = Some("FREQ=WEEKLY;COUNT=2".into());
 
-        let map = occurrences_by_date(&[a.clone(), b.clone(), c], date(2026, 8, 23), date(2026, 9, 10));
+        let map = occurrences_by_date(
+            &[a.clone(), b.clone(), c],
+            date(2026, 8, 23),
+            date(2026, 9, 10),
+        );
         assert_eq!(map.get(&date(2026, 8, 24)).unwrap().len(), 2);
         let day = &map[&date(2026, 8, 24)];
         assert_eq!(day[0].start.hour(), 8); // sorted
-        // Weekly COUNT=2 → two Tuesdays (weekday of dtstart).
+                                            // Weekly COUNT=2 → two Tuesdays (weekday of dtstart).
         assert_eq!(map.get(&date(2026, 9, 1)).unwrap().len(), 1);
         assert!(map.get(&date(2026, 9, 8)).is_none());
     }

@@ -7,9 +7,7 @@
 use chrono::{DateTime, NaiveDate, NaiveTime, TimeZone as _, Utc};
 use serde::Deserialize;
 
-use kal_core::models::{
-    Calendar, CalendarItem, CalendarSource, Color, DateTimeTz, ItemKind,
-};
+use kal_core::models::{Calendar, CalendarItem, CalendarSource, Color, DateTimeTz, ItemKind};
 
 use crate::ImportError;
 
@@ -79,7 +77,7 @@ impl GoogleEvent {
     pub fn start_dtz(&self) -> Option<DateTimeTz> {
         let t = self.start.as_ref()?;
         if let Some(date) = &t.date {
-            return Some(midnight(NaiveDate::parse_from_str(date, "%Y-%m-%d").ok()?)?);
+            return midnight(NaiveDate::parse_from_str(date, "%Y-%m-%d").ok()?);
         }
         let dt = DateTime::parse_from_rfc3339(t.date_time.as_deref()?).ok()?;
         Some(dt)
@@ -134,7 +132,10 @@ pub fn map_event(event: &GoogleEvent, calendar_id: ulid::Ulid) -> Option<Calenda
     item.notes = event.description.clone().filter(|s| !s.is_empty());
     item.location = event.location.clone().filter(|s| !s.is_empty());
     item.rrule = event.recurrence_rules.first().map(|r| {
-        r.split_once(':').map(|(_, body)| body).unwrap_or(r).to_string()
+        r.split_once(':')
+            .map(|(_, body)| body)
+            .unwrap_or(r)
+            .to_string()
     });
     Some(item)
 }
@@ -145,7 +146,11 @@ pub fn map_calendars(list: &[GoogleCalendar]) -> Vec<Calendar> {
         .map(|g| Calendar {
             id: ulid_from_google_id(&format!("cal:{}", g.id)),
             name: g.summary.clone(),
-            color: Color(g.background_color.clone().unwrap_or_else(|| "#1a73e8".into())),
+            color: Color(
+                g.background_color
+                    .clone()
+                    .unwrap_or_else(|| "#1a73e8".into()),
+            ),
             source: CalendarSource::GoogleImport,
             visible: true,
             updated_at: Utc::now().fixed_offset(),
@@ -210,7 +215,10 @@ pub fn fetch_events<T: Transport>(
 }
 
 /// RFC 8628 device-flow step 1: request a device/user code pair.
-pub fn start_device_flow<T: Transport>(http: &T, client_id: &str) -> Result<serde_json::Value, ImportError> {
+pub fn start_device_flow<T: Transport>(
+    http: &T,
+    client_id: &str,
+) -> Result<serde_json::Value, ImportError> {
     let body = http.post_form(
         GOOGLE_DEVICE_CODE_URL,
         &[("client_id", client_id), ("scope", GOOGLE_SCOPE)],
@@ -298,7 +306,11 @@ mod tests {
         let events = parse_events(json).unwrap();
         assert_eq!(events.next_sync_token.as_deref(), Some("tok123"));
 
-        let mapped: Vec<_> = events.items.iter().filter_map(|e| map_event(e, ulid::Ulid::nil())).collect();
+        let mapped: Vec<_> = events
+            .items
+            .iter()
+            .filter_map(|e| map_event(e, ulid::Ulid::nil()))
+            .collect();
         assert_eq!(mapped.len(), 1); // cancelled dropped
         let it = &mapped[0];
         assert!(it.all_day);
@@ -318,7 +330,9 @@ mod tests {
         let list: GoogleCalendarList = serde_json::from_str(json).unwrap();
         let cals = map_calendars(&list.items);
         assert_eq!(cals.len(), 2);
-        assert!(cals.iter().all(|c| c.source == CalendarSource::GoogleImport));
+        assert!(cals
+            .iter()
+            .all(|c| c.source == CalendarSource::GoogleImport));
         assert_eq!(cals[0].name, "Me");
     }
 

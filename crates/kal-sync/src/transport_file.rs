@@ -100,7 +100,8 @@ mod tests {
         let mut s2 = SyncSession::new(&id2, dev2, "two", SyncState::default());
 
         // Device 1 publishes its state.
-        t1.send(&dev1.to_string(), &s1.seal_state().unwrap()).unwrap();
+        t1.send(&dev1.to_string(), &s1.seal_state().unwrap())
+            .unwrap();
 
         // Device 2 drains exactly one blob and accepts it.
         let mut received = 0;
@@ -117,7 +118,8 @@ mod tests {
         assert_eq!(again, 0);
 
         // Reverse direction merges back; states converge.
-        t2.send(&dev2.to_string(), &s2.seal_state().unwrap()).unwrap();
+        t2.send(&dev2.to_string(), &s2.seal_state().unwrap())
+            .unwrap();
         drain(&t1, |_, bytes| {
             s1.accept_blob(&bytes).unwrap();
         });

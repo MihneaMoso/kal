@@ -30,12 +30,17 @@ impl From<StorageError> for rusqlite::Error {
 }
 
 /// Opens (creating if needed) and migrates a database file.
+///
+/// A `rusqlite::Connection` is `Send` but not `Sync`; the internal mutex
+/// makes `Database` safely shareable (`Arc<Database>`) across async tasks
+/// while serializing actual SQLite access.
 pub struct Database {
-    conn: Connection,
+    conn: std::sync::Mutex<Connection>,
 }
 
 /// Ordered migration list; `PRAGMA user_version` tracks applied count.
-const MIGRATIONS: &[&str] = &[r#"
+const MIGRATIONS: &[&str] = &[
+    r#"
 CREATE TABLE calendars (
     id          TEXT PRIMARY KEY,
     name        TEXT NOT NULL,
@@ -73,18 +78,19 @@ CREATE TABLE items (
 CREATE INDEX idx_items_start ON items(start_epoch);
 CREATE INDEX idx_items_calendar ON items(calendar_id);
 "#,
-// v2: calendar LWW timestamp for sync.
-r#"
+    // v2: calendar LWW timestamp for sync.
+    r#"
 ALTER TABLE calendars ADD COLUMN updated_epoch INTEGER NOT NULL DEFAULT 0;
 ALTER TABLE calendars ADD COLUMN updated_rfc3339 TEXT NOT NULL DEFAULT '';
 "#,
-// v3: device-local settings (theme, time format, week start, default view…).
-r#"
+    // v3: device-local settings (theme, time format, week start, default view…).
+    r#"
 CREATE TABLE IF NOT EXISTS settings (
     key   TEXT PRIMARY KEY,
     value TEXT NOT NULL
 );
-"#];
+"#,
+];
 
 impl Database {
     pub fn open(path: impl AsRef<Path>) -> Result<Self> {
@@ -98,33 +104,36 @@ impl Database {
     }
 
     fn with_connection(conn: Connection) -> Result<Self> {
-        conn.pragma_update(None, "journal_mode", "WAL")?;
-        conn.pragma_update(None, "foreign_keys", "ON")?;
-        let db = Self { conn };
+        {
+            let c = &conn;
+            c.pragma_update(None, "journal_mode", "WAL")?;
+            c.pragma_update(None, "foreign_keys", "ON")?;
+        }
+        let db = Self {
+            conn: std::sync::Mutex::new(conn),
+        };
         db.migrate()?;
         Ok(db)
     }
 
     fn migrate(&self) -> Result<()> {
-        let version: i64 = self.conn.query_row("PRAGMA user_version", [], |r| r.get(0))?;
+        let conn = self.conn.lock().unwrap();
+        let version: i64 = conn.query_row("PRAGMA user_version", [], |r| r.get(0))?;
         for (i, sql) in MIGRATIONS.iter().enumerate() {
             let target = (i + 1) as i64;
             if version < target {
-                self.conn.execute_batch(sql)?;
-                self.conn.pragma_update(None, "user_version", target)?;
+                conn.execute_batch(sql)?;
+                conn.pragma_update(None, "user_version", target)?;
             }
         }
         Ok(())
     }
 
-    pub fn connection(&self) -> &Connection {
-        &self.conn
-    }
-
     // ----- calendars -----
 
     pub fn upsert_calendar(&self, cal: &Calendar) -> Result<()> {
-        self.conn.execute(
+        let conn = self.conn.lock().unwrap();
+        conn.execute(
             "INSERT INTO calendars (id, name, color, source, visible, updated_epoch, updated_rfc3339)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
              ON CONFLICT(id) DO UPDATE SET
@@ -139,7 +148,8 @@ impl Database {
     }
 
     pub fn get_calendar(&self, id: Ulid) -> Result<Option<Calendar>> {
-        self.conn
+        let conn = self.conn.lock().unwrap();
+        conn
             .query_row(
                 "SELECT id, name, color, source, visible, updated_epoch, updated_rfc3339 FROM calendars WHERE id = ?1",
                 params![id.to_string()],
@@ -150,9 +160,8 @@ impl Database {
     }
 
     pub fn list_calendars(&self) -> Result<Vec<Calendar>> {
-        let mut stmt = self
-            .conn
-            .prepare("SELECT id, name, color, source, visible, updated_epoch, updated_rfc3339 FROM calendars ORDER BY name")?;
+        let conn = self.conn.lock().unwrap();
+        let mut stmt = conn.prepare("SELECT id, name, color, source, visible, updated_epoch, updated_rfc3339 FROM calendars ORDER BY name")?;
         let rows = stmt.query_map([], row_to_calendar)?;
         Ok(rows
             .collect::<rusqlite::Result<Vec<_>>>()?
@@ -163,8 +172,10 @@ impl Database {
     // ----- items -----
 
     pub fn upsert_item(&self, item: &CalendarItem) -> Result<()> {
-        item.validate().map_err(|e| StorageError::Corrupt(e.to_string()))?;
-        self.conn.execute(
+        let conn = self.conn.lock().unwrap();
+        item.validate()
+            .map_err(|e| StorageError::Corrupt(e.to_string()))?;
+        conn.execute(
             "INSERT INTO items (
                 id, kind, title, notes, location, calendar_id,
                 start_epoch, start_rfc3339, end_epoch, end_rfc3339,
@@ -218,8 +229,9 @@ impl Database {
 
     /// Soft-delete tombstone (CRDT sync requires keeping the row).
     pub fn soft_delete_item(&self, id: Ulid) -> Result<bool> {
+        let conn = self.conn.lock().unwrap();
         let now = Utc::now().fixed_offset();
-        let n = self.conn.execute(
+        let n = conn.execute(
             "UPDATE items SET deleted=1, updated_epoch=?2, updated_rfc3339=?3 WHERE id=?1",
             params![id.to_string(), epoch(&now), now.to_rfc3339()],
         )?;
@@ -227,15 +239,20 @@ impl Database {
     }
 
     pub fn get_item(&self, id: Ulid) -> Result<Option<CalendarItem>> {
-        self.conn
-            .query_row("SELECT * FROM items WHERE id = ?1", params![id.to_string()], row_to_item)
-            .optional()
-            .map_err(Into::into)
+        let conn = self.conn.lock().unwrap();
+        conn.query_row(
+            "SELECT * FROM items WHERE id = ?1",
+            params![id.to_string()],
+            row_to_item,
+        )
+        .optional()
+        .map_err(Into::into)
     }
 
     /// All non-deleted items overlapping `[from, to]` (by start/end epochs).
     pub fn items_in_range(&self, from: DateTimeTz, to: DateTimeTz) -> Result<Vec<CalendarItem>> {
-        let mut stmt = self.conn.prepare(
+        let conn = self.conn.lock().unwrap();
+        let mut stmt = conn.prepare(
             "SELECT * FROM items
              WHERE deleted=0 AND start_epoch <= ?2 AND COALESCE(end_epoch, start_epoch) >= ?1
              ORDER BY start_epoch",
@@ -250,7 +267,8 @@ impl Database {
     // ----- settings -----
 
     pub fn set_setting(&self, key: &str, value_json: &str) -> Result<()> {
-        self.conn.execute(
+        let conn = self.conn.lock().unwrap();
+        conn.execute(
             "INSERT INTO settings (key, value) VALUES (?1, ?2)
              ON CONFLICT(key) DO UPDATE SET value=excluded.value",
             params![key, value_json],
@@ -259,25 +277,27 @@ impl Database {
     }
 
     pub fn get_setting(&self, key: &str) -> Result<Option<String>> {
-        self.conn
-            .query_row(
-                "SELECT value FROM settings WHERE key = ?1",
-                params![key],
-                |r| r.get(0),
-            )
-            .optional()
-            .map_err(Into::into)
+        let conn = self.conn.lock().unwrap();
+        conn.query_row(
+            "SELECT value FROM settings WHERE key = ?1",
+            params![key],
+            |r| r.get(0),
+        )
+        .optional()
+        .map_err(Into::into)
     }
 
     pub fn all_settings(&self) -> Result<Vec<(String, String)>> {
-        let mut stmt = self.conn.prepare("SELECT key, value FROM settings")?;
+        let conn = self.conn.lock().unwrap();
+        let mut stmt = conn.prepare("SELECT key, value FROM settings")?;
         let rows = stmt.query_map([], |r| Ok((r.get(0)?, r.get(1)?)))?;
         rows.collect::<rusqlite::Result<Vec<_>>>()
             .map_err(Into::into)
     }
 
     pub fn list_items(&self, include_deleted: bool) -> Result<Vec<CalendarItem>> {
-        let mut stmt = self.conn.prepare(if include_deleted {
+        let conn = self.conn.lock().unwrap();
+        let mut stmt = conn.prepare(if include_deleted {
             "SELECT * FROM items"
         } else {
             "SELECT * FROM items WHERE deleted=0"
@@ -299,7 +319,8 @@ fn from_epoch(secs: i64, rfc3339: &str) -> Result<DateTimeTz> {
     // fall back to the epoch if parsing fails.
     match DateTime::parse_from_rfc3339(rfc3339) {
         Ok(dt) => Ok(dt),
-        Err(_) => Utc.timestamp_opt(secs, 0)
+        Err(_) => Utc
+            .timestamp_opt(secs, 0)
             .single()
             .map(|dt| dt.fixed_offset())
             .ok_or_else(|| StorageError::Corrupt(format!("bad timestamp {rfc3339}"))),
@@ -380,5 +401,3 @@ fn row_to_item(row: &rusqlite::Row<'_>) -> rusqlite::Result<CalendarItem> {
             .map_err(|e| StorageError::Corrupt(e.to_string()))?,
     })
 }
-
-

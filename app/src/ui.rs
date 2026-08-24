@@ -1,9 +1,9 @@
 //! UI components for the Kal desktop shell (phase 2).
 
 use chrono::{Datelike, Local, NaiveDate, NaiveTime, Weekday};
+use dioxus::prelude::*;
 use kal_core::models::{CalendarItem, DateTimeTz, ItemKind, Occurrence};
 use kal_core::viewmodel;
-use dioxus::prelude::*;
 use std::collections::BTreeMap;
 use ulid::Ulid;
 
@@ -12,7 +12,7 @@ use crate::DbHandle;
 /// Device-local preferences (§5.7), persisted in the `settings` table.
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct Settings {
-    pub theme: String,            // "light" | "dark"
+    pub theme: String, // "light" | "dark"
     pub time_24h: bool,
     pub first_day_monday: bool,
     pub default_view: ViewMode,
@@ -62,8 +62,12 @@ pub enum ViewMode {
 }
 
 impl ViewMode {
-    pub const ALL: [ViewMode; 4] =
-        [ViewMode::Month, ViewMode::Week, ViewMode::Day, ViewMode::Agenda];
+    pub const ALL: [ViewMode; 4] = [
+        ViewMode::Month,
+        ViewMode::Week,
+        ViewMode::Day,
+        ViewMode::Agenda,
+    ];
 
     pub fn label(&self) -> String {
         match self {
@@ -87,7 +91,10 @@ pub fn use_visible_items() -> Vec<CalendarItem> {
     let cals = cals_res.value().read().clone().unwrap_or_default();
     let hidden: std::collections::HashSet<Ulid> =
         cals.iter().filter(|c| !c.visible).map(|c| c.id).collect();
-    items.into_iter().filter(|i| !hidden.contains(&i.calendar_id)).collect()
+    items
+        .into_iter()
+        .filter(|i| !hidden.contains(&i.calendar_id))
+        .collect()
 }
 
 fn local_offset() -> chrono::FixedOffset {
@@ -119,7 +126,11 @@ pub fn MonthView() -> Element {
 
     let st = settings.read();
     let c = *cursor.read();
-    let first_day = if st.first_day_monday { Weekday::Mon } else { Weekday::Sun };
+    let first_day = if st.first_day_monday {
+        Weekday::Mon
+    } else {
+        Weekday::Sun
+    };
     let grid = viewmodel::month_grid(c.year(), c.month(), first_day);
     let today = Local::now().date_naive();
 
@@ -127,16 +138,19 @@ pub fn MonthView() -> Element {
     let last = grid[viewmodel::MONTH_GRID_WEEKS - 1][6];
     let occ_map = viewmodel::occurrences_by_date(&items, first, last);
 
-    let rows: Vec<(String, Vec<(NaiveDate, Vec<Occurrence>)>)> = grid
+    type MonthRow = (String, Vec<(NaiveDate, Vec<Occurrence>)>);
+    let rows: Vec<MonthRow> = grid
         .into_iter()
         .enumerate()
         .map(|(w, row)| {
             (
                 format!("{}-{}-{w}", c.year(), c.month()),
-                row.into_iter().map(|d| {
-                    let occs = occ_map.get(&d).cloned().unwrap_or_default();
-                    (d, occs)
-                }).collect(),
+                row.into_iter()
+                    .map(|d| {
+                        let occs = occ_map.get(&d).cloned().unwrap_or_default();
+                        (d, occs)
+                    })
+                    .collect(),
             )
         })
         .collect();
@@ -266,10 +280,14 @@ fn ItemRow(date: Option<NaiveDate>, item: CalendarItem, occ_start: DateTimeTz) -
         format!(
             "{} – {}",
             settings.read().fmt_time(item.start),
-            item.end.map(|e| settings.read().fmt_time(e)).unwrap_or_default()
+            item.end
+                .map(|e| settings.read().fmt_time(e))
+                .unwrap_or_default()
         )
     };
-    let date_str = date.map(|d| d.format("%a %b %d").to_string()).unwrap_or_default();
+    let date_str = date
+        .map(|d| d.format("%a %b %d").to_string())
+        .unwrap_or_default();
     // Age shown for birthdays next to the title.
     let title_suffix = if item.kind == ItemKind::Birthday {
         match item.birthday_age_at(occ_start) {
@@ -327,7 +345,13 @@ pub fn DayView() -> Element {
         .get(&d)
         .map(|occs| {
             occs.iter()
-                .filter_map(|o| items.iter().find(|i| i.id == o.item_id).cloned().map(|i| (o.clone(), i)))
+                .filter_map(|o| {
+                    items
+                        .iter()
+                        .find(|i| i.id == o.item_id)
+                        .cloned()
+                        .map(|i| (o.clone(), i))
+                })
                 .collect()
         })
         .unwrap_or_default();
@@ -350,7 +374,8 @@ pub fn WeekView() -> Element {
     let items = use_visible_items();
     let c = *cursor.read();
     let week_start = c - chrono::Duration::days(c.weekday().num_days_from_monday() as i64);
-    let map = viewmodel::occurrences_by_date(&items, week_start, week_start + chrono::Duration::days(6));
+    let map =
+        viewmodel::occurrences_by_date(&items, week_start, week_start + chrono::Duration::days(6));
 
     let days: Vec<(String, Vec<(Occurrence, CalendarItem)>)> = (0..7)
         .map(|i| {
@@ -359,7 +384,13 @@ pub fn WeekView() -> Element {
                 .get(&d)
                 .map(|occs| {
                     occs.iter()
-                        .filter_map(|o| items.iter().find(|it| it.id == o.item_id).cloned().map(|it| (o.clone(), it)))
+                        .filter_map(|o| {
+                            items
+                                .iter()
+                                .find(|it| it.id == o.item_id)
+                                .cloned()
+                                .map(|it| (o.clone(), it))
+                        })
                         .collect()
                 })
                 .unwrap_or_default();
@@ -524,7 +555,11 @@ impl EditorState {
             kind,
             title: String::new(),
             date: date.format("%Y-%m-%d").to_string(),
-            start_time: if birthday { "00:00".into() } else { "09:00".into() },
+            start_time: if birthday {
+                "00:00".into()
+            } else {
+                "09:00".into()
+            },
             end_time: if birthday || kind == ItemKind::Task {
                 String::new()
             } else {
@@ -533,7 +568,11 @@ impl EditorState {
             all_day: birthday,
             calendar_id,
             location: String::new(),
-            rrule_preset: if kind == ItemKind::Birthday { RrulePreset::Yearly } else { RrulePreset::None },
+            rrule_preset: if kind == ItemKind::Birthday {
+                RrulePreset::Yearly
+            } else {
+                RrulePreset::None
+            },
             reminder_minutes: Vec::new(),
         }
     }
@@ -603,8 +642,7 @@ fn db_apply_scoped_edit(
         if !base.rrule.as_deref().unwrap_or("").contains("COUNT=")
             && !base.rrule.as_deref().unwrap_or("").contains("UNTIL=")
         {
-            let until_utc = (occ_start - chrono::Duration::minutes(1))
-                .with_timezone(&chrono::Utc);
+            let until_utc = (occ_start - chrono::Duration::minutes(1)).with_timezone(&chrono::Utc);
             let until = until_utc.format("%Y%m%dT%H%M%SZ").to_string();
             let rule = base.rrule.take().unwrap_or_default();
             base.rrule = Some(format!("{rule};UNTIL={until}"));
@@ -674,66 +712,72 @@ pub fn EditorModal(state: EditorState) -> Element {
     // Signal captures are Copy in Dioxus, so we build one handler per scope.
     // Signal captures are Copy in Dioxus; each scope gets its own handler
     // with its own DB handle clone.
-    let mk_save = |scope: Scope, db_save: DbHandle| move |_| {
-        let Some(start) = parse_when(&date.read(), &start_time.read()) else {
-            return;
-        };
-        let end = parse_when(&date.read(), &end_time.read());
+    let mk_save = |scope: Scope, db_save: DbHandle| {
+        move |_| {
+            let Some(start) = parse_when(&date.read(), &start_time.read()) else {
+                return;
+            };
+            let end = parse_when(&date.read(), &end_time.read());
 
-        // Load-or-create base item so editing preserves fields not shown here
-        // (reminders, …) once later phases introduce them.
-        let mut item = match state.id {
-            Some(id) => db_save.get_item(id).ok().flatten().unwrap_or_else(|| {
-                CalendarItem::new(state.kind, "", *calendar_id.read(), start)
-            }),
-            None => CalendarItem::new(state.kind, "", *calendar_id.read(), start),
-        };
+            // Load-or-create base item so editing preserves fields not shown here
+            // (reminders, …) once later phases introduce them.
+            let mut item = match state.id {
+                Some(id) => db_save.get_item(id).ok().flatten().unwrap_or_else(|| {
+                    CalendarItem::new(state.kind, "", *calendar_id.read(), start)
+                }),
+                None => CalendarItem::new(state.kind, "", *calendar_id.read(), start),
+            };
 
-        item.kind = state.kind;
-        item.title = title.read().clone();
-        item.location = {
-            let l = location.read().clone();
-            if l.is_empty() { None } else { Some(l) }
-        };
-        item.calendar_id = *calendar_id.read();
-        item.start = start;
-        item.end = end;
-        item.all_day = *all_day.read();
-        if state.kind == ItemKind::Birthday {
-            item.metadata.birthday_of = Some(person.read().clone());
+            item.kind = state.kind;
+            item.title = title.read().clone();
+            item.location = {
+                let l = location.read().clone();
+                if l.is_empty() {
+                    None
+                } else {
+                    Some(l)
+                }
+            };
+            item.calendar_id = *calendar_id.read();
+            item.start = start;
+            item.end = end;
+            item.all_day = *all_day.read();
+            if state.kind == ItemKind::Birthday {
+                item.metadata.birthday_of = Some(person.read().clone());
+            }
+            item.rrule = rrule_choice.read().to_rrule().map(str::to_string);
+            item.reminders = {
+                let mut mins = reminder_minutes.read().clone();
+                if let Ok(m) = custom_reminder.read().trim().parse::<i64>() {
+                    if m > 0 && !mins.contains(&m) {
+                        mins.push(m);
+                    }
+                }
+                mins.sort();
+                mins.dedup();
+                mins.into_iter()
+                    .map(kal_core::models::Reminder::minutes_before)
+                    .collect()
+            };
+            item.updated_at = Local::now().fixed_offset();
+
+            let and_following = scope == Scope::ThisAndFollowing;
+            match (scope, state.id, state.occurrence_start) {
+                (Scope::ThisOnly | Scope::ThisAndFollowing, Some(base_id), Some(occ_start)) => {
+                    if !db_apply_scoped_edit(&db_save, base_id, &item, occ_start, and_following) {
+                        return;
+                    }
+                }
+                _ => {
+                    if db_save.upsert_item(&item).is_err() {
+                        return;
+                    }
+                }
+            }
+
+            items_res.restart();
+            editor.set(None);
         }
-        item.rrule = rrule_choice.read().to_rrule().map(str::to_string);
-        item.reminders = {
-            let mut mins = reminder_minutes.read().clone();
-            if let Ok(m) = custom_reminder.read().trim().parse::<i64>() {
-                if m > 0 && !mins.contains(&m) {
-                    mins.push(m);
-                }
-            }
-            mins.sort();
-            mins.dedup();
-            mins.into_iter()
-                .map(kal_core::models::Reminder::minutes_before)
-                .collect()
-        };
-        item.updated_at = Local::now().fixed_offset();
-
-        let and_following = scope == Scope::ThisAndFollowing;
-        match (scope, state.id, state.occurrence_start) {
-            (Scope::ThisOnly | Scope::ThisAndFollowing, Some(base_id), Some(occ_start)) => {
-                if !db_apply_scoped_edit(&db_save, base_id, &item, occ_start, and_following) {
-                    return;
-                }
-            }
-            _ => {
-                if db_save.upsert_item(&item).is_err() {
-                    return;
-                }
-            }
-        }
-
-        items_res.restart();
-        editor.set(None);
     };
     let save_all = mk_save(Scope::All, db_save.clone());
     let save_following = mk_save(Scope::ThisAndFollowing, db_save.clone());

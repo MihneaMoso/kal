@@ -4,9 +4,7 @@ use std::ffi::{c_char, CStr, CString};
 
 use kal_storage::Database;
 
-use kal_core::models::{
-    datetime_from_parts, Calendar, CalendarItem, Color, ItemKind,
-};
+use kal_core::models::{datetime_from_parts, Calendar, CalendarItem, Color, ItemKind};
 
 unsafe fn take_string(ptr: *mut c_char) -> Option<String> {
     if ptr.is_null() {
@@ -22,13 +20,21 @@ fn setup_db(path: &std::path::Path) -> ulid::Ulid {
     let cal = Calendar::local("Work", Color("#3366cc".into()));
     db.upsert_calendar(&cal).unwrap();
 
-    let mut ev =
-        CalendarItem::new(ItemKind::Event, "Standup", cal.id, datetime_from_parts(2026, 8, 24, 9, 0, 0).unwrap());
+    let mut ev = CalendarItem::new(
+        ItemKind::Event,
+        "Standup",
+        cal.id,
+        datetime_from_parts(2026, 8, 24, 9, 0, 0).unwrap(),
+    );
     ev.end = Some(datetime_from_parts(2026, 8, 24, 10, 0, 0).unwrap());
     db.upsert_item(&ev).unwrap();
 
-    let mut bday =
-        CalendarItem::new(ItemKind::Birthday, "Ada", cal.id, datetime_from_parts(1990, 8, 24, 0, 0, 0).unwrap());
+    let mut bday = CalendarItem::new(
+        ItemKind::Birthday,
+        "Ada",
+        cal.id,
+        datetime_from_parts(1990, 8, 24, 0, 0, 0).unwrap(),
+    );
     bday.all_day = true;
     // Birthdays are yearly-recurring by spec (§4); the editor enforces this.
     bday.rrule = Some("FREQ=YEARLY".into());
@@ -55,7 +61,10 @@ fn open_query_close_lifecycle() {
         let json = take_string(kal_ffi::kal_upcoming_json(db, from, to)).unwrap();
         assert!(json.contains("Standup"), "{json}");
         assert!(json.contains("\"kind\":\"birthday\""), "{json}");
-        assert!(json.contains("\"age\":36") || json.contains("\"age\":35"), "{json}");
+        assert!(
+            json.contains("\"age\":36") || json.contains("\"age\":35"),
+            "{json}"
+        );
         assert!(json.contains("#3366cc"));
 
         // Month grid for August 2026.
@@ -83,4 +92,3 @@ fn open_with_garbage_path_returns_null() {
         assert!(kal_ffi::kal_open(bad.as_ptr()).is_null());
     }
 }
-

@@ -36,7 +36,8 @@ pub fn compute_firings(
     from: crate::models::DateTimeTz,
     horizon_days: i64,
 ) -> Vec<ReminderFiring> {
-    let to_date = from.date_naive() + chrono::Duration::days(horizon_days.min(RECURRENCE_HORIZON_DAYS));
+    let to_date =
+        from.date_naive() + chrono::Duration::days(horizon_days.min(RECURRENCE_HORIZON_DAYS));
     let mut out = Vec::new();
 
     for item in items {
@@ -62,24 +63,20 @@ pub fn compute_firings(
         }
     }
     out.sort_by_key(|f| f.fire_at);
-    out.dedup_by(|a, b| a.item_id == b.item_id && a.reminder_id == b.reminder_id && a.fire_at == b.fire_at);
+    out.dedup_by(|a, b| {
+        a.item_id == b.item_id && a.reminder_id == b.reminder_id && a.fire_at == b.fire_at
+    });
     out
 }
 
-fn occurrences_window(
-    item: &CalendarItem,
-    from: NaiveDate,
-    to: NaiveDate,
-) -> Vec<Occurrence> {
+fn occurrences_window(item: &CalendarItem, from: NaiveDate, to: NaiveDate) -> Vec<Occurrence> {
     expand_occurrences(item, from, to)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::models::{
-        datetime_from_parts, Calendar, ItemKind, Reminder, ReminderOffset,
-    };
+    use crate::models::{datetime_from_parts, Calendar, ItemKind, Reminder, ReminderOffset};
     use chrono::{DateTime, FixedOffset, Timelike};
 
     fn cal() -> Calendar {
@@ -93,7 +90,10 @@ mod tests {
     fn event(start: DateTime<FixedOffset>, minutes_before: &[i64]) -> CalendarItem {
         let mut it = CalendarItem::new(ItemKind::Event, "Standup", cal().id, start);
         it.end = Some(start + chrono::Duration::hours(1));
-        it.reminders = minutes_before.iter().map(|m| Reminder::minutes_before(*m)).collect();
+        it.reminders = minutes_before
+            .iter()
+            .map(|m| Reminder::minutes_before(*m))
+            .collect();
         it
     }
 

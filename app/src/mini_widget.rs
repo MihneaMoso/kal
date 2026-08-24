@@ -42,8 +42,11 @@ fn MiniCalendar() -> Element {
     let items = db.list_items(false).unwrap_or_default();
     let first_day = if true { Weekday::Mon } else { Weekday::Sun };
     let grid = viewmodel::month_grid(c.year(), c.month(), first_day);
-    let occs =
-        viewmodel::occurrences_by_date(&items, grid[0][0], grid[viewmodel::MONTH_GRID_WEEKS - 1][6]);
+    let occs = viewmodel::occurrences_by_date(
+        &items,
+        grid[0][0],
+        grid[viewmodel::MONTH_GRID_WEEKS - 1][6],
+    );
     let today = now.date_naive();
 
     rsx! {

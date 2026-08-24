@@ -62,8 +62,8 @@ impl<'a> SyncSession<'a> {
             device_id: self.device_id,
             state: self.state.clone(),
         };
-        let plaintext = serde_json::to_vec(&env)
-            .map_err(|e| SyncError::Malformed(e.to_string()))?;
+        let plaintext =
+            serde_json::to_vec(&env).map_err(|e| SyncError::Malformed(e.to_string()))?;
         self.identity.encrypt(&plaintext).map_err(Into::into)
     }
 
@@ -71,8 +71,7 @@ impl<'a> SyncSession<'a> {
     pub fn accept_blob(&mut self, blob: &[u8]) -> Result<SyncState, SyncError> {
         let plaintext = self.identity.decrypt(blob)?;
         let env: SyncEnvelope = serde_json::from_str(
-            &String::from_utf8(plaintext)
-                .map_err(|e| SyncError::Malformed(e.to_string()))?,
+            &String::from_utf8(plaintext).map_err(|e| SyncError::Malformed(e.to_string()))?,
         )
         .map_err(|e| SyncError::Malformed(e.to_string()))?;
 
@@ -88,13 +87,14 @@ impl<'a> SyncSession<'a> {
 mod tests {
     use super::*;
     use crate::crdt::SyncState;
+    use kal_core::models::{CalendarItem, ItemKind};
     use std::cell::RefCell;
     use std::collections::HashMap;
-    use kal_core::models::{CalendarItem, ItemKind};
 
     const PHRASE_A: &str = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
     // A different, valid 12-word phrase.
-    const PHRASE_B: &str = "legal winner thank year wave sausage worth useful legal winner thank yellow";
+    const PHRASE_B: &str =
+        "legal winner thank year wave sausage worth useful legal winner thank yellow";
 
     /// In-memory mailboxes keyed by logical address.
     #[derive(Default)]
@@ -104,7 +104,11 @@ mod tests {
 
     impl LoopbackTransport {
         fn deliver_to(&self, addr: &str, blob: Vec<u8>) {
-            self.boxes.borrow_mut().entry(addr.to_string()).or_default().push(blob);
+            self.boxes
+                .borrow_mut()
+                .entry(addr.to_string())
+                .or_default()
+                .push(blob);
         }
     }
 
@@ -120,11 +124,19 @@ mod tests {
 
     fn sample_item(title: &str, ts_secs: i64) -> CalendarItem {
         use chrono::TimeZone;
-        let start = chrono::Utc.timestamp_opt(ts_secs, 0).single().unwrap().fixed_offset();
+        let start = chrono::Utc
+            .timestamp_opt(ts_secs, 0)
+            .single()
+            .unwrap()
+            .fixed_offset();
         CalendarItem::new(ItemKind::Event, title, ulid::Ulid::new(), start)
     }
 
-    fn make_session<'a>(identity: &'a ChainIdentity, name: &str, state: SyncState) -> SyncSession<'a> {
+    fn make_session<'a>(
+        identity: &'a ChainIdentity,
+        name: &str,
+        state: SyncState,
+    ) -> SyncSession<'a> {
         SyncSession::new(identity, Ulid::new(), name, state)
     }
 
@@ -149,11 +161,23 @@ mod tests {
 
         let net = LoopbackTransport::default();
         net.send("peer", &sess1.seal_state().unwrap()).unwrap();
-        let blob = net.boxes.borrow_mut().remove("peer").unwrap().pop().unwrap();
+        let blob = net
+            .boxes
+            .borrow_mut()
+            .remove("peer")
+            .unwrap()
+            .pop()
+            .unwrap();
         sess2.accept_blob(&blob).unwrap();
 
         net.send("peer", &sess2.seal_state().unwrap()).unwrap();
-        let blob = net.boxes.borrow_mut().remove("peer").unwrap().pop().unwrap();
+        let blob = net
+            .boxes
+            .borrow_mut()
+            .remove("peer")
+            .unwrap()
+            .pop()
+            .unwrap();
         sess1.accept_blob(&blob).unwrap();
 
         assert_eq!(sess1.state, sess2.state);
@@ -166,10 +190,10 @@ mod tests {
         let intruder = ChainIdentity::generate().unwrap();
 
         let mut victim = make_session(&legit, "Victim", SyncState::default());
-        victim.state.items.insert(
-            sample_item("secret", 3000).id,
-            sample_item("secret", 3000),
-        );
+        victim
+            .state
+            .items
+            .insert(sample_item("secret", 3000).id, sample_item("secret", 3000));
         let blob = victim.seal_state().unwrap();
 
         // Intruder lacks the chain key entirely.

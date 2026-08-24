@@ -100,7 +100,9 @@ impl<N: Notifier> ReminderScheduler for ThreadScheduler<N> {
 
             // Compute sleep duration up-front against the injected clock so
             // tests don't need real wall-clock alignment.
-            let delay = (fire_at_utc - (now_fn)()).to_std().unwrap_or(Duration::ZERO);
+            let delay = (fire_at_utc - (now_fn)())
+                .to_std()
+                .unwrap_or(Duration::ZERO);
 
             cancels.insert(key, cancel);
             thread::spawn(move || {

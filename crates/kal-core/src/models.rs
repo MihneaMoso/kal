@@ -67,14 +67,18 @@ pub enum NotifyMethod {
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum ReminderOffset {
     /// Minutes before the item start (may exceed 24h, e.g. 10080 = 1 week).
-    MinutesBefore { minutes: i64 },
+    MinutesBefore {
+        minutes: i64,
+    },
     Absolute(DateTimeTz),
 }
 
 impl ReminderOffset {
     pub fn resolve(&self, start: DateTimeTz) -> DateTimeTz {
         match self {
-            ReminderOffset::MinutesBefore { minutes } => start - chrono::Duration::minutes(*minutes),
+            ReminderOffset::MinutesBefore { minutes } => {
+                start - chrono::Duration::minutes(*minutes)
+            }
             ReminderOffset::Absolute(t) => *t,
         }
     }
@@ -166,7 +170,12 @@ pub struct CalendarItem {
 
 impl CalendarItem {
     /// Create a new event-like item with sane defaults.
-    pub fn new(kind: ItemKind, title: impl Into<String>, calendar_id: Ulid, start: DateTimeTz) -> Self {
+    pub fn new(
+        kind: ItemKind,
+        title: impl Into<String>,
+        calendar_id: Ulid,
+        start: DateTimeTz,
+    ) -> Self {
         let now = Utc::now().fixed_offset();
         Self {
             id: Ulid::new(),
@@ -196,7 +205,9 @@ impl CalendarItem {
 
     /// Effective display color: override wins over calendar color.
     pub fn effective_color(&self, calendar: Option<&Calendar>) -> Option<Color> {
-        self.color_override.clone().or_else(|| calendar.map(|c| c.color.clone()))
+        self.color_override
+            .clone()
+            .or_else(|| calendar.map(|c| c.color.clone()))
     }
 
     /// Validate structural invariants before persisting/syncing.
@@ -267,7 +278,9 @@ pub fn datetime_from_parts(
     offset_hours: i32,
 ) -> Option<DateTimeTz> {
     let offset = FixedOffset::east_opt(offset_hours * 3600)?;
-    offset.with_ymd_and_hms(year, month, day, hour, min, 0).single()
+    offset
+        .with_ymd_and_hms(year, month, day, hour, min, 0)
+        .single()
 }
 
 #[cfg(test)]
@@ -311,7 +324,10 @@ mod tests {
         // Not yet reached in 2026.
         assert_eq!(it.birthday_age_at(ts(2026, 6, 1, 12)), Some(35));
         // Non-birthdays have no age.
-        assert_eq!(sample(ItemKind::Event, it.start).birthday_age_at(it.start), None);
+        assert_eq!(
+            sample(ItemKind::Event, it.start).birthday_age_at(it.start),
+            None
+        );
     }
 
     #[test]

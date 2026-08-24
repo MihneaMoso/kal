@@ -1,7 +1,5 @@
 use chrono::Timelike;
-use kal_core::models::{
-    Calendar, CalendarItem, CalendarSource, Color, ItemKind, Reminder,
-};
+use kal_core::models::{Calendar, CalendarItem, CalendarSource, Color, ItemKind, Reminder};
 use kal_storage::Database;
 
 fn ts(y: i32, m: u32, d: u32, h: u32) -> kal_core::models::DateTimeTz {
@@ -58,11 +56,15 @@ fn item_round_trip_preserves_everything() {
     assert_eq!(db.get_item(item.id).unwrap().unwrap(), item);
 
     // Range query containing the event.
-    let hits = db.items_in_range(ts(2026, 8, 23, 0), ts(2026, 8, 25, 0)).unwrap();
+    let hits = db
+        .items_in_range(ts(2026, 8, 23, 0), ts(2026, 8, 25, 0))
+        .unwrap();
     assert_eq!(hits.len(), 1);
 
     // Range query missing it.
-    let miss = db.items_in_range(ts(2030, 1, 1, 0), ts(2030, 1, 2, 0)).unwrap();
+    let miss = db
+        .items_in_range(ts(2030, 1, 1, 0), ts(2030, 1, 2, 0))
+        .unwrap();
     assert!(miss.is_empty());
 }
 
@@ -76,7 +78,10 @@ fn soft_delete_keeps_tombstone_hidden_from_queries() {
     assert!(!db.soft_delete_item(item.id).is_err());
 
     assert!(db.get_item(item.id).unwrap().unwrap().deleted);
-    assert!(db.items_in_range(ts(2026, 8, 24, 0), ts(2026, 8, 25, 0)).unwrap().is_empty());
+    assert!(db
+        .items_in_range(ts(2026, 8, 24, 0), ts(2026, 8, 25, 0))
+        .unwrap()
+        .is_empty());
 
     let all = db.list_items(true).unwrap();
     assert_eq!(all.len(), 1);
@@ -137,7 +142,12 @@ fn birthday_item_round_trip_with_metadata() {
     };
     db.upsert_calendar(&bd_cal).unwrap();
 
-    let mut bday = CalendarItem::new(ItemKind::Birthday, "Ada Lovelace", bd_cal.id, ts(1815, 12, 10, 0));
+    let mut bday = CalendarItem::new(
+        ItemKind::Birthday,
+        "Ada Lovelace",
+        bd_cal.id,
+        ts(1815, 12, 10, 0),
+    );
     bday.all_day = true;
     bday.metadata.birthday_of = Some("vcf:ada-1".into());
     db.upsert_item(&bday).unwrap();
@@ -153,9 +163,15 @@ fn settings_round_trip_and_upsert() {
     assert_eq!(db.get_setting("theme").unwrap(), None);
     db.set_setting("theme", r#""dark""#).unwrap();
     db.set_setting("time_format", r#""24h""#).unwrap();
-    assert_eq!(db.get_setting("theme").unwrap().as_deref(), Some(r#""dark""#));
+    assert_eq!(
+        db.get_setting("theme").unwrap().as_deref(),
+        Some(r#""dark""#)
+    );
     db.set_setting("theme", r#""light""#).unwrap(); // upsert replaces
-    assert_eq!(db.get_setting("theme").unwrap().as_deref(), Some(r#""light""#));
+    assert_eq!(
+        db.get_setting("theme").unwrap().as_deref(),
+        Some(r#""light""#)
+    );
 
     let mut all = db.all_settings().unwrap();
     all.sort();

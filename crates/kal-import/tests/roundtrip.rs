@@ -1,12 +1,12 @@
 use std::str::FromStr;
 
-use kal_import::{export_all, export_calendar, import_ics};
 use icalendar::Calendar as IcsCalendar;
+use kal_import::{export_all, export_calendar, import_ics};
 use ulid::Ulid;
 
 use kal_core::models::{
-    datetime_from_parts, Calendar, CalendarItem, CalendarSource, Color, ItemKind,
-    ItemMetadata, NotifyMethod, Reminder, ReminderOffset,
+    datetime_from_parts, Calendar, CalendarItem, CalendarSource, Color, ItemKind, ItemMetadata,
+    NotifyMethod, Reminder, ReminderOffset,
 };
 
 fn ts(y: i32, m: u32, d: u32, h: u32) -> kal_core::models::DateTimeTz {
@@ -32,10 +32,7 @@ fn sample_event() -> (Calendar, CalendarItem) {
     item.notes = Some("daily sync".into());
     item.rrule = Some("FREQ=DAILY;COUNT=5".into());
     item.exdates = vec![ts(2026, 8, 25, 9)];
-    item.reminders = vec![
-        Reminder::minutes_before(10),
-        Reminder::minutes_before(1440),
-    ];
+    item.reminders = vec![Reminder::minutes_before(10), Reminder::minutes_before(1440)];
     (cal(id), item)
 }
 
@@ -61,7 +58,10 @@ fn event_round_trip_preserves_fields() {
     assert!(!got.all_day);
 
     // Times come back as UTC instants.
-    assert_eq!(got.start.with_timezone(&chrono::Utc), item.start.with_timezone(&chrono::Utc));
+    assert_eq!(
+        got.start.with_timezone(&chrono::Utc),
+        item.start.with_timezone(&chrono::Utc)
+    );
 
     // EXDATE survives (as UTC instant).
     assert_eq!(got.exdates.len(), 1);

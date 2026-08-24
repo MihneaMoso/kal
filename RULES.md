@@ -149,7 +149,14 @@ bite you again if ignored, plus the exact state to resume from.
   button in sidebar. dioxus-desktop dep added for Config/WindowBuilder/tao
   re-exports. Component fns used with VirtualDom::new need
   #[allow(non_snake_case)].
-- ▶ NEXT: Phase 10 release engineering (CI matrix, packaging), then wrap-up. + desktop mini-widget window, then Phase 10. (fluent-rs), 9c a11y/perf + desktop
+- ✅ Phase 10 COMPLETE: .github/workflows/ci.yml (fmt+clippy -D warnings+tests
+  on 3 OSes + release artifact upload); ARCHITECTURE.md; CONTRIBUTING.md;
+  README rewritten w/ status table, mobile/widget/packaging sections;
+  LICENSE-MIT + LICENSE-APACHE files. Codebase is fmt/clippy-clean.
+- ✅ kal-storage Database now wraps Connection in std Mutex → Send+Sync,
+  fixing a real thread-safety hole under the async runtime (clippy caught it).
+- ▶ PROJECT WRAP-UP: all spec phases either complete or explicitly deferred
+  with owners listed in RULES "Future work" below. + desktop mini-widget window, then Phase 10. (fluent-rs), 9c a11y/perf + desktop
   mini-widget window, then Phase 10 release eng. (12/24h, first day of week, default
   view), i18n scaffolding (fluent-rs), a11y pass, desktop mini-widget window.
   Then Phase 10 release eng. Real iroh/mDNS transports remain future work
@@ -187,3 +194,14 @@ bite you again if ignored, plus the exact state to resume from.
 - `cargo build --workspace` warning-free (fix or justify warnings)
 - Desktop app still launches: `timeout 8 ./target/debug/Kal; echo $?`
 - Update DECISIONS.md with any judgment calls made during the phase
+
+## Future work (deferred deliberately, with entry points)
+
+- Live P2P transports: implement `kal_sync::Transport` for iroh and/or mDNS
+  (crates/kal-sync/src/session.rs defines the trait; FileTransport is the
+  reference impl). Feature-gate deps.
+- Mobile app shells (phase 6): dioxus mobile renderer + AlarmManager /
+  UNUserNotificationCenter notification FFI. kal-ffi already cross-compiles.
+- Widget shims need Xcode/Android SDK builds (sources in widgets/).
+- Sync-chain key rotation & re-pairing UX (revocation blocklist exists).
+- fluent-rs runtime when locale #2 lands (parser swap documented in D43).

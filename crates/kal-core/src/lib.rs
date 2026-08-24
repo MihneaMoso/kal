@@ -2,8 +2,8 @@
 //! No UI framework dependencies — reused by the app, native widget shims (via
 //! kal-ffi) and headless tests.
 
-pub mod models;
 pub mod error;
+pub mod models;
 pub mod reminders;
 pub mod viewmodel;
 

@@ -4,11 +4,11 @@ mod sync_ui;
 mod ui;
 
 use chrono::{Datelike, Local, Months, NaiveDate};
-use kal_notify::{DesktopNotifier, ReminderScheduler as _, ThreadScheduler};
-use std::sync::Arc;
-use kal_core::models::{Calendar, CalendarItem, Color};
-use kal_storage::Database;
 use dioxus::prelude::*;
+use kal_core::models::{Calendar, CalendarItem, Color};
+use kal_notify::{DesktopNotifier, ReminderScheduler as _, ThreadScheduler};
+use kal_storage::Database;
+use std::sync::Arc;
 /// App-wide shared handle to the reminder scheduler.
 pub type SchedulerHandle = Arc<ThreadScheduler<DesktopNotifier>>;
 
@@ -120,13 +120,17 @@ fn App() -> Element {
     let sched = use_context::<SchedulerHandle>();
     let mut last_items_len = use_signal(|| 0usize);
     use_effect(move || {
-        let version = items_res.value().read().as_ref().map(|v| v.len()).unwrap_or(0);
+        let version = items_res
+            .value()
+            .read()
+            .as_ref()
+            .map(|v| v.len())
+            .unwrap_or(0);
         if version != *last_items_len.read() {
             last_items_len.set(version);
             if let Some(items) = items_res.value().read().as_ref() {
                 let from = Local::now().fixed_offset();
-                let firings =
-                    kal_core::reminders::compute_firings(items, from, 14);
+                let firings = kal_core::reminders::compute_firings(items, from, 14);
                 sched.reschedule(&firings);
                 let _ = &db_sched; // reserved: per-item deep-link payload later
             }
@@ -360,7 +364,11 @@ fn ViewNav() -> Element {
         ui::ViewMode::Month => c.format("%B %Y").to_string(),
         ui::ViewMode::Week => {
             let ws = c - chrono::Duration::days(c.weekday().num_days_from_monday() as i64);
-            format!("{} – {}", ws.format("%b %d"), (ws + chrono::Duration::days(6)).format("%b %d, %Y"))
+            format!(
+                "{} – {}",
+                ws.format("%b %d"),
+                (ws + chrono::Duration::days(6)).format("%b %d, %Y")
+            )
         }
         ui::ViewMode::Day => c.format("%A, %B %d %Y").to_string(),
         ui::ViewMode::Agenda => "Agenda — next 30 days".to_string(),
@@ -371,7 +379,10 @@ fn ViewNav() -> Element {
         cursor.set(match *v {
             ui::ViewMode::Day => *cursor.read() - chrono::Duration::days(1),
             ui::ViewMode::Week => *cursor.read() - chrono::Duration::days(7),
-            _ => cursor.read().checked_sub_months(Months::new(1)).unwrap_or(*cursor.read()),
+            _ => cursor
+                .read()
+                .checked_sub_months(Months::new(1))
+                .unwrap_or(*cursor.read()),
         });
     };
     let step_fwd = move |_| {
@@ -379,7 +390,10 @@ fn ViewNav() -> Element {
         cursor.set(match *v {
             ui::ViewMode::Day => *cursor.read() + chrono::Duration::days(1),
             ui::ViewMode::Week => *cursor.read() + chrono::Duration::days(7),
-            _ => cursor.read().checked_add_months(Months::new(1)).unwrap_or(*cursor.read()),
+            _ => cursor
+                .read()
+                .checked_add_months(Months::new(1))
+                .unwrap_or(*cursor.read()),
         });
     };
 
