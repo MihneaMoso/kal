@@ -51,14 +51,9 @@ fn ensure_default_calendars(db: &Database) -> Vec<Calendar> {
 }
 
 fn main() {
-    // Frameless window (spec request): no GTK decorations => no system
-    // menu/titlebar; Kal draws its own title bar (see TitleBar component).
-    let cfg = Config::new().with_window(
-        WindowBuilder::new()
-            .with_title("Kal")
-            .with_decorations(false)
-            .with_maximized(true),
-    );
+    // Window manager / DE owns decorations; we just ask for a big window.
+    let cfg =
+        Config::new().with_window(WindowBuilder::new().with_title("Kal").with_maximized(true));
     dioxus::LaunchBuilder::new().with_cfg(cfg).launch(App);
 }
 
@@ -84,13 +79,15 @@ fn App() -> Element {
     let prefs = ui::Settings::load(&db);
     let default_view = prefs.default_view;
 
-    // Layout state: hamburger/collapse (§ issue 3) and pixel width of the
-    // resizable sidebar.
-    use_context_provider(|| Signal::new(true)); // sidebar_open
-    use_context_provider(|| Signal::new(230u32)); // sidebar_width
-    use_context_provider(|| Signal::new(false)); // sidebar_resizing
-    let prefs_drawer = Signal::new(false);
-    use_context_provider(|| prefs_drawer);
+    // Layout state: a SINGLE signal — Dioxus contexts are keyed by type, so
+    // multiple Signal<bool> providers would alias each other.
+    use_context_provider(|| {
+        Signal::new(ui::UiLayout {
+            sidebar_open: true,
+            sidebar_width: 230,
+            ..Default::default()
+        })
+    });
 
     let today: NaiveDate = Local::now().date_naive();
     use_context_provider(|| Signal::new(today));
@@ -192,7 +189,6 @@ fn App() -> Element {
             onmouseleave: end_resize,
             style { dangerous_inner_html: "{themed_css}" }
 
-            TitleBar {}
             TopBar {}
             div { class: "body",
                 Sidebar {}
@@ -207,56 +203,9 @@ fn App() -> Element {
     }
 }
 
-/// Frameless-window title bar: hamburger toggle, drag-to-move strip and
-/// min/max/close controls replacing the removed GTK decorations.
-#[component]
-fn TitleBar() -> Element {
-    let mut sidebar_open = use_context::<Signal<bool>>();
-    let title_label = i18n::tr("app-title");
-    let ctx_min = dioxus::desktop::window();
-    let ctx_max = dioxus::desktop::window();
-    let ctx_dblmax = ctx_max.clone();
-    let ctx_close = dioxus::desktop::window();
-    let ctx_drag = dioxus::desktop::window();
-
-    rsx! {
-        div { class: "titlebar",
-            button {
-                class: "icon-btn",
-                "aria-label": "Toggle sidebar",
-                onclick: move |_| sidebar_open.toggle(),
-                "☰"
-            }
-            span { class: "tb-title", "{title_label}" }
-            div {
-                class: "drag-area",
-                onmousedown: move |_| ctx_drag.drag(),
-                ondoubleclick: move |_| ctx_dblmax.toggle_maximized(),
-            }
-            button {
-                class: "icon-btn win",
-                "aria-label": "Minimize",
-                onclick: move |_| ctx_min.window.set_minimized(true),
-                "—"
-            }
-            button {
-                class: "icon-btn win",
-                "aria-label": "Maximize / restore",
-                onclick: move |_| ctx_max.toggle_maximized(),
-                "□"
-            }
-            button {
-                class: "icon-btn win close",
-                "aria-label": "Close",
-                onclick: move |_| ctx_close.close(),
-                "×"
-            }
-        }
-    }
-}
-
 const DARK_THEME_VARS: &str = r#"
 :root {
+    --select-chevron: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%239aa4ae' stroke-width='1.5' fill='none'/%3E%3C/svg%3E");
     --bg: #16191d;
     --bg-alt: #1f2329;
     --fg: #e6e8eb;
@@ -269,11 +218,22 @@ const DARK_THEME_VARS: &str = r#"
 
 #[component]
 fn TopBar() -> Element {
-    let mut prefs_drawer = use_context::<Signal<bool>>();
+    let mut layout = use_context::<Signal<ui::UiLayout>>();
+    let mut prefs_drawer = layout;
 
     rsx! {
         header { class: "topbar",
-            h1 { "{title_label()}" }
+            button {
+                class: "icon-btn hamburger",
+                "aria-label": "Toggle sidebar",
+                aria_expanded: "{layout.read().sidebar_open}",
+                onclick: move |_| {
+                    let cur = layout.read().sidebar_open;
+                    layout.write().sidebar_open = !cur;
+                },
+                "\u{2630}"
+            }
+            h1 { "{i18n::tr(\"app-title\")}" }
             span { class: "subtitle", "{subtitle_label()}" }
             div { class: "spacer" }
             nav { class: "tb-controls", "aria-label": "Preferences",
@@ -282,21 +242,20 @@ fn TopBar() -> Element {
             button {
                 class: "icon-btn prefs-toggle",
                 "aria-label": "Preferences menu",
-                "aria-expanded": "{*prefs_drawer.read()}",
-                onclick: move |_| prefs_drawer.toggle(),
+                "aria-expanded": "{prefs_drawer.read().prefs_drawer_open}",
+                onclick: move |_| {
+                    let cur = prefs_drawer.read().prefs_drawer_open;
+                    prefs_drawer.write().prefs_drawer_open = !cur;
+                },
                 "\u{2699}"
             }
         }
-        if *prefs_drawer.read() {
+        if prefs_drawer.read().prefs_drawer_open {
             div { class: "prefs-drawer", role: "menu", "aria-label": "Preferences",
                 PreferencesControls {}
             }
         }
     }
-}
-
-fn title_label() -> String {
-    i18n::tr("app-title")
 }
 
 fn subtitle_label() -> String {
@@ -398,9 +357,7 @@ fn source_label(cal: &Calendar) -> &'static str {
 
 #[component]
 fn Sidebar() -> Element {
-    let open = use_context::<Signal<bool>>();
-    let width = use_context::<Signal<u32>>();
-    let mut resizing = use_context::<Signal<bool>>();
+    let mut layout = use_context::<Signal<ui::UiLayout>>();
 
     let db = use_context::<DbHandle>();
     let mut editor = use_context::<Signal<Option<ui::EditorState>>>();
@@ -415,8 +372,9 @@ fn Sidebar() -> Element {
     let db_task = db.clone();
     let db_bday = db.clone();
 
-    let style_width = if *open.read() {
-        format!("width:{}px", width)
+    let l = layout.read();
+    let style_width = if l.sidebar_open {
+        format!("width:{}px", l.sidebar_width)
     } else {
         "width:0;padding:0;border-right:none".to_string()
     };
@@ -425,7 +383,7 @@ fn Sidebar() -> Element {
         aside { class: "sidebar", style: "{style_width}",
             div { class: "resize-handle",
                 title: "Drag to resize",
-                onmousedown: move |_| resizing.set(true),
+                onmousedown: move |_| layout.write().sidebar_resizing = true,
             }
             h2 { "Calendars" }
             ul {

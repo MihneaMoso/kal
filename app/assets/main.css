@@ -4,6 +4,7 @@
  * this sheet so it wins the cascade for the whole document. */
 
 :root {
+    --select-chevron: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%236a737d' stroke-width='1.5' fill='none'/%3E%3C/svg%3E");
     --bg: #ffffff;
     --bg-alt: #f5f6f8;
     --fg: #1b1f24;
@@ -29,82 +30,6 @@ body {
 }
 
 .app { display: flex; flex-direction: column; height: 100vh; width: 100vw; }
-
-/* ---- Frameless-window title bar (replaces GTK decorations) ---- */
-.titlebar {
-    display: flex;
-    align-items: center;
-    gap: 4px;
-    height: 38px;
-    min-height: 38px;
-    padding: 0 6px;
-    background: var(--bg-alt);
-    border-bottom: 1px solid var(--border);
-    user-select: none;
-}
-.tb-title { font-weight: 600; font-size: 14px; margin-right: 4px; }
-.drag-area { flex: 1; align-self: stretch; cursor: default; }
-.icon-btn {
-    background: transparent;
-    border: none;
-    border-radius: 6px;
-    min-width: 30px;
-    height: 28px;
-    font-size: 14px;
-    line-height: 1;
-    cursor: pointer;
-    color: var(--fg);
-}
-.icon-btn:hover { background: var(--border); }
-.icon-btn.win.close:hover { background: #c0392b; color: #fff; }
-
-.topbar {
-    display: flex; align-items: center; gap: 12px;
-    padding: 8px 16px;
-    border-bottom: 1px solid var(--border);
-    background: var(--bg-alt);
-}
-.topbar h1 { font-size: 18px; margin: 0; }
-.topbar .spacer { flex: 1; }
-.subtitle { color: var(--fg-muted); font-size: 12px; }
-.tb-controls { display: flex; gap: 8px; align-items: center; }
-.prefs-toggle { display: none; font-size: 16px; }
-.prefs-drawer {
-    position: fixed;
-    top: calc(38px + 45px); /* below titlebar + topbar */
-    right: 8px;
-    z-index: 50;
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-    padding: 10px;
-    background: var(--bg-alt);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    box-shadow: 0 6px 24px rgba(0,0,0,0.25);
-}
-.prefs-drawer select, .prefs-drawer button { width: 100%; }
-
-@media (max-width: 900px) {
-    .tb-controls { display: none; }
-    .prefs-toggle { display: inline-block; }
-    .subtitle { display: none; }
-}
-
-button, select, input[type="text"], input[type="date"], input[type="time"] {
-    background: var(--bg);
-    color: var(--fg);
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    padding: 4px 10px;
-    font-size: 13px;
-}
-button:hover { border-color: var(--accent); }
-:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
-@media (prefers-reduced-motion: reduce) {
-    * { transition: none !important; animation: none !important; }
-}
-button.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
 
 .body { display: flex; flex: 1; min-height: 0; }
 

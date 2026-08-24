@@ -9,6 +9,19 @@ use ulid::Ulid;
 
 use crate::DbHandle;
 
+/// Non-persisted layout state for the whole app.
+///
+/// ONE struct in ONE signal on purpose: Dioxus contexts are keyed by type,
+/// so separate Signal<bool> contexts silently collapse into each other
+/// (hamburger toggling also engaged resize + prefs drawer).
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
+pub struct UiLayout {
+    pub sidebar_open: bool,
+    pub sidebar_width: u32,
+    pub sidebar_resizing: bool,
+    pub prefs_drawer_open: bool,
+}
+
 /// Device-local preferences (§5.7), persisted in the `settings` table.
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct Settings {

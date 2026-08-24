@@ -201,7 +201,23 @@ bite you again if ignored, plus the exact state to resume from.
 - Desktop app still launches: `timeout 8 ./target/debug/Kal; echo $?`
 - Update DECISIONS.md with any judgment calls made during the phase
 
-## UI notes (frameless window)
+## UI notes
+
+- USER RULES: never launch the app ourselves (user runs `dx serve`), never
+  run `cargo clean` (user does it manually), nothing outside ~/kal.
+- DIOXUS CONTEXT PITFALL (caused hamburger/resize/drawer chaos): contexts are
+  keyed by TYPE. Providing three Signal<bool> contexts makes them alias one
+  signal! Bundle related flags into ONE struct signal (`ui::UiLayout`).
+- Signal write+read in one expression borrows twice; bind
+  `let cur = sig.read().field;` then `sig.write().field = !cur;`.
+- Native <select> ignores page theme on WebKitGTK → style with
+  appearance:none + themed chevron via --select-chevron var (light in css,
+  dark in DARK_THEME_VARS). The dropdown LIST is GTK-rendered and cannot be
+  themed from CSS.
+- Window decorations stay with the WM/DE (plain Config with_maximized);
+  no custom titlebar.
+
+## Former frameless-window notes (superseded)
 
 - Main + mini windows use `.with_decorations(false)`; Kal draws its own
   TitleBar (hamburger / drag-area onmousedown→ctx.drag() /
