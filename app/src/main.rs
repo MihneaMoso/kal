@@ -164,22 +164,20 @@ fn App() -> Element {
     };
 
     // Sidebar resize dragging (root-level so fast cursor movement can't
-    // escape the handle). The flag is shared with the divider handle.
-    let mut resizing = use_context::<Signal<bool>>();
-    let _ = &mut resizing;
-    let mut sidebar_width = use_context::<Signal<u32>>();
-    let app_class = if *resizing.read() {
+    // escape the handle).
+    let mut layout = use_context::<Signal<ui::UiLayout>>();
+    let app_class = if layout.read().sidebar_resizing {
         "app resizing"
     } else {
         "app"
     };
     let on_root_mousemove = move |e: Event<MouseData>| {
-        if *resizing.read() {
+        if layout.read().sidebar_resizing {
             let x = e.client_coordinates().x as u32;
-            sidebar_width.set(x.clamp(170, 480));
+            layout.write().sidebar_width = x.clamp(170, 480);
         }
     };
-    let end_resize = move |_| resizing.set(false);
+    let end_resize = move |_| layout.write().sidebar_resizing = false;
 
     rsx! {
         div {

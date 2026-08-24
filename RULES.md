@@ -205,9 +205,13 @@ bite you again if ignored, plus the exact state to resume from.
 
 - USER RULES: never launch the app ourselves (user runs `dx serve`), never
   run `cargo clean` (user does it manually), nothing outside ~/kal.
-- DIOXUS CONTEXT PITFALL (caused hamburger/resize/drawer chaos): contexts are
-  keyed by TYPE. Providing three Signal<bool> contexts makes them alias one
-  signal! Bundle related flags into ONE struct signal (`ui::UiLayout`).
+- DIOXUS CONTEXT PITFALL x2: (a) contexts are keyed by TYPE — providing
+  several Signal<bool> providers aliases them into one signal; (b) a
+  use_context of a type with NO provider compiles fine and only panics at
+  runtime as the red "Any { .. }" screen ("Could not find context ...").
+  When that appears: grep use_context vs use_context_provider FIRST.
+  Root fix for both: bundle related flags into ONE struct signal
+  (`ui::UiLayout`) and audit consumers after refactors.
 - Signal write+read in one expression borrows twice; bind
   `let cur = sig.read().field;` then `sig.write().field = !cur;`.
 - Native <select> ignores page theme on WebKitGTK → style with
