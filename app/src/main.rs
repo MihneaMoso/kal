@@ -70,9 +70,14 @@ fn App() -> Element {
     });
     use_context_provider(|| calendars_res);
 
+    let prefs = ui::Settings::load(&db);
+    let default_view = prefs.default_view;
+
     let today: NaiveDate = Local::now().date_naive();
     use_context_provider(|| Signal::new(today));
-    use_context_provider(|| Signal::new(ui::ViewMode::Month));
+    let settings = Signal::new(prefs);
+    use_context_provider(|| settings);
+    use_context_provider(|| Signal::new(default_view));
     let editor: Signal<Option<ui::EditorState>> = Signal::new(None);
     use_context_provider(|| editor);
 
@@ -126,14 +131,14 @@ fn App() -> Element {
         }
     });
 
-    let theme = use_signal(|| String::from("light"));
     let css = include_str!("../assets/main.css");
 
     rsx! {
-        div { class: "app", "data-theme": "{theme}",
+        div {
+            "data-theme": "{settings.read().theme}",
             style { dangerous_inner_html: "{css}" }
 
-            TopBar { theme }
+            TopBar {}
             div { class: "body",
                 Sidebar {}
                 Content {}
@@ -148,18 +153,85 @@ fn App() -> Element {
 }
 
 #[component]
-fn TopBar(mut theme: Signal<String>) -> Element {
-    let dark = theme() == "dark";
+fn TopBar() -> Element {
+    let db = use_context::<DbHandle>();
+    let mut settings = use_context::<Signal<ui::Settings>>();
+    let dark = settings.read().theme == "dark";
+    let db_time = db.clone();
+    let db_week = db.clone();
+    let db_view = db.clone();
+    let db_theme = db.clone();
+
+    // Preferences selector: 12/24h + week start + default view.
     rsx! {
         header { class: "topbar",
             h1 { "Kal" }
             span { class: "subtitle", "{ui::today_line()}" }
             div { class: "spacer" }
+            select {
+                title: "Time format",
+                value: if settings.read().time_24h { "24h" } else { "12h" },
+                onchange: move |e| {
+                    let mut p = settings.read().clone();
+                    p.time_24h = e.value() == "24h";
+                    p.save(&db_time);
+                    settings.set(p);
+                },
+                option { value: "24h", selected: settings.read().time_24h, "24-hour" }
+                option { value: "12h", selected: !settings.read().time_24h, "12-hour" }
+            }
+            select {
+                title: "First day of week",
+                onchange: move |e| {
+                    let mut p = settings.read().clone();
+                    p.first_day_monday = e.value() == "mon";
+                    p.save(&db_week);
+                    settings.set(p);
+                },
+                option { value: "mon", selected: settings.read().first_day_monday, "Week starts Monday" }
+                option { value: "sun", selected: !settings.read().first_day_monday, "Week starts Sunday" }
+            }
+            select {
+                title: "Default view",
+                onchange: move |e| {
+                    let mut p = settings.read().clone();
+                    p.default_view = match e.value().as_str() {
+                        "week" => ui::ViewMode::Week,
+                        "day" => ui::ViewMode::Day,
+                        "agenda" => ui::ViewMode::Agenda,
+                        _ => ui::ViewMode::Month,
+                    };
+                    p.save(&db_view);
+                    settings.set(p);
+                },
+                for m in ui::ViewMode::ALL {
+                    option {
+                        key: "{m:?}",
+                        value: "{default_view_value(m)}",
+                        selected: settings.read().default_view == m,
+                        "{m.label()}"
+                    }
+                }
+            }
             button {
-                onclick: move |_| theme.set(if dark { "light".into() } else { "dark".into() }),
+                onclick: move |_| {
+                    let mut p = settings.read().clone();
+                    p.theme = if dark { "light".into() } else { "dark".into() };
+                    p.save(&db_theme);
+                    settings.set(p);
+                },
                 {if dark { "Light mode" } else { "Dark mode" }}
             }
         }
+    }
+}
+
+fn default_view_value(m: ui::ViewMode) -> &'static str {
+    match m {
+        ui::ViewMode::Month => "month",
+        ui::ViewMode::Week => "week",
+        ui::ViewMode::Day => "day",
+        ui::ViewMode::Agenda => "agenda",
     }
 }
 

@@ -146,3 +146,23 @@ fn birthday_item_round_trip_with_metadata() {
     assert_eq!(got.kind, ItemKind::Birthday);
     assert_eq!(got.metadata.birthday_of.as_deref(), Some("vcf:ada-1"));
 }
+
+#[test]
+fn settings_round_trip_and_upsert() {
+    let db = Database::open_in_memory().unwrap();
+    assert_eq!(db.get_setting("theme").unwrap(), None);
+    db.set_setting("theme", r#""dark""#).unwrap();
+    db.set_setting("time_format", r#""24h""#).unwrap();
+    assert_eq!(db.get_setting("theme").unwrap().as_deref(), Some(r#""dark""#));
+    db.set_setting("theme", r#""light""#).unwrap(); // upsert replaces
+    assert_eq!(db.get_setting("theme").unwrap().as_deref(), Some(r#""light""#));
+
+    let mut all = db.all_settings().unwrap();
+    all.sort();
+    assert_eq!(all.len(), 2);
+
+    // Survives reopen (migrations idempotent).
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("s.db");
+    drop(Database::open(&path).unwrap());
+}

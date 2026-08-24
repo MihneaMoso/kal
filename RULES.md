@@ -129,7 +129,15 @@ bite you again if ignored, plus the exact state to resume from.
   seal→publish→drain→accept→upsert merged state→RESOURCES_DIRTY global signal
   restarts calendars/items resources in App. Sender-self filtering done in
   caller (recv returns all). 20 kal-sync tests total.
-- ▶ NEXT: Phase 9 polish — settings store (12/24h, first day of week, default
+- ✅ Phase 9a COMPLETE: `settings` table (migration v3) + get/set/all_settings
+  repo API; ui::Settings struct (theme/time_24h/first_day_monday/default_view)
+  persisted as "preferences" JSON; TopBar has selects for time format, week
+  start, default view + theme toggle, all saving immediately. Views format
+  times via Settings::fmt_time; month grid honors week start.
+  GOTCHA: Calendar/Settings literals need updated_at/full fields; run
+  `cargo build` from REPO ROOT only (workdir matters for sed/python edits).
+- ▶ NEXT: Phase 9b i18n scaffolding (fluent-rs), 9c a11y/perf + desktop
+  mini-widget window, then Phase 10 release eng. (12/24h, first day of week, default
   view), i18n scaffolding (fluent-rs), a11y pass, desktop mini-widget window.
   Then Phase 10 release eng. Real iroh/mDNS transports remain future work
   behind the same Transport trait.: after merges re-run reminder

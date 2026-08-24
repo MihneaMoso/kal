@@ -9,7 +9,51 @@ use ulid::Ulid;
 
 use crate::DbHandle;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Device-local preferences (§5.7), persisted in the `settings` table.
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct Settings {
+    pub theme: String,            // "light" | "dark"
+    pub time_24h: bool,
+    pub first_day_monday: bool,
+    pub default_view: ViewMode,
+}
+
+impl Default for Settings {
+    fn default() -> Self {
+        Self {
+            theme: "light".into(),
+            time_24h: true,
+            first_day_monday: true,
+            default_view: ViewMode::Month,
+        }
+    }
+}
+
+impl Settings {
+    pub fn load(db: &crate::DbHandle) -> Self {
+        db.get_setting("preferences")
+            .ok()
+            .flatten()
+            .and_then(|json| serde_json::from_str(&json).ok())
+            .unwrap_or_default()
+    }
+
+    pub fn save(&self, db: &crate::DbHandle) {
+        if let Ok(json) = serde_json::to_string(self) {
+            let _ = db.set_setting("preferences", &json);
+        }
+    }
+
+    pub fn fmt_time(&self, dt: kal_core::models::DateTimeTz) -> String {
+        if self.time_24h {
+            dt.format("%H:%M").to_string()
+        } else {
+            dt.format("%l:%M %p").to_string().trim().to_string()
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum ViewMode {
     Month,
     Week,
@@ -70,10 +114,13 @@ fn parse_when(date: &str, time: &str) -> Option<kal_core::models::DateTimeTz> {
 #[component]
 pub fn MonthView() -> Element {
     let cursor = use_context::<Signal<NaiveDate>>();
+    let settings = use_context::<Signal<Settings>>();
     let items = use_visible_items();
 
+    let st = settings.read();
     let c = *cursor.read();
-    let grid = viewmodel::month_grid(c.year(), c.month(), Weekday::Mon);
+    let first_day = if st.first_day_monday { Weekday::Mon } else { Weekday::Sun };
+    let grid = viewmodel::month_grid(c.year(), c.month(), first_day);
     let today = Local::now().date_naive();
 
     let first = grid[0][0];
@@ -97,7 +144,7 @@ pub fn MonthView() -> Element {
     rsx! {
         div { class: "month-grid",
             div { class: "month-head",
-                for wd in ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"] {
+                for wd in weekday_headers(st.first_day_monday) {
                     div { key: "{wd}", "{wd}" }
                 }
             }
@@ -163,10 +210,12 @@ fn EventChip(item: CalendarItem, occ_start: DateTimeTz) -> Element {
     let mut editor = use_context::<Signal<Option<EditorState>>>();
     let db = use_context::<DbHandle>();
 
+    let settings = use_context::<Signal<Settings>>();
+    let time_str = settings.read().fmt_time(item.start);
     let label = if item.all_day || item.kind == ItemKind::Birthday {
         item.title.clone()
     } else {
-        format!("{} {}", item.start.format("%H:%M"), item.title)
+        format!("{time_str} {}", item.title)
     };
     let bg = item
         .color_override
@@ -201,6 +250,7 @@ fn EventChip(item: CalendarItem, occ_start: DateTimeTz) -> Element {
 /// One row in day/week/agenda lists.
 #[component]
 fn ItemRow(date: Option<NaiveDate>, item: CalendarItem, occ_start: DateTimeTz) -> Element {
+    let settings = use_context::<Signal<Settings>>();
     let mut editor = use_context::<Signal<Option<EditorState>>>();
     let mut items_res = use_context::<Resource<Vec<CalendarItem>>>();
     let db = use_context::<DbHandle>();
@@ -215,8 +265,8 @@ fn ItemRow(date: Option<NaiveDate>, item: CalendarItem, occ_start: DateTimeTz) -
     } else {
         format!(
             "{} – {}",
-            item.start.format("%H:%M"),
-            item.end.map(|e| e.format("%H:%M").to_string()).unwrap_or_default()
+            settings.read().fmt_time(item.start),
+            item.end.map(|e| settings.read().fmt_time(e)).unwrap_or_default()
         )
     };
     let date_str = date.map(|d| d.format("%a %b %d").to_string()).unwrap_or_default();
@@ -875,5 +925,13 @@ fn preset_value(p: RrulePreset) -> &'static str {
         RrulePreset::Weekly => "weekly",
         RrulePreset::Monthly => "monthly",
         RrulePreset::Yearly => "yearly",
+    }
+}
+
+fn weekday_headers(monday_first: bool) -> [&'static str; 7] {
+    if monday_first {
+        ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+    } else {
+        ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
     }
 }

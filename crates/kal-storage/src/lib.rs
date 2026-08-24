@@ -77,6 +77,13 @@ CREATE INDEX idx_items_calendar ON items(calendar_id);
 r#"
 ALTER TABLE calendars ADD COLUMN updated_epoch INTEGER NOT NULL DEFAULT 0;
 ALTER TABLE calendars ADD COLUMN updated_rfc3339 TEXT NOT NULL DEFAULT '';
+"#,
+// v3: device-local settings (theme, time format, week start, default view…).
+r#"
+CREATE TABLE IF NOT EXISTS settings (
+    key   TEXT PRIMARY KEY,
+    value TEXT NOT NULL
+);
 "#];
 
 impl Database {
@@ -238,6 +245,35 @@ impl Database {
             .collect::<rusqlite::Result<Vec<_>>>()?
             .into_iter()
             .collect())
+    }
+
+    // ----- settings -----
+
+    pub fn set_setting(&self, key: &str, value_json: &str) -> Result<()> {
+        self.conn.execute(
+            "INSERT INTO settings (key, value) VALUES (?1, ?2)
+             ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+            params![key, value_json],
+        )?;
+        Ok(())
+    }
+
+    pub fn get_setting(&self, key: &str) -> Result<Option<String>> {
+        self.conn
+            .query_row(
+                "SELECT value FROM settings WHERE key = ?1",
+                params![key],
+                |r| r.get(0),
+            )
+            .optional()
+            .map_err(Into::into)
+    }
+
+    pub fn all_settings(&self) -> Result<Vec<(String, String)>> {
+        let mut stmt = self.conn.prepare("SELECT key, value FROM settings")?;
+        let rows = stmt.query_map([], |r| Ok((r.get(0)?, r.get(1)?)))?;
+        rows.collect::<rusqlite::Result<Vec<_>>>()
+            .map_err(Into::into)
     }
 
     pub fn list_items(&self, include_deleted: bool) -> Result<Vec<CalendarItem>> {
