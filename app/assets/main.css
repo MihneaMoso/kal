@@ -50,6 +50,10 @@ button, select, input[type="text"], input[type="date"], input[type="time"] {
     font-size: 13px;
 }
 button:hover { border-color: var(--accent); }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+@media (prefers-reduced-motion: reduce) {
+    * { transition: none !important; animation: none !important; }
+}
 button.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
 
 .body { display: flex; flex: 1; min-height: 0; }
@@ -105,7 +109,7 @@ button.primary { background: var(--accent); color: #fff; border-color: var(--acc
     position: fixed; inset: 0; background: rgba(0,0,0,0.45);
     display: flex; align-items: center; justify-content: center;
 }
-.modal {
+.modal[role="dialog"] {
     background: var(--bg); border: 1px solid var(--border); border-radius: 10px;
     padding: 16px; min-width: 340px; display: flex; flex-direction: column; gap: 10px;
 }

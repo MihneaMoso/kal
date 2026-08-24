@@ -141,7 +141,15 @@ bite you again if ignored, plus the exact state to resume from.
   strings in app/i18n/en-US/main.ftl. ViewMode::label now returns String.
   NOTE: fluent crate intentionally deferred until a second locale lands — the
   parser covers current needs and keeps deps light; swap-in documented.
-- ▶ NEXT: Phase 9c a11y pass + desktop mini-widget window, then Phase 10. (fluent-rs), 9c a11y/perf + desktop
+- ✅ Phase 9c COMPLETE: a11y (aria-labels on nav/theme, dialog role +
+  aria-modal + label on editor modal, :focus-visible outlines,
+  prefers-reduced-motion); desktop mini-widget window via
+  `dioxus::desktop::window().new_window(dom, cfg)` — always-on-top 280x320,
+  self-contained component opening its own DB handle, refreshes every 5min,
+  button in sidebar. dioxus-desktop dep added for Config/WindowBuilder/tao
+  re-exports. Component fns used with VirtualDom::new need
+  #[allow(non_snake_case)].
+- ▶ NEXT: Phase 10 release engineering (CI matrix, packaging), then wrap-up. + desktop mini-widget window, then Phase 10. (fluent-rs), 9c a11y/perf + desktop
   mini-widget window, then Phase 10 release eng. (12/24h, first day of week, default
   view), i18n scaffolding (fluent-rs), a11y pass, desktop mini-widget window.
   Then Phase 10 release eng. Real iroh/mDNS transports remain future work

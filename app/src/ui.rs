@@ -754,7 +754,11 @@ pub fn EditorModal(state: EditorState) -> Element {
     rsx! {
         div { class: "modal-backdrop",
             onclick: move |_| editor.set(None),
-            div { class: "modal",
+            div {
+                class: "modal",
+                role: "dialog",
+                "aria-modal": true,
+                "aria-label": "{heading}",
                 onclick: move |e| e.stop_propagation(),
                 h2 { "{heading}" }
                 label { "Title"

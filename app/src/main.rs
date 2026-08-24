@@ -1,4 +1,5 @@
 mod i18n;
+mod mini_widget;
 mod sync_ui;
 mod ui;
 
@@ -215,13 +216,14 @@ fn TopBar() -> Element {
                 }
             }
             button {
+                "aria-label": if dark { "Switch to light mode" } else { "Switch to dark mode" },
                 onclick: move |_| {
                     let mut p = settings.read().clone();
                     p.theme = if dark { "light".into() } else { "dark".into() };
                     p.save(&db_theme);
                     settings.set(p);
                 },
-                {if dark { "Light mode" } else { "Dark mode" }}
+                {if dark { crate::i18n::tr("theme-toggle-light") } else { crate::i18n::tr("theme-toggle-dark") }}
             }
         }
     }
@@ -270,6 +272,11 @@ fn Sidebar() -> Element {
                 }
             }
             sync_ui::SyncPanel {}
+            h2 { "Widget" }
+            button {
+                onclick: move |_| crate::mini_widget::launch_mini_window(),
+                "Open mini calendar"
+            }
             h2 { "Import / Export" }
             div { style: "display:flex; flex-direction:column; gap:6px;",
                 button {
@@ -378,9 +385,13 @@ fn ViewNav() -> Element {
 
     rsx! {
         div { class: "month-nav",
-            button { onclick: step_back, "‹" }
-            button { onclick: move |_| cursor.set(Local::now().date_naive()), "Today" }
-            button { onclick: step_fwd, "›" }
+            button { "aria-label": "Previous period", onclick: step_back, "‹" }
+            button {
+                "aria-label": "Jump to today",
+                onclick: move |_| cursor.set(Local::now().date_naive()),
+                {crate::i18n::tr("nav-today")}
+            }
+            button { "aria-label": "Next period", onclick: step_fwd, "›" }
             h2 { "{label}" }
             div { class: "spacer" }
             for m in ui::ViewMode::ALL {

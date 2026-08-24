@@ -18,6 +18,7 @@ kal-sync = { path = "../crates/kal-sync" }
 serde = { workspace = true }
 serde_json = { workspace = true }
 dioxus = { version = "0.7", features = ["desktop"] }
+dioxus-desktop = "0.7"
 tokio = { workspace = true }
 chrono = { workspace = true }
 ulid = { workspace = true }
