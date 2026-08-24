@@ -81,7 +81,7 @@ Newest decisions may reference later phases; each entry notes the phase.
 | D39 | **Build artifacts live outside the repo** (`../kal-build` via .cargo/config.toml) after target/ ballooned to 20G | Keeps checkout at ~2MB; any dev can override with CARGO_TARGET_DIR. |
 | D40 | **Sync identity persisted as plain JSON next to the DB with 0600 perms**, not in the SQLite file | Widgets/FFI and future mobile shims need path-based access; keeps secrets out of synced data. |
 
-## Pending decisions for later phases
+| D41 | **FileTransport folder-gossip as the first real transport** (encrypted .kalblob files in a user-chosen outbox dir) | Zero-infrastructure P2P that works today via Syncthing/Dropbox/USB and honors the "relay only sees ciphertext" rule; iroh/mDNS plug into the same Transport trait later. |
 
 - Sync CRDT engine: automerge vs yrs (phase 8).
 - Transport: iroh vs libp2p (phase 8).

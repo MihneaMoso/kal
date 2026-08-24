@@ -19,3 +19,4 @@ thiserror = { workspace = true }
 
 [dev-dependencies]
 rand = "0.8"
+tempfile = "3"

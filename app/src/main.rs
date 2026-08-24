@@ -96,6 +96,17 @@ fn App() -> Element {
         }
     });
 
+    // After a sync merge (sync_ui bumps this), reload everything.
+    let mut cal_res_sync = calendars_res;
+    let db_dirty = db.clone();
+    use_effect(move || {
+        if *sync_ui::RESOURCES_DIRTY.read() > 0 {
+            cal_res_sync.restart();
+            let _ = &db_dirty;
+            items_res.restart();
+        }
+    });
+
     // Reconcile scheduled reminders whenever items change (§5.3: reschedule
     // on foreground / after mutations / after sync merges).
     let db_sched = db.clone();

@@ -9,7 +9,7 @@ use dioxus::prelude::*;
 
 use serde::{Deserialize, Serialize};
 
-use kal_sync::ChainIdentity;
+use kal_sync::{ChainIdentity, FileTransport, SyncSession, SyncState, Transport as _};
 
 #[derive(Serialize, Deserialize)]
 struct StoredIdentity {
@@ -51,6 +51,57 @@ fn persist(identity: &ChainIdentity) -> Result<(), String> {
         let _ = std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600));
     }
     Ok(())
+}
+
+/// Bumped after a successful merge so App-level effects restart resources.
+pub static RESOURCES_DIRTY: GlobalSignal<u32> = Signal::global(|| 0);
+
+/// One full gossip round against the shared outbox folder.
+fn run_sync_once(db: &crate::DbHandle) -> Result<usize, String> {
+    let identity = load_identity().ok_or("not paired")?;
+    let device_id = ulid::Ulid::new(); // per-round id; stable ids land with settings store
+    let outbox = identity_path(&db_file())
+        .parent()
+        .unwrap_or_else(|| std::path::Path::new("."))
+        .join("sync-outbox");
+    let transport = FileTransport::new(&outbox).map_err(|e| e.to_string())?;
+
+    let calendars = db.list_calendars().map_err(|e| e.to_string())?;
+    let items = db.list_items(true).map_err(|e| e.to_string())?;
+    let mut session = SyncSession::new(
+        &identity,
+        device_id,
+        "desktop",
+        SyncState::from_parts(calendars.clone(), items.clone()),
+    );
+
+    // Publish our state, then drain peers'.
+    transport
+        .send(&device_id.to_string(), &session.seal_state().map_err(|e| e.to_string())?)
+        .map_err(|e| e.to_string())?;
+
+    let self_id = device_id.to_string();
+    let mut merged = 0usize;
+    while let Some((sender, bytes)) = transport.recv() {
+        if sender == self_id {
+            continue;
+        }
+        if session.accept_blob(&bytes).is_ok() {
+            merged += 1;
+        }
+    }
+    if merged == 0 {
+        return Ok(0);
+    }
+
+    // Persist everything we now know (upsert is CRDT-safe by construction).
+    for cal in session.state.calendars.values() {
+        db.upsert_calendar(cal).map_err(|e| e.to_string())?;
+    }
+    for item in session.state.items.values() {
+        db.upsert_item(item).map_err(|e| e.to_string())?;
+    }
+    Ok(merged)
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -143,6 +194,30 @@ pub fn SyncPanel() -> Element {
                 SyncUiState::Paired { fingerprint } => rsx! {
                     small { class: "when", "Device fingerprint" }
                     code { style: "font-size:11px;", "{fingerprint}" }
+                    button {
+                        title: "Exchange encrypted snapshots via the shared sync-outbox folder",
+                        onclick: move |_| {
+                            let db = crate::open_db();
+                            match run_sync_once(&db) {
+                                Ok(merged) => {
+                                    if merged > 0 {
+                                        // Refresh views + reminder schedule after merge.
+                                        if let Some(items) = db.list_items(false).ok() {
+                                            let _ = items.len();
+                                        }
+                                        *RESOURCES_DIRTY.write() += 1;
+                                    }
+                                    state.set(SyncUiState::Paired {
+                                        fingerprint: load_identity()
+                                            .map(|i| i.fingerprint().fingerprint_hex)
+                                            .unwrap_or_default(),
+                                    });
+                                }
+                                Err(e) => state.set(SyncUiState::Error(e)),
+                            }
+                        },
+                        "Sync now"
+                    }
                 },
                 SyncUiState::Error(msg) => rsx! {
                     span { class: "when", style: "color:#c0392b", "{msg}" }

@@ -3,7 +3,9 @@
 pub mod crdt;
 pub mod keys;
 pub mod session;
+pub mod transport_file;
 
 pub use crdt::{SyncEnvelope, SyncState};
 pub use keys::{ChainIdentity, SyncKeys};
 pub use session::{SyncError, SyncSession, Transport};
+pub use transport_file::FileTransport;

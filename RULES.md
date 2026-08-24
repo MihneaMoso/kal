@@ -124,7 +124,15 @@ bite you again if ignored, plus the exact state to resume from.
   (24-word phrase shown once in modal grid), join by pasting phrase,
   fingerprint display; identity persisted to <dbdir>/sync-identity.json with
   0600 perms.
-- ▶ NEXT: wire sync into the app loop: after merges re-run reminder
+- ✅ Phase 8e COMPLETE: transport_file.rs FileTransport (folder-gossip of
+  .kalblob blobs; works with Syncthing/Dropbox/USB) + app "Sync now" button:
+  seal→publish→drain→accept→upsert merged state→RESOURCES_DIRTY global signal
+  restarts calendars/items resources in App. Sender-self filtering done in
+  caller (recv returns all). 20 kal-sync tests total.
+- ▶ NEXT: Phase 9 polish — settings store (12/24h, first day of week, default
+  view), i18n scaffolding (fluent-rs), a11y pass, desktop mini-widget window.
+  Then Phase 10 release eng. Real iroh/mDNS transports remain future work
+  behind the same Transport trait.: after merges re-run reminder
   reconcile + restart items resource; add "Sync now" using a LoopbackTransport
   placeholder until iroh lands (real transport = phase 8e). Then Phase 9. in app (generate phrase screen,
   join-by-phrase input, device fingerprint display), then wire a periodic
