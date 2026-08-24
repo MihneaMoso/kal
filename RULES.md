@@ -218,11 +218,11 @@ bite you again if ignored, plus the exact state to resume from.
   appearance:none + themed chevron via --select-chevron var (light in css,
   dark in DARK_THEME_VARS). The dropdown LIST is GTK-rendered and cannot be
   themed from CSS.
-- Window decorations stay with the WM/DE (plain Config with_maximized);
-  NO custom titlebar component (user removed it twice — do not re-add).
-  Hamburger lives in TopBar beside the app title; gear opens prefs drawer
-  <900px. Stylesheet is a single coherent sheet in app/assets/main.css —
-  keep brace balance sane (a broken rule kills everything downstream).
+- FINAL window preference: `.with_decorations(false)` (no GTK bar) AND no
+  custom titlebar component either. Hamburger lives in TopBar beside the app
+  title; gear opens prefs drawer <900px. Stylesheet is a single coherent
+  sheet in app/assets/main.css — keep brace balance sane (a broken rule
+  kills everything downstream).
 
 ## Former frameless-window notes (superseded)
 

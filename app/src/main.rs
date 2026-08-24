@@ -51,9 +51,13 @@ fn ensure_default_calendars(db: &Database) -> Vec<Calendar> {
 }
 
 fn main() {
-    // Window manager / DE owns the titlebar; we just ask for a big window.
-    let cfg =
-        Config::new().with_window(WindowBuilder::new().with_title("Kal").with_maximized(true));
+    // Frameless: hide the GTK titlebar/menu entirely (user preference).
+    let cfg = Config::new().with_window(
+        WindowBuilder::new()
+            .with_title("Kal")
+            .with_decorations(false)
+            .with_maximized(true),
+    );
     dioxus::LaunchBuilder::new().with_cfg(cfg).launch(App);
 }
 
