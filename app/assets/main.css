@@ -18,7 +18,7 @@
 }
 
 
-/* Dark palette — applied by setting data-theme on <html> (see main.rs). */
+/* Dark palette — applied via data-theme on the .app root div (see main.rs). */
 [data-theme="dark"] {
     --select-chevron: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%239aa4ae' stroke-width='1.5' fill='none'/%3E%3C/svg%3E");
     --bg: #16191d;

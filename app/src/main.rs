@@ -85,8 +85,7 @@ fn App() -> Element {
 
     // Dedicated theme signal: toggling it must NOT re-render the calendar
     // views (they subscribe to `settings`, not `theme`) — this is what keeps
-    // the switch instant and immune to rapid clicking. Applied to the
-    // document root (see effect below), not via VDOM style injection.
+    // the switch instant and immune to rapid clicking.
     let theme = Signal::new(prefs.theme.clone());
     use_context_provider(|| theme);
 
@@ -159,16 +158,6 @@ fn App() -> Element {
         }
     });
 
-    // Theme is applied to the document ROOT via a tiny script (see effect
-    // below): DOM truth beats VDOM style injection, and html[data-theme]
-    // cascades into every element including body.
-    use_effect(move || {
-        let t = theme.read().as_str().to_string();
-        document::eval(&format!(
-            "document.documentElement.setAttribute('data-theme', '{t}');"
-        ));
-    });
-
     // Base stylesheet: injected once per render as a plain <style> tag.
     // (main.css is only delivered through this inline tag — there is no
     // external asset pipeline in the desktop build.)
@@ -190,9 +179,14 @@ fn App() -> Element {
     };
     let end_resize = move |_| layout.write().sidebar_resizing = false;
 
+    // Explicit read: subscribes App to theme changes so the data-theme
+    // attribute below is recomputed on every toggle.
+    let theme_value = theme.read().clone();
+
     rsx! {
         div {
             class: "{app_class}",
+            "data-theme": "{theme_value}",
             onmousemove: on_root_mousemove,
             onmouseup: end_resize,
             onmouseleave: end_resize,
