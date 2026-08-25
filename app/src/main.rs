@@ -172,6 +172,11 @@ fn App() -> Element {
         ));
     });
 
+    // Base stylesheet: injected once per render as a plain <style> tag.
+    // (main.css is only delivered through this inline tag — there is no
+    // external asset pipeline in the desktop build.)
+    let css = include_str!("../assets/main.css");
+
     // Sidebar resize dragging (root-level so fast cursor movement can't
     // escape the handle).
     let mut layout = use_context::<Signal<ui::UiLayout>>();
@@ -194,6 +199,7 @@ fn App() -> Element {
             onmousemove: on_root_mousemove,
             onmouseup: end_resize,
             onmouseleave: end_resize,
+            style { dangerous_inner_html: "{css}" }
             TopBar {}
             div { class: "body",
                 Sidebar {}
