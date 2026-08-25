@@ -247,9 +247,13 @@ bite you again if ignored, plus the exact state to resume from.
 - All-day items render in a strip above the grid; timed items absolutely
   positioned in .day-canvas (48px/hour). Scroll container auto-jumps to 08:00
   via one-shot effect + document::eval on #day-scroll.
-- Theme mechanism FINAL: base css inline <style> + active palette appended
-  (:root-scoped DARK_THEME_VARS) — verified restyling path in WebKitGTK;
-  attribute-selector and JS-eval approaches failed in practice.
+- Theme mechanism FINAL v2: theme field lives INSIDE ui::UiLayout (the
+  signal proven to drive visuals via sidebar resize); root div renders
+  data-theme="{cur_theme}" from an explicit layout.read(); css has :root
+  light + [data-theme="dark"] overrides; .app paints background itself.
+  FAILED approaches (do not resurrect): style-tag innerHTML palette swap,
+  document::eval attribute setting, separate Signal<String> theme context.
+- Startup view hardcoded Month; default_view pref select removed.
 
 ## Bug-fix round notes
 

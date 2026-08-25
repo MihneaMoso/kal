@@ -13,12 +13,15 @@ use crate::DbHandle;
 /// ONE struct in ONE signal on purpose: Dioxus contexts are keyed by type,
 /// so separate Signal<bool> contexts silently collapse into each other
 /// (hamburger toggling also engaged resize + prefs drawer).
-#[derive(Debug, Clone, Copy, PartialEq, Default)]
+#[derive(Debug, Clone, PartialEq, Default)]
 pub struct UiLayout {
     pub sidebar_open: bool,
     pub sidebar_width: u32,
     pub sidebar_resizing: bool,
     pub prefs_drawer_open: bool,
+    /// "light" | "dark". Lives here because this signal is the one
+    /// empirically proven to drive visual updates (sidebar resize uses it).
+    pub theme: String,
 }
 
 /// Device-local preferences (§5.7), persisted in the `settings` table.

@@ -81,29 +81,27 @@ fn App() -> Element {
     use_context_provider(|| calendars_res);
 
     let prefs = ui::Settings::load(&db);
-    let default_view = prefs.default_view;
 
-    // Dedicated theme signal: toggling it must NOT re-render the calendar
-    // views (they subscribe to `settings`, not `theme`) — this is what keeps
-    // the switch instant and immune to rapid clicking.
-    let theme = Signal::new(prefs.theme.clone());
-    use_context_provider(|| theme);
-
-    // Layout state: a SINGLE signal — Dioxus contexts are keyed by type, so
-    // multiple Signal<bool> providers would alias each other.
+    // Layout + theme in ONE signal: the resize path proves this signal
+    // drives visual updates reliably; theme rides along on that proven path.
     use_context_provider(|| {
         Signal::new(ui::UiLayout {
             sidebar_open: true,
             sidebar_width: 230,
+            theme: prefs.theme.clone(),
             ..Default::default()
         })
     });
+
+    // Startup view is always Month (user request); the persisted default_view
+    // preference no longer overrides it.
+    use_context_provider(|| Signal::new(ui::ViewMode::Month));
 
     let today: NaiveDate = Local::now().date_naive();
     use_context_provider(|| Signal::new(today));
     let settings = Signal::new(prefs);
     use_context_provider(|| settings);
-    use_context_provider(|| Signal::new(default_view));
+    use_context_provider(|| Signal::new(ui::ViewMode::Month));
     // Single shared item list; views read it via context and restart it after
     // mutations.
     let mut items_res = use_resource(move || {
@@ -177,25 +175,21 @@ fn App() -> Element {
             layout.write().sidebar_width = x.clamp(170, 480);
         }
     };
-    let end_resize = move |_| layout.write().sidebar_resizing = false;
+    let end_resize = move |_: Event<MouseData>| layout.write().sidebar_resizing = false;
 
-    // Active palette appended AFTER the base sheet, scoped to :root so the
-    // whole document (body included) follows. This inline-injection path is
-    // verified to restyle in WebKitGTK.
-    let dark = theme.read().as_str() == "dark";
-    let themed_css = if dark {
-        format!("{css}\n{DARK_THEME_VARS}")
-    } else {
-        css.to_string()
-    };
+    // Theme rides on the layout signal (see provider above): reading it here
+    // subscribes App, so toggling re-renders and the data-theme attribute —
+    // the only theming hook the CSS needs — is recomputed.
+    let cur_theme = layout.read().theme.clone();
 
     rsx! {
         div {
             class: "{app_class}",
+            "data-theme": "{cur_theme}",
             onmousemove: on_root_mousemove,
             onmouseup: end_resize,
             onmouseleave: end_resize,
-            style { dangerous_inner_html: "{themed_css}" }
+            style { dangerous_inner_html: "{css}" }
             TopBar {}
             div { class: "body",
                 Sidebar {}
@@ -209,20 +203,6 @@ fn App() -> Element {
         }
     }
 }
-
-const DARK_THEME_VARS: &str = r#"
-:root {
-    --select-chevron: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%239aa4ae' stroke-width='1.5' fill='none'/%3E%3C/svg%3E");
-    --bg: #16191d;
-    --bg-alt: #1f2329;
-    --fg: #e6e8eb;
-    --fg-muted: #9aa4ae;
-    --accent: #6c99f0;
-    --accent-soft: #24304a;
-    --border: #33393f;
-    --today: #22304a;
-}
-"#;
 
 #[component]
 fn TopBar() -> Element {
@@ -279,7 +259,6 @@ fn PreferencesControls() -> Element {
     let dark = theme.read().as_str() == "dark";
     let db_time = db.clone();
     let db_week = db.clone();
-    let db_view = db.clone();
     let db_theme = db.clone();
 
     rsx! {
@@ -306,28 +285,6 @@ fn PreferencesControls() -> Element {
             option { value: "mon", selected: settings.read().first_day_monday, "Week starts Monday" }
             option { value: "sun", selected: !settings.read().first_day_monday, "Week starts Sunday" }
         }
-        select {
-            title: "Default view",
-            onchange: move |e| {
-                let mut p = settings.read().clone();
-                p.default_view = match e.value().as_str() {
-                    "week" => ui::ViewMode::Week,
-                    "day" => ui::ViewMode::Day,
-                    "agenda" => ui::ViewMode::Agenda,
-                    _ => ui::ViewMode::Month,
-                };
-                p.save(&db_view);
-                settings.set(p);
-            },
-            for m in ui::ViewMode::ALL {
-                option {
-                    key: "{m:?}",
-                    value: "{default_view_value(m)}",
-                    selected: settings.read().default_view == m,
-                    "{m.label()}"
-                }
-            }
-        }
         button {
             "aria-label": if dark { "Switch to light mode" } else { "Switch to dark mode" },
             onclick: move |_| {
@@ -341,15 +298,6 @@ fn PreferencesControls() -> Element {
             },
             {if dark { crate::i18n::tr("theme-toggle-light") } else { crate::i18n::tr("theme-toggle-dark") }}
         }
-    }
-}
-
-fn default_view_value(m: ui::ViewMode) -> &'static str {
-    match m {
-        ui::ViewMode::Month => "month",
-        ui::ViewMode::Week => "week",
-        ui::ViewMode::Day => "day",
-        ui::ViewMode::Agenda => "agenda",
     }
 }
 
