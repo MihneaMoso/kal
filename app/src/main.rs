@@ -105,9 +105,6 @@ fn App() -> Element {
     let settings = Signal::new(prefs);
     use_context_provider(|| settings);
     use_context_provider(|| Signal::new(default_view));
-    let editor: Signal<Option<ui::EditorState>> = Signal::new(None);
-    use_context_provider(|| editor);
-
     // Single shared item list; views read it via context and restart it after
     // mutations.
     let mut items_res = use_resource(move || {
@@ -206,7 +203,7 @@ fn App() -> Element {
                 Content {}
             }
 
-            match editor.read().clone() {
+            match ui::EDITOR_OPEN.read().clone() {
                 Some(state) => rsx! { ui::EditorModal { state } },
                 None => rsx! {},
             }
@@ -358,7 +355,6 @@ fn Sidebar() -> Element {
     let mut layout = use_context::<Signal<ui::UiLayout>>();
 
     let db = use_context::<DbHandle>();
-    let mut editor = use_context::<Signal<Option<ui::EditorState>>>();
     let mut items_res = use_context::<Resource<Vec<CalendarItem>>>();
 
     let mut cal_res = use_context::<Resource<Vec<Calendar>>>();
@@ -436,15 +432,15 @@ fn Sidebar() -> Element {
             div { style: "display:flex; flex-direction:column; gap:6px;",
                 button {
                     class: "primary",
-                    onclick: move |_| editor.set(Some(ui::EditorState::new_kind(&db_event, kal_core::models::ItemKind::Event))),
+                    onclick: move |_| { *ui::EDITOR_OPEN.write() = Some(ui::EditorState::new_kind(&db_event, kal_core::models::ItemKind::Event)); },
                     "+ Event"
                 }
                 button {
-                    onclick: move |_| editor.set(Some(ui::EditorState::new_kind(&db_task, kal_core::models::ItemKind::Task))),
+                    onclick: move |_| { *ui::EDITOR_OPEN.write() = Some(ui::EditorState::new_kind(&db_task, kal_core::models::ItemKind::Task)); },
                     "+ Task"
                 }
                 button {
-                    onclick: move |_| editor.set(Some(ui::EditorState::new_kind(&db_bday, kal_core::models::ItemKind::Birthday))),
+                    onclick: move |_| { *ui::EDITOR_OPEN.write() = Some(ui::EditorState::new_kind(&db_bday, kal_core::models::ItemKind::Birthday)); },
                     "+ Birthday"
                 }
             }
