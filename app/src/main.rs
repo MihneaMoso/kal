@@ -85,7 +85,8 @@ fn App() -> Element {
 
     // Dedicated theme signal: toggling it must NOT re-render the calendar
     // views (they subscribe to `settings`, not `theme`) — this is what keeps
-    // the switch instant and immune to rapid clicking.
+    // the switch instant and immune to rapid clicking. Applied to the
+    // document root (see effect below), not via VDOM style injection.
     let theme = Signal::new(prefs.theme.clone());
     use_context_provider(|| theme);
 
@@ -161,17 +162,15 @@ fn App() -> Element {
         }
     });
 
-    let css = include_str!("../assets/main.css");
-    // Whole-document theming: variables are injected at :root AFTER the base
-    // stylesheet so every element (html/body included) follows the theme.
-    // Direct read (not use_memo): App re-renders on theme change and rebuilds
-    // the string synchronously — no memo evaluation timing involved.
-    let dark = theme.read().as_str() == "dark";
-    let themed_css = if dark {
-        format!("{css}{DARK_THEME_VARS}")
-    } else {
-        css.to_string()
-    };
+    // Theme is applied to the document ROOT via a tiny script (see effect
+    // below): DOM truth beats VDOM style injection, and html[data-theme]
+    // cascades into every element including body.
+    use_effect(move || {
+        let t = theme.read().as_str().to_string();
+        document::eval(&format!(
+            "document.documentElement.setAttribute('data-theme', '{t}');"
+        ));
+    });
 
     // Sidebar resize dragging (root-level so fast cursor movement can't
     // escape the handle).
@@ -195,8 +194,6 @@ fn App() -> Element {
             onmousemove: on_root_mousemove,
             onmouseup: end_resize,
             onmouseleave: end_resize,
-            style { dangerous_inner_html: "{themed_css}" }
-
             TopBar {}
             div { class: "body",
                 Sidebar {}
@@ -210,19 +207,6 @@ fn App() -> Element {
         }
     }
 }
-
-const DARK_THEME_VARS: &str = r#"
-:root {
-    --select-chevron: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%239aa4ae' stroke-width='1.5' fill='none'/%3E%3C/svg%3E");
-    --bg: #16191d;
-    --bg-alt: #1f2329;
-    --fg: #e6e8eb;
-    --fg-muted: #9aa4ae;
-    --accent: #6c99f0;
-    --border: #33393f;
-    --today: #22304a;
-}
-"#;
 
 #[component]
 fn TopBar() -> Element {

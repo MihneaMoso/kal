@@ -17,6 +17,20 @@
     --today: #eef4ff;
 }
 
+
+/* Dark palette — applied by setting data-theme on <html> (see main.rs). */
+html[data-theme="dark"] {
+    --select-chevron: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%239aa4ae' stroke-width='1.5' fill='none'/%3E%3C/svg%3E");
+    --bg: #16191d;
+    --bg-alt: #1f2329;
+    --fg: #e6e8eb;
+    --fg-muted: #9aa4ae;
+    --accent: #6c99f0;
+    --accent-soft: #24304a;
+    --border: #33393f;
+    --today: #22304a;
+}
+
 * { box-sizing: border-box; }
 
 html, body, #main { margin: 0; height: 100%; }

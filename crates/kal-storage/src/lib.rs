@@ -90,6 +90,22 @@ CREATE TABLE IF NOT EXISTS settings (
     value TEXT NOT NULL
 );
 "#,
+    // v4: one-time repair of duplicated default calendars (a historical bug
+    // re-inserted Personal/Birthdays on every failed list). Items are
+    // re-pointed to the surviving row before the duplicates are removed.
+    r#"
+UPDATE items SET calendar_id = (
+    SELECT c.id FROM calendars c
+    WHERE c.name = (SELECT name FROM calendars WHERE id = items.calendar_id)
+    ORDER BY c.id LIMIT 1
+)
+WHERE calendar_id IN (
+    SELECT id FROM calendars
+    WHERE id NOT IN (SELECT MIN(id) FROM calendars GROUP BY name)
+);
+DELETE FROM calendars
+WHERE id NOT IN (SELECT MIN(id) FROM calendars GROUP BY name);
+"#,
 ];
 
 impl Database {

@@ -201,6 +201,18 @@ fn legacy_pre_v2_calendar_rows_with_empty_timestamp_read_cleanly() {
             );
             INSERT INTO calendars VALUES
              ('01ARZ3NDEKTSV4RRFFQ69G5FAV', 'Personal', '#3366cc', '\"local\"', 1);
+            CREATE TABLE items (
+                id TEXT PRIMARY KEY, kind TEXT NOT NULL, title TEXT NOT NULL,
+                notes TEXT, location TEXT, calendar_id TEXT NOT NULL REFERENCES calendars(id),
+                start_epoch INTEGER NOT NULL, start_rfc3339 TEXT NOT NULL,
+                end_epoch INTEGER, end_rfc3339 TEXT, all_day INTEGER NOT NULL DEFAULT 0,
+                rrule TEXT, exdates_json TEXT NOT NULL DEFAULT '[]',
+                completed_epoch INTEGER, completed_rfc3339 TEXT,
+                reminders_json TEXT NOT NULL DEFAULT '[]', color_override TEXT,
+                created_epoch INTEGER NOT NULL, created_rfc3339 TEXT NOT NULL,
+                updated_epoch INTEGER NOT NULL, updated_rfc3339 TEXT NOT NULL,
+                deleted INTEGER NOT NULL DEFAULT 0, metadata_json TEXT NOT NULL DEFAULT '{}'
+            );
             PRAGMA user_version = 1;",
         )
         .unwrap();
@@ -270,4 +282,78 @@ fn poison_rows_are_skipped_not_fatal() {
     let items = db.list_items(false).unwrap();
     assert_eq!(items.len(), 1);
     assert_eq!(items[0].title, "Good item");
+}
+
+#[test]
+fn migration_v4_dedupes_default_calendars_and_repoints_items() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("dupes.db");
+    {
+        let conn = rusqlite::Connection::open(&path).unwrap();
+        // Shape of a DB damaged by the historical defaults-spam bug: many
+        // same-named calendars, items pointing at different copies.
+        conn.execute_batch(
+            r#"
+            CREATE TABLE calendars (
+                id TEXT PRIMARY KEY, name TEXT NOT NULL, color TEXT NOT NULL,
+                source TEXT NOT NULL, visible INTEGER NOT NULL DEFAULT 1
+            );
+            CREATE TABLE items (
+                id TEXT PRIMARY KEY, kind TEXT NOT NULL, title TEXT NOT NULL,
+                notes TEXT, location TEXT, calendar_id TEXT NOT NULL REFERENCES calendars(id),
+                start_epoch INTEGER NOT NULL, start_rfc3339 TEXT NOT NULL,
+                end_epoch INTEGER, end_rfc3339 TEXT, all_day INTEGER NOT NULL DEFAULT 0,
+                rrule TEXT, exdates_json TEXT NOT NULL DEFAULT '[]',
+                completed_epoch INTEGER, completed_rfc3339 TEXT,
+                reminders_json TEXT NOT NULL DEFAULT '[]', color_override TEXT,
+                created_epoch INTEGER NOT NULL, created_rfc3339 TEXT NOT NULL,
+                updated_epoch INTEGER NOT NULL, updated_rfc3339 TEXT NOT NULL,
+                deleted INTEGER NOT NULL DEFAULT 0, metadata_json TEXT NOT NULL DEFAULT '{}'
+            );
+            INSERT INTO calendars VALUES ('01ARZ3NDEKTSV4RRFFQ69G5FAV', 'Personal', '#3366cc', '"local"', 1);
+            INSERT INTO calendars VALUES ('01ARZ3NDEKTSV4RRFFQ69G5FAW', 'Personal', '#3366cc', '"local"', 1);
+            INSERT INTO calendars VALUES ('01ARZ3NDEKTSV4RRFFQ69G5FBV', 'Birthdays', '#e91e63', '"birthdays"', 1);
+            INSERT INTO calendars VALUES ('01ARZ3NDEKTSV4RRFFQ69G5FBW', 'Birthdays', '#e91e63', '"birthdays"', 1);
+            INSERT INTO items (id, kind, title, calendar_id, start_epoch, start_rfc3339,
+                exdates_json, reminders_json, created_epoch, created_rfc3339,
+                updated_epoch, updated_rfc3339, metadata_json)
+            VALUES ('01ARZ3NDEKTSV4RRFFQ69G5FCV', '"event"', 'on A', '01ARZ3NDEKTSV4RRFFQ69G5FAV', 0, '', '[]', '[]', 0, '', 0, '', '{}');
+            INSERT INTO items (id, kind, title, calendar_id, start_epoch, start_rfc3339,
+                exdates_json, reminders_json, created_epoch, created_rfc3339,
+                updated_epoch, updated_rfc3339, metadata_json)
+            VALUES ('01ARZ3NDEKTSV4RRFFQ69G5FCW', '"event"', 'on B', '01ARZ3NDEKTSV4RRFFQ69G5FAW', 0, '', '[]', '[]', 0, '', 0, '', '{}');
+            PRAGMA user_version = 1;
+            "#,
+        )
+        .unwrap();
+    }
+
+    let db = Database::open(&path).unwrap(); // applies v4
+    {
+        let c = rusqlite::Connection::open(&path).unwrap();
+        let uv: i64 = c
+            .query_row("PRAGMA user_version", [], |r| r.get(0))
+            .unwrap();
+        let n: i64 = c
+            .query_row("SELECT COUNT(*) FROM calendars", [], |r| r.get(0))
+            .unwrap();
+        eprintln!("DEBUG user_version={uv} calendar_rows={n}");
+    }
+    let mut cals = db.list_calendars().unwrap();
+    cals.sort_by(|a, b| a.name.cmp(&b.name));
+    let names: Vec<_> = cals.iter().map(|c| c.name.as_str()).collect();
+    assert_eq!(names, ["Birthdays", "Personal"]);
+
+    // Both items survived and live on the surviving Personal copy.
+    let items = db.list_items(false).unwrap();
+    assert_eq!(items.len(), 2);
+    let personal_id = cals
+        .iter()
+        .find(|c| c.name == "Personal")
+        .unwrap()
+        .id
+        .to_string();
+    assert!(items
+        .iter()
+        .all(|i| i.calendar_id.to_string() == personal_id));
 }

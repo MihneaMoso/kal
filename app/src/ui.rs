@@ -210,7 +210,6 @@ fn MonthCell(
     occurrences: Vec<Occurrence>,
     items: Vec<CalendarItem>,
 ) -> Element {
-    let mut editor = use_context::<Signal<Option<EditorState>>>();
     let db = use_context::<DbHandle>();
     let db_new = db.clone();
 
@@ -224,7 +223,7 @@ fn MonthCell(
     rsx! {
         div {
             class: "{class}",
-            onclick: move |_| editor.set(Some(EditorState::new_on(&db_new, date))),
+            onclick: move |_| *EDITOR_OPEN.write() = Some(EditorState::new_on(&db_new, date)),
             span { class: "day-num", "{date.day()}" }
             for occ in occurrences.iter().cloned() {
                 {
@@ -241,7 +240,6 @@ fn MonthCell(
 
 #[component]
 fn EventChip(item: CalendarItem, occ_start: DateTimeTz) -> Element {
-    let mut editor = use_context::<Signal<Option<EditorState>>>();
     let db = use_context::<DbHandle>();
 
     let settings = use_context::<Signal<Settings>>();
@@ -274,7 +272,7 @@ fn EventChip(item: CalendarItem, occ_start: DateTimeTz) -> Element {
             title: "{chip_label}",
             onclick: move |e| {
                 e.stop_propagation();
-                editor.set(Some(EditorState::edit_existing(&db, item_id, Some(occ_start))));
+                *EDITOR_OPEN.write() = Some(EditorState::edit_existing(&db, item_id, Some(occ_start)));
             },
             "{chip_label}"
         }
@@ -285,7 +283,6 @@ fn EventChip(item: CalendarItem, occ_start: DateTimeTz) -> Element {
 #[component]
 fn ItemRow(date: Option<NaiveDate>, item: CalendarItem, occ_start: DateTimeTz) -> Element {
     let settings = use_context::<Signal<Settings>>();
-    let mut editor = use_context::<Signal<Option<EditorState>>>();
     let mut items_res = use_context::<Resource<Vec<CalendarItem>>>();
     let db = use_context::<DbHandle>();
     let db_edit = db.clone();
@@ -321,7 +318,7 @@ fn ItemRow(date: Option<NaiveDate>, item: CalendarItem, occ_start: DateTimeTz) -
     rsx! {
         li {
             key: "{item_id}",
-            onclick: move |_| editor.set(Some(EditorState::edit_existing(&db_edit, item_id, Some(occ_start)))),
+            onclick: move |_| *EDITOR_OPEN.write() = Some(EditorState::edit_existing(&db_edit, item_id, Some(occ_start))),
             if !date_str.is_empty() {
                 span { class: "agenda-date", "{date_str}" }
             }
@@ -465,6 +462,10 @@ pub fn AgendaView() -> Element {
 // ---------------------------------------------------------------------------
 // Editor
 // ---------------------------------------------------------------------------
+
+/// Global editor state (deliberately NOT a context: one static, zero
+/// resolution ambiguity).
+pub static EDITOR_OPEN: GlobalSignal<Option<EditorState>> = Signal::global(|| None);
 
 /// State driving the create/edit modal.
 #[derive(Clone, PartialEq)]
@@ -708,7 +709,6 @@ fn db_apply_scoped_edit(
 #[component]
 pub fn EditorModal(state: EditorState) -> Element {
     let db = use_context::<DbHandle>();
-    let mut editor = use_context::<Signal<Option<EditorState>>>();
     let mut items_res = use_context::<Resource<Vec<CalendarItem>>>();
 
     let calendars = db.list_calendars().unwrap_or_default();
@@ -813,7 +813,7 @@ pub fn EditorModal(state: EditorState) -> Element {
             }
 
             items_res.restart();
-            editor.set(None);
+            *EDITOR_OPEN.write() = None;
         }
     };
     let save_all = mk_save(Scope::All, db_save.clone());
@@ -824,7 +824,7 @@ pub fn EditorModal(state: EditorState) -> Element {
         if let Some(id) = state.id {
             let _ = db_delete.soft_delete_item(id);
             items_res.restart();
-            editor.set(None);
+            *EDITOR_OPEN.write() = None;
         }
     };
 
@@ -834,7 +834,7 @@ pub fn EditorModal(state: EditorState) -> Element {
 
     rsx! {
         div { class: "modal-backdrop",
-            onclick: move |_| editor.set(None),
+            onclick: move |_| *EDITOR_OPEN.write() = None,
             div {
                 class: "modal",
                 role: "dialog",
@@ -972,7 +972,7 @@ pub fn EditorModal(state: EditorState) -> Element {
                         span {}
                     }
                     div { style: "display:flex;gap:8px;flex-wrap:wrap;",
-                        button { onclick: move |_| editor.set(None), "Cancel" }
+                        button { onclick: move |_| *EDITOR_OPEN.write() = None, "Cancel" }
                         if is_recurring_edit {
                             button { class: "primary", onclick: save_all, "All events" }
                             button { onclick: save_following, "…and following" }
