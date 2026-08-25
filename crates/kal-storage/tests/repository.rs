@@ -1,6 +1,7 @@
 use chrono::Timelike;
 use kal_core::models::{Calendar, CalendarItem, CalendarSource, Color, ItemKind, Reminder};
 use kal_storage::Database;
+use rusqlite::params;
 
 fn ts(y: i32, m: u32, d: u32, h: u32) -> kal_core::models::DateTimeTz {
     kal_core::models::datetime_from_parts(y, m, d, h, 0, 0).unwrap()
@@ -217,4 +218,56 @@ fn legacy_pre_v2_calendar_rows_with_empty_timestamp_read_cleanly() {
     db.upsert_calendar(&repaired).unwrap();
     let reread = db.list_calendars().unwrap();
     assert!(reread[0].updated_at.timestamp() > 1_700_000_000);
+}
+
+#[test]
+fn poison_rows_are_skipped_not_fatal() {
+    // One unreadable calendar + one unreadable item must not hide the rest
+    // (regression: a single bad row made list_calendars() error, which the
+    // app treated as "no calendars", spamming default duplicates each launch
+    // and breaking the editor's calendar picker).
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("poison.db");
+    {
+        let db = Database::open(&path).unwrap();
+        let cal = Calendar::local("Good", Color("#00aa00".into()));
+        db.upsert_calendar(&cal).unwrap();
+        let item = CalendarItem::new(ItemKind::Event, "Good item", cal.id, ts(2026, 1, 1, 8));
+        db.upsert_item(&item).unwrap();
+    }
+    {
+        // Corrupt rows written behind the repository's back. The item's
+        // calendar_id is a VALID row so only the poisoned field trips
+        // conversion, not the FK.
+        let conn = rusqlite::Connection::open(&path).unwrap();
+        let good_cal_id: String = conn
+            .query_row("SELECT id FROM calendars WHERE name = 'Good'", [], |r| {
+                r.get(0)
+            })
+            .unwrap();
+        conn.execute(
+            "INSERT INTO calendars (id, name, color, source, visible, updated_epoch, updated_rfc3339)
+             VALUES ('not-a-ulid', 'PoisonCal', '#000000', '\"local\"', 1, 0, '')",
+            params![],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO items (id, kind, title, calendar_id, start_epoch, start_rfc3339,
+                all_day, exdates_json, reminders_json, created_epoch, created_rfc3339,
+                updated_epoch, updated_rfc3339, deleted, metadata_json)
+             VALUES ('also-bad', '\"event\"', 'PoisonItem', ?1,
+                0, '', 0, '[]', '[]', 0, '', 0, '', 0, '{}')",
+            params!(good_cal_id),
+        )
+        .unwrap();
+    }
+
+    let db = Database::open(&path).unwrap();
+    let cals = db.list_calendars().unwrap();
+    assert_eq!(cals.len(), 1, "only the good calendar survives");
+    assert_eq!(cals[0].name, "Good");
+
+    let items = db.list_items(false).unwrap();
+    assert_eq!(items.len(), 1);
+    assert_eq!(items[0].title, "Good item");
 }

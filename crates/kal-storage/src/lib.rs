@@ -159,14 +159,21 @@ impl Database {
             .map_err(Into::into)
     }
 
+    /// Lists calendars, skipping any row that fails to convert (poison-row
+    /// tolerance): one bad record must not hide the user's whole library.
+    /// Skipped rows are reported on stderr for diagnosis.
     pub fn list_calendars(&self) -> Result<Vec<Calendar>> {
         let conn = self.conn.lock().unwrap();
         let mut stmt = conn.prepare("SELECT id, name, color, source, visible, updated_epoch, updated_rfc3339 FROM calendars ORDER BY name")?;
-        let rows = stmt.query_map([], row_to_calendar)?;
-        Ok(rows
-            .collect::<rusqlite::Result<Vec<_>>>()?
-            .into_iter()
-            .collect())
+        let mut rows = stmt.query([])?;
+        let mut out = Vec::new();
+        while let Some(row) = rows.next()? {
+            match row_to_calendar(row) {
+                Ok(c) => out.push(c),
+                Err(e) => eprintln!("kal-storage: skipping unreadable calendar row: {e}"),
+            }
+        }
+        Ok(out)
     }
 
     // ----- items -----
@@ -257,11 +264,15 @@ impl Database {
              WHERE deleted=0 AND start_epoch <= ?2 AND COALESCE(end_epoch, start_epoch) >= ?1
              ORDER BY start_epoch",
         )?;
-        let rows = stmt.query_map(params![epoch(&from), epoch(&to)], row_to_item)?;
-        Ok(rows
-            .collect::<rusqlite::Result<Vec<_>>>()?
-            .into_iter()
-            .collect())
+        let mut rows = stmt.query(params![epoch(&from), epoch(&to)])?;
+        let mut out = Vec::new();
+        while let Some(row) = rows.next()? {
+            match row_to_item(row) {
+                Ok(i) => out.push(i),
+                Err(e) => eprintln!("kal-storage: skipping unreadable item row: {e}"),
+            }
+        }
+        Ok(out)
     }
 
     // ----- settings -----
@@ -302,11 +313,15 @@ impl Database {
         } else {
             "SELECT * FROM items WHERE deleted=0"
         })?;
-        let rows = stmt.query_map([], row_to_item)?;
-        Ok(rows
-            .collect::<rusqlite::Result<Vec<_>>>()?
-            .into_iter()
-            .collect())
+        let mut rows = stmt.query([])?;
+        let mut out = Vec::new();
+        while let Some(row) = rows.next()? {
+            match row_to_item(row) {
+                Ok(i) => out.push(i),
+                Err(e) => eprintln!("kal-storage: skipping unreadable item row: {e}"),
+            }
+        }
+        Ok(out)
     }
 }
 

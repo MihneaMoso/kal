@@ -241,6 +241,16 @@ bite you again if ignored, plus the exact state to resume from.
 
 ## Bug-fix round notes
 
+- Poison-row policy: ONE unreadable row must not fail whole list queries —
+  list_* skip + eprintln the reason (a single bad row previously made
+  list_calendars() error → defaults guard re-inserted Personal/Birthdays
+  every launch → duplicate checkboxes; editor fallback spammed more).
+  Regression test: poison_rows_are_skipped_not_fatal.
+- rusqlite note: stmt.query(params) takes ONLY params (no row mapper — that's
+  query_map); conn.execute(sql, params![]) always needs the params arg.
+- use_memo on a Copy Signal failed to re-fire in practice for theme CSS;
+  direct `let dark = theme.read()...` in render is reliable. Prefer direct
+  reads unless memo benefit is measured.
 - "premature end of input" on real user DBs = chrono parsing the '' DEFAULT
   that migration v2 stamped onto pre-v2 calendar rows. row_to_calendar now
   treats empty/unparseable as epoch 0 (self-healing read) + regression test

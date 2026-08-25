@@ -164,15 +164,14 @@ fn App() -> Element {
     let css = include_str!("../assets/main.css");
     // Whole-document theming: variables are injected at :root AFTER the base
     // stylesheet so every element (html/body included) follows the theme.
-    // (Previously vars lived on the .app wrapper, which is why body and the
-    // calendar grid never switched.)
-    let themed_css = use_memo(move || {
-        if theme.read().as_str() == "dark" {
-            format!("{css}{DARK_THEME_VARS}")
-        } else {
-            css.to_string()
-        }
-    });
+    // Direct read (not use_memo): App re-renders on theme change and rebuilds
+    // the string synchronously — no memo evaluation timing involved.
+    let dark = theme.read().as_str() == "dark";
+    let themed_css = if dark {
+        format!("{css}{DARK_THEME_VARS}")
+    } else {
+        css.to_string()
+    };
 
     // Sidebar resize dragging (root-level so fast cursor movement can't
     // escape the handle).
