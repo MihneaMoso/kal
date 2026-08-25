@@ -209,7 +209,11 @@ bite you again if ignored, plus the exact state to resume from.
   several Signal<bool> providers aliases them into one signal; (b) a
   use_context of a type with NO provider compiles fine and only panics at
   runtime as the red "Any { .. }" screen ("Could not find context ...").
-  When that appears: grep use_context vs use_context_provider FIRST.
+  When that appears: grep use_context vs use_context_provider FIRST and diff
+  the TYPE LISTS on both sides (a provider removed but a consumer left, or a
+  duplicate same-type provider silently shadowing, produce exactly this
+  blank/red screen). After ANY context refactor run:
+    grep -rn "use_context::<" app/src | ...   vs providers list.
   Root fix for both: bundle related flags into ONE struct signal
   (`ui::UiLayout`) and audit consumers after refactors.
 - Signal write+read in one expression borrows twice; bind

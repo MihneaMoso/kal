@@ -101,7 +101,6 @@ fn App() -> Element {
     use_context_provider(|| Signal::new(today));
     let settings = Signal::new(prefs);
     use_context_provider(|| settings);
-    use_context_provider(|| Signal::new(ui::ViewMode::Month));
     // Single shared item list; views read it via context and restart it after
     // mutations.
     let mut items_res = use_resource(move || {
@@ -255,10 +254,11 @@ fn subtitle_label() -> String {
 fn PreferencesControls() -> Element {
     let db = use_context::<DbHandle>();
     let mut settings = use_context::<Signal<ui::Settings>>();
-    let mut theme = use_context::<Signal<String>>();
-    let dark = theme.read().as_str() == "dark";
+    let mut layout = use_context::<Signal<ui::UiLayout>>();
+    let dark = layout.read().theme.as_str() == "dark";
     let db_time = db.clone();
     let db_week = db.clone();
+    // Theme persists under its own key; the signal of record is UiLayout.
     let db_theme = db.clone();
 
     rsx! {
@@ -288,12 +288,10 @@ fn PreferencesControls() -> Element {
         button {
             "aria-label": if dark { "Switch to light mode" } else { "Switch to dark mode" },
             onclick: move |_| {
-                // Flip ONLY the dedicated theme signal (cheap: re-renders the
-                // label + CSS injection, never the calendar views) and
-                // persist it under its own key. Reading current state here
-                // keeps rapid clicks consistent.
-                let next = if theme.read().as_str() == "dark" { "light" } else { "dark" };
-                theme.set(next.to_string());
+                // Flip theme on the UiLayout signal (drives the data-theme
+                // attribute on the root div) and persist under its own key.
+                let next = if layout.read().theme.as_str() == "dark" { "light" } else { "dark" };
+                layout.write().theme = next.to_string();
                 let _ = db_theme.set_setting("theme", &serde_json::to_string(next).unwrap());
             },
             {if dark { crate::i18n::tr("theme-toggle-light") } else { crate::i18n::tr("theme-toggle-dark") }}
