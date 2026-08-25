@@ -239,6 +239,18 @@ bite you again if ignored, plus the exact state to resume from.
   App context; divider mousedown sets resizing, ROOT onmousemove applies
   clamp(170..480); class "resizing" disables transitions.
 
+## Day view (Google-style) notes
+
+- Layout math lives in chrono-core::viewmodel::layout_day (fractions of day,
+  greedy overlap lanes, min-height clamp) + PositionedOccurrence; tests cover
+  offsets, lane sharing, min height. UI just multiplies by pixel height.
+- All-day items render in a strip above the grid; timed items absolutely
+  positioned in .day-canvas (48px/hour). Scroll container auto-jumps to 08:00
+  via one-shot effect + document::eval on #day-scroll.
+- Theme mechanism FINAL: base css inline <style> + active palette appended
+  (:root-scoped DARK_THEME_VARS) — verified restyling path in WebKitGTK;
+  attribute-selector and JS-eval approaches failed in practice.
+
 ## Bug-fix round notes
 
 - Poison-row policy: ONE unreadable row must not fail whole list queries —

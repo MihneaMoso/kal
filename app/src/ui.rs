@@ -4,7 +4,6 @@ use chrono::{Datelike, Local, NaiveDate, NaiveTime, Weekday};
 use dioxus::prelude::*;
 use kal_core::models::{CalendarItem, DateTimeTz, ItemKind, Occurrence};
 use kal_core::viewmodel;
-use std::collections::BTreeMap;
 use ulid::Ulid;
 
 use crate::DbHandle;
@@ -350,37 +349,155 @@ fn ItemRow(date: Option<NaiveDate>, item: CalendarItem, occ_start: DateTimeTz) -
 #[component]
 pub fn DayView() -> Element {
     let cursor = use_context::<Signal<NaiveDate>>();
+    let settings = use_context::<Signal<Settings>>();
+    let mut theme_scrolled = use_signal(|| false);
     let items = use_visible_items();
+    let cals_res = use_context::<Resource<Vec<kal_core::models::Calendar>>>();
+    let cals = cals_res.value().read().clone().unwrap_or_default();
+
     let d = *cursor.read();
-    let empty = BTreeMap::new();
-    let map = if items.is_empty() {
-        &empty
-    } else {
-        &viewmodel::occurrences_by_date(&items, d, d)
+    let map = viewmodel::occurrences_by_date(&items, d, d);
+    let day_occs = map.get(&d).cloned().unwrap_or_default();
+
+    // Split all-day vs timed; timed get grid positions.
+    let (all_day, timed): (Vec<Occurrence>, Vec<Occurrence>) =
+        day_occs.iter().cloned().partition(|o| {
+            items
+                .iter()
+                .find(|i| i.id == o.item_id)
+                .map(|i| i.all_day)
+                .unwrap_or(false)
+        });
+    let positioned = viewmodel::layout_day(
+        timed.clone(),
+        d.and_hms_opt(0, 0, 0)
+            .unwrap()
+            .and_local_timezone(*Local::now().offset())
+            .single()
+            .unwrap_or_else(|| Local::now().fixed_offset()),
+        0.02,
+    );
+
+    // Jump to ~08:00 once after mount so mornings are visible (Google does
+    // "current or 8am"; current-hour logic can come later).
+    use_effect(move || {
+        if !*theme_scrolled.read() {
+            theme_scrolled.set(true);
+            document::eval(
+                "let el=document.getElementById('day-scroll'); if(el){el.scrollTop=8*60;} ",
+            );
+        }
+    });
+
+    let hour_label = |h: u32| {
+        if settings.read().time_24h {
+            format!("{h:02}:00")
+        } else {
+            let suffix = if h < 12 { "AM" } else { "PM" };
+            let h12 = match h % 12 {
+                0 => 12,
+                x => x,
+            };
+            format!("{h12}:00 {suffix}")
+        }
     };
-    let rows: Vec<(Occurrence, CalendarItem)> = map
-        .get(&d)
-        .map(|occs| {
-            occs.iter()
-                .filter_map(|o| {
-                    items
-                        .iter()
-                        .find(|i| i.id == o.item_id)
-                        .cloned()
-                        .map(|i| (o.clone(), i))
-                })
-                .collect()
-        })
-        .unwrap_or_default();
 
     rsx! {
-        ul { class: "day-list",
-            if rows.is_empty() {
-                li { class: "empty", "Nothing scheduled." }
+        div { class: "day-wrap",
+            if !all_day.is_empty() {
+                div { class: "allday-strip",
+                    span { class: "when", "All-day" }
+                    for o in all_day.iter() {
+                        {
+                            let it = items.iter().find(|i| i.id == o.item_id).cloned();
+                            match it {
+                                Some(it) => rsx! { EventChip { item: it, occ_start: o.start } },
+                                None => rsx! {},
+                            }
+                        }
+                    }
+                }
             }
-            for (occ, it) in rows {
-                ItemRow { key: "{it.id}-{occ.start}", date: None, item: it, occ_start: occ.start }
+            div { class: "day-scroll", id: "day-scroll",
+                div { class: "day-inner",
+                    div { class: "day-gutter",
+                        for h in 0..24 {
+                            div { class: "day-label", key: "{h}", "{hour_label(h)}" }
+                        }
+                    }
+                    div { class: "day-canvas",
+                        for h in 0..24 {
+                            div { class: "day-hourline", key: "{h}" }
+                        }
+                        for p in positioned.iter() {
+                            {
+                                let found = items.iter().find(|i| i.id == p.occ.item_id).cloned();
+                                match found {
+                                    Some(it) => {
+                                        let bg = it
+                                            .color_override
+                                            .as_ref()
+                                            .map(|c| c.to_string())
+                                            .or_else(|| {
+                                                cals.iter()
+                                                    .find(|c| c.id == it.calendar_id)
+                                                    .map(|c| c.color.to_string())
+                                            })
+                                            .unwrap_or_else(|| "var(--accent)".into());
+                                        rsx! { TimedEventBlock {
+                                            key: "{it.id}-{p.occ.start}",
+                                            item: it,
+                                            top_frac: p.top_frac,
+                                            height_frac: p.height_frac,
+                                            lane: p.lane,
+                                            lanes: p.lanes,
+                                            bg: bg,
+                                        } }
+                                    }
+                                    None => rsx! {},
+                                }
+                            }
+                        }
+                    }
+                }
             }
+        }
+    }
+}
+
+/// One absolutely-positioned event block inside the day canvas.
+#[component]
+fn TimedEventBlock(
+    item: CalendarItem,
+    top_frac: f64,
+    height_frac: f64,
+    lane: usize,
+    lanes: usize,
+    bg: String,
+) -> Element {
+    let db = use_context::<DbHandle>();
+    let item_id = item.id;
+    let title = item.title.clone();
+    let time = item.start.format("%H:%M").to_string();
+
+    let style = format!(
+        "top:calc({top} * 100%); height:calc({h} * 100%); left:calc({lane} * 100% / {lanes}); width:calc(100% / {lanes} - 4px); background:{bg};",
+        top = top_frac,
+        h = height_frac.max(0.02),
+        lane = lane,
+        lanes = lanes.max(1),
+    );
+
+    rsx! {
+        div {
+            class: "day-event",
+            style: "{style}",
+            title: "{title}",
+            onclick: move |_| {
+                *EDITOR_OPEN.write() = Some(EditorState::edit_existing(&db, item_id, Some(item.start)));
+            },
+            span { class: "de-time", "{time}" }
+            span { class: "de-title", "{title}" }
         }
     }
 }

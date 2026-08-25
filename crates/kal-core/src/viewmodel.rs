@@ -399,3 +399,142 @@ mod recurrence_tests {
 
     use chrono::Timelike as _;
 }
+
+/// One occurrence positioned inside a day time-grid (Google Calendar style).
+///
+/// `top_frac`/`height_frac` are fractions of the full day (0.0..1.0) so the
+/// UI can multiply by its pixel height. Overlapping events share the day
+/// width via greedy lane assignment within each overlap cluster.
+#[derive(Debug, Clone, PartialEq)]
+pub struct PositionedOccurrence {
+    pub occ: Occurrence,
+    pub top_frac: f64,
+    pub height_frac: f64,
+    pub lane: usize,
+    pub lanes: usize,
+}
+
+const DAY_MINUTES: f64 = 24.0 * 60.0;
+
+/// Lay out timed occurrences of a single day.
+///
+/// Input may be unsorted; all-day items should be excluded by the caller
+/// (they render in their own strip). Events are clamped to the day and get a
+/// small minimum height so short events remain clickable/visible.
+pub fn layout_day(
+    mut occs: Vec<Occurrence>,
+    _day_start: chrono::DateTime<chrono::FixedOffset>,
+    min_height_frac: f64,
+) -> Vec<PositionedOccurrence> {
+    use chrono::Timelike;
+
+    occs.sort_by_key(|o| o.start);
+
+    // Convert to minute ranges, splitting nothing across midnight (the
+    // caller queries per-day; occurrences starting before the day clamp 0).
+    let ranges: Vec<(f64, f64, Occurrence)> = occs
+        .into_iter()
+        .map(|o| {
+            let start_min = (o.start.hour() as f64) * 60.0
+                + (o.start.minute() as f64)
+                + (o.start.second() as f64) / 60.0;
+            let end_dt = o.end.unwrap_or(o.start + chrono::Duration::hours(1));
+            let end_min = ((end_dt - o.start).num_seconds() as f64 / 60.0 + start_min)
+                .clamp(start_min, DAY_MINUTES);
+            (start_min.min(DAY_MINUTES), end_min.max(start_min), o)
+        })
+        .collect();
+
+    // Lane assignment below is computed per overlap-cluster in a second
+    // pass (rank of this event among everything it overlaps).
+
+    // Recompute per-cluster lane counts with a simple second pass: for each
+    // event count how many events overlap it (including itself); its lane
+    // count is that number clamped to [1, lanes_used_in_cluster].
+    let mut out = Vec::with_capacity(ranges.len());
+    for i in 0..ranges.len() {
+        let (si, ei, _) = &ranges[i];
+        let overlapping: Vec<usize> = (0..ranges.len())
+            .filter(|&j| {
+                let (sj, ej, _) = &ranges[j];
+                sj < ei && ej > si // open-ended overlap
+            })
+            .collect();
+        let lanes_needed = overlapping.len().max(1);
+        // Lane index = rank of i among overlapping by (start, id-order).
+        let mut order: Vec<usize> = overlapping.clone();
+        order.sort_by(|&a, &b| (ranges[a].0, a).partial_cmp(&(ranges[b].0, b)).unwrap());
+        let lane = order.iter().position(|&x| x == i).unwrap_or(0);
+        out.push(PositionedOccurrence {
+            occ: ranges[i].2.clone(),
+            top_frac: si / DAY_MINUTES,
+            height_frac: ((ei - si) / DAY_MINUTES).max(min_height_frac),
+            lane,
+            lanes: lanes_needed,
+        });
+    }
+    out
+}
+
+#[cfg(test)]
+mod day_layout_tests {
+    use super::*;
+    use crate::models::{datetime_from_parts, Occurrence};
+    use chrono::FixedOffset;
+
+    fn occ(y: i32, mo: u32, d: u32, start_h: u32, dur_min: i64) -> Occurrence {
+        let start = datetime_from_parts(y, mo, d, start_h, 0, 0).unwrap();
+        Occurrence {
+            item_id: ulid_like(),
+            start,
+            end: Some(start + chrono::Duration::minutes(dur_min)),
+        }
+    }
+
+    // Deterministic stand-in ids (real ULIDs so nothing downstream chokes).
+    fn ulid_like() -> crate::models::Ulid {
+        crate::models::Ulid::from_string("01ARZ3NDEKTSV4RRFFQ69G5FAV").unwrap()
+    }
+
+    fn day() -> chrono::DateTime<FixedOffset> {
+        datetime_from_parts(2026, 8, 24, 0, 0, 0).unwrap()
+    }
+
+    #[test]
+    fn single_event_spans_full_width_at_right_offset() {
+        let e = occ(2026, 8, 24, 10, 90);
+        let out = layout_day(vec![e.clone()], day(), 0.02);
+        assert_eq!(out.len(), 1);
+        assert_eq!(out[0].lane, 0);
+        assert_eq!(out[0].lanes, 1);
+        let expect_top = (10.0 * 60.0) / 1440.0;
+        assert!((out[0].top_frac - expect_top).abs() < 1e-9);
+        let expect_h = 90.0 / 1440.0;
+        assert!((out[0].height_frac - expect_h).abs() < 1e-9);
+    }
+
+    #[test]
+    fn overlapping_events_share_lanes() {
+        let a = occ(2026, 8, 24, 9, 120); // 09:00–11:00
+        let b = occ(2026, 8, 24, 10, 60); // 10:00–11:00 overlaps a
+        let c = occ(2026, 8, 24, 13, 30); // separate cluster
+        let mut evs = vec![c, b.clone(), a.clone()];
+        evs.sort_by_key(|o| o.start);
+        let out = layout_day(evs, day(), 0.02);
+
+        let lane_of = |s: u32| out.iter().find(|p| p.occ.start.hour() == s).unwrap();
+        assert_eq!(lane_of(9).lanes, 2);
+        assert_eq!(lane_of(10).lanes, 2);
+        assert_ne!(lane_of(9).lane, lane_of(10).lane);
+        assert_eq!(lane_of(13).lanes, 1); // own cluster
+    }
+
+    #[test]
+    fn min_height_enforced_for_short_events() {
+        let five_min = occ(2026, 8, 24, 22, 5);
+        let out = layout_day(vec![five_min], day(), 0.02);
+        assert!(out[0].height_frac >= 0.02 - 1e-9);
+    }
+
+    use chrono::Timelike as _;
+}

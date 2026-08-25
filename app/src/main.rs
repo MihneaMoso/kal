@@ -179,18 +179,23 @@ fn App() -> Element {
     };
     let end_resize = move |_| layout.write().sidebar_resizing = false;
 
-    // Explicit read: subscribes App to theme changes so the data-theme
-    // attribute below is recomputed on every toggle.
-    let theme_value = theme.read().clone();
+    // Active palette appended AFTER the base sheet, scoped to :root so the
+    // whole document (body included) follows. This inline-injection path is
+    // verified to restyle in WebKitGTK.
+    let dark = theme.read().as_str() == "dark";
+    let themed_css = if dark {
+        format!("{css}\n{DARK_THEME_VARS}")
+    } else {
+        css.to_string()
+    };
 
     rsx! {
         div {
             class: "{app_class}",
-            "data-theme": "{theme_value}",
             onmousemove: on_root_mousemove,
             onmouseup: end_resize,
             onmouseleave: end_resize,
-            style { dangerous_inner_html: "{css}" }
+            style { dangerous_inner_html: "{themed_css}" }
             TopBar {}
             div { class: "body",
                 Sidebar {}
@@ -204,6 +209,20 @@ fn App() -> Element {
         }
     }
 }
+
+const DARK_THEME_VARS: &str = r#"
+:root {
+    --select-chevron: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%239aa4ae' stroke-width='1.5' fill='none'/%3E%3C/svg%3E");
+    --bg: #16191d;
+    --bg-alt: #1f2329;
+    --fg: #e6e8eb;
+    --fg-muted: #9aa4ae;
+    --accent: #6c99f0;
+    --accent-soft: #24304a;
+    --border: #33393f;
+    --today: #22304a;
+}
+"#;
 
 #[component]
 fn TopBar() -> Element {
