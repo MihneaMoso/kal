@@ -83,6 +83,12 @@ fn App() -> Element {
     let prefs = ui::Settings::load(&db);
     let default_view = prefs.default_view;
 
+    // Dedicated theme signal: toggling it must NOT re-render the calendar
+    // views (they subscribe to `settings`, not `theme`) — this is what keeps
+    // the switch instant and immune to rapid clicking.
+    let theme = Signal::new(prefs.theme.clone());
+    use_context_provider(|| theme);
+
     // Layout state: a SINGLE signal — Dioxus contexts are keyed by type, so
     // multiple Signal<bool> providers would alias each other.
     use_context_provider(|| {
@@ -160,12 +166,13 @@ fn App() -> Element {
     // stylesheet so every element (html/body included) follows the theme.
     // (Previously vars lived on the .app wrapper, which is why body and the
     // calendar grid never switched.)
-    let dark = settings.read().theme == "dark";
-    let themed_css = if dark {
-        format!("{css}{DARK_THEME_VARS}")
-    } else {
-        css.to_string()
-    };
+    let themed_css = use_memo(move || {
+        if theme.read().as_str() == "dark" {
+            format!("{css}{DARK_THEME_VARS}")
+        } else {
+            css.to_string()
+        }
+    });
 
     // Sidebar resize dragging (root-level so fast cursor movement can't
     // escape the handle).
@@ -269,7 +276,8 @@ fn subtitle_label() -> String {
 fn PreferencesControls() -> Element {
     let db = use_context::<DbHandle>();
     let mut settings = use_context::<Signal<ui::Settings>>();
-    let dark = settings.read().theme == "dark";
+    let mut theme = use_context::<Signal<String>>();
+    let dark = theme.read().as_str() == "dark";
     let db_time = db.clone();
     let db_week = db.clone();
     let db_view = db.clone();
@@ -324,13 +332,13 @@ fn PreferencesControls() -> Element {
         button {
             "aria-label": if dark { "Switch to light mode" } else { "Switch to dark mode" },
             onclick: move |_| {
-                // Read current theme INSIDE the handler; capturing `dark` at
-                // render time made every click after the first a no-op.
-                let mut p = settings.read().clone();
-                let now_dark = p.theme == "dark";
-                p.theme = if now_dark { "light".into() } else { "dark".into() };
-                p.save(&db_theme);
-                settings.set(p);
+                // Flip ONLY the dedicated theme signal (cheap: re-renders the
+                // label + CSS injection, never the calendar views) and
+                // persist it under its own key. Reading current state here
+                // keeps rapid clicks consistent.
+                let next = if theme.read().as_str() == "dark" { "light" } else { "dark" };
+                theme.set(next.to_string());
+                let _ = db_theme.set_setting("theme", &serde_json::to_string(next).unwrap());
             },
             {if dark { crate::i18n::tr("theme-toggle-light") } else { crate::i18n::tr("theme-toggle-dark") }}
         }

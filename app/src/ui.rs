@@ -44,11 +44,18 @@ impl Default for Settings {
 
 impl Settings {
     pub fn load(db: &crate::DbHandle) -> Self {
-        db.get_setting("preferences")
+        let mut prefs: Settings = db
+            .get_setting("preferences")
             .ok()
             .flatten()
             .and_then(|json| serde_json::from_str(&json).ok())
-            .unwrap_or_default()
+            .unwrap_or_default();
+        // Theme lives under its own key: toggling it must not mutate the
+        // `preferences` signal that calendar views subscribe to.
+        if let Some(t) = db.get_setting("theme").ok().flatten() {
+            prefs.theme = t;
+        }
+        prefs
     }
 
     pub fn save(&self, db: &crate::DbHandle) {
@@ -556,11 +563,28 @@ impl EditorState {
     }
 
     fn build(db: &DbHandle, kind: ItemKind, date: NaiveDate) -> Self {
+        // First visible calendar, else any calendar, else a fresh one —
+        // never Ulid::nil(), which would fail the FK constraint on save.
         let calendar_id = db
             .list_calendars()
-            .ok()
-            .and_then(|cals| cals.into_iter().find(|c| c.visible).map(|c| c.id))
-            .unwrap_or_else(Ulid::nil);
+            .unwrap_or_default()
+            .into_iter()
+            .find(|c| c.visible)
+            .or_else(|| {
+                db.list_calendars()
+                    .ok()
+                    .and_then(|cals| cals.into_iter().next())
+            })
+            .map(|c| c.id)
+            .unwrap_or_else(|| {
+                let c = kal_core::models::Calendar::local(
+                    "Personal",
+                    kal_core::models::Color("#3366cc".into()),
+                );
+                let id = c.id;
+                db.upsert_calendar(&c).ok();
+                id
+            });
         let birthday = kind == ItemKind::Birthday;
         Self {
             id: None,

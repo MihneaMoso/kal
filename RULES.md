@@ -239,6 +239,19 @@ bite you again if ignored, plus the exact state to resume from.
   App context; divider mousedown sets resizing, ROOT onmousemove applies
   clamp(170..480); class "resizing" disables transitions.
 
+## Bug-fix round notes
+
+- "premature end of input" on real user DBs = chrono parsing the '' DEFAULT
+  that migration v2 stamped onto pre-v2 calendar rows. row_to_calendar now
+  treats empty/unparseable as epoch 0 (self-healing read) + regression test
+  crafting a user_version=1 DB. Symptom cascade: list_calendars() err →
+  editor picked Ulid::nil() calendar → Save silently failed FK → "+ Event
+  does nothing". ALWAYS trace storage errors to UI symptoms.
+- Theme toggle: NEVER mutate a wide-subscriber signal (whole Settings) for a
+  cosmetic switch — views re-run occurrence expansion per click (delay +
+  rapid-click desync). Dedicated `theme: Signal<String>` context + own
+  `theme` settings key; views don't subscribe; css via use_memo.
+
 ## Future work (deferred deliberately, with entry points)
 
 - Live P2P transports: implement `kal_sync::Transport` for iroh and/or mDNS

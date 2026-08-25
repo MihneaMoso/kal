@@ -329,15 +329,16 @@ fn from_epoch(secs: i64, rfc3339: &str) -> Result<DateTimeTz> {
 
 fn row_to_calendar(row: &rusqlite::Row<'_>) -> rusqlite::Result<Calendar> {
     let id: String = row.get(0)?;
-    // v2 columns may be absent in legacy rows; fall back to epoch 0.
-    let upd_e: Option<i64> = row.get(5).ok();
+    // v2 columns may be absent in legacy rows, and rows written before v2
+    // carry the migration DEFAULT '' here. Both must fall back to epoch 0
+    // instead of failing the whole read ("premature end of input").
+    let _upd_e: Option<i64> = row.get(5).ok();
     let upd_s: Option<String> = row.get(6).ok();
-    let updated_at = match (upd_e, upd_s) {
-        (_, Some(ref r)) => DateTime::parse_from_rfc3339(r)
-            .map_err(|e| StorageError::Corrupt(e.to_string()))
-            .map_err(rusqlite::Error::from)?,
-        _ => Utc.timestamp_opt(0, 0).single().unwrap().fixed_offset(),
-    };
+    let updated_at = upd_s
+        .as_deref()
+        .filter(|r| !r.is_empty())
+        .and_then(|r| DateTime::parse_from_rfc3339(r).ok())
+        .unwrap_or_else(|| Utc.timestamp_opt(0, 0).single().unwrap().fixed_offset());
     Ok(Calendar {
         id: Ulid::from_str(&id).map_err(|e| StorageError::Corrupt(e.to_string()))?,
         name: row.get(1)?,

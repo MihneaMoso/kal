@@ -182,3 +182,39 @@ fn settings_round_trip_and_upsert() {
     let path = dir.path().join("s.db");
     drop(Database::open(&path).unwrap());
 }
+
+#[test]
+fn legacy_pre_v2_calendar_rows_with_empty_timestamp_read_cleanly() {
+    // Simulate a database written before migration v2: calendars lack any
+    // updated_at (the ALTER added DEFAULT ''). list_calendars() must not
+    // fail with "premature end of input" — regression for the sync/editor
+    // breakage on real user databases.
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("legacy.db");
+    {
+        let conn = rusqlite::Connection::open(&path).unwrap();
+        conn.execute_batch(
+            "CREATE TABLE calendars (
+                id TEXT PRIMARY KEY, name TEXT NOT NULL, color TEXT NOT NULL,
+                source TEXT NOT NULL, visible INTEGER NOT NULL DEFAULT 1
+            );
+            INSERT INTO calendars VALUES
+             ('01ARZ3NDEKTSV4RRFFQ69G5FAV', 'Personal', '#3366cc', '\"local\"', 1);
+            PRAGMA user_version = 1;",
+        )
+        .unwrap();
+    }
+
+    let db = Database::open(&path).unwrap(); // applies v2 + v3 migrations
+    let cals = db.list_calendars().unwrap();
+    assert_eq!(cals.len(), 1);
+    assert_eq!(cals[0].name, "Personal");
+
+    // Writing back stamps whatever the caller provides (sync LWW contract):
+    // callers set updated_at = now on mutation.
+    let mut repaired = cals[0].clone();
+    repaired.updated_at = chrono::Utc::now().fixed_offset();
+    db.upsert_calendar(&repaired).unwrap();
+    let reread = db.list_calendars().unwrap();
+    assert!(reread[0].updated_at.timestamp() > 1_700_000_000);
+}
