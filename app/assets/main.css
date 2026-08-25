@@ -1,8 +1,9 @@
 /* Kal base stylesheet.
  *
- * Light palette lives on :root below; the dark palette is injected as an
- * additional :root block from Rust (DARK_THEME_VARS in main.rs) AFTER this
- * sheet so it wins the cascade for the whole document (html/body included).
+ * Theming contract: BOTH palettes are static blocks here. Light on :root,
+ * dark on [data-theme="dark"] — the .app root div carries the data-theme
+ * attribute (set from UiLayout.theme in main.rs), so descendants resolve
+ * dark vars while body keeps the light fallback.
  */
 
 :root {
@@ -17,6 +18,23 @@
     --today: #eef4ff;
 }
 
+[data-theme="dark"] {
+    --select-chevron: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%239aa4ae' stroke-width='1.5' fill='none'/%3E%3C/svg%3E");
+    --bg: #16191d;
+    --bg-alt: #1f2329;
+    --fg: #e6e8eb;
+    --fg-muted: #9aa4ae;
+    --accent: #6c99f0;
+    --accent-soft: #24304a;
+    --border: #33393f;
+    --today: #22304a;
+}
+
+/* Opaque surfaces so nothing depends on <body>'s (always-light) paint. */
+.app { background: var(--bg); color: var(--fg); }
+.month-grid, .day-scroll, .day-canvas, .agenda-list, .day-list {
+    background: var(--bg);
+}
 
 * { box-sizing: border-box; }
 

@@ -255,8 +255,14 @@ bite you again if ignored, plus the exact state to resume from.
   signal proven to drive visuals via sidebar resize); root div renders
   data-theme="{cur_theme}" from an explicit layout.read(); css has :root
   light + [data-theme="dark"] overrides; .app paints background itself.
-  FAILED approaches (do not resurrect): style-tag innerHTML palette swap,
-  document::eval attribute setting, separate Signal<String> theme context.
+- Theme root cause of "still broken" rounds: the dark palette BLOCK kept
+  getting deleted from main.css during rewrites while JS/attr plumbing was
+  blamed. LESSON: when a toggle does nothing, FIRST verify the target CSS
+  rules exist in the delivered stylesheet (grep the actual file), THEN the
+  mechanism. Current contract: BOTH palettes static in main.css
+  (:root light, [data-theme=dark] dark); .app div carries data-theme from
+  UiLayout.theme; opaque surfaces (.app/.month-grid/.day-*) so body's
+  light paint never bleeds through.
 - Startup view hardcoded Month; default_view pref select removed.
 
 ## Bug-fix round notes
