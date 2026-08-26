@@ -264,6 +264,11 @@ bite you again if ignored, plus the exact state to resume from.
   UiLayout.theme; opaque surfaces (.app/.month-grid/.day-*) so body's
   light paint never bleeds through.
 - Startup view hardcoded Month; default_view pref select removed.
+- Android build: dioxus/dioxus-desktop/rfd/kal-notify gated via
+  `[target.'cfg(not(target_os = "android"))'.dependencies]` in app/Cargo.toml.
+  #[cfg] does NOT work inside rsx!{} — desktop-only UI sections must live in
+  platform-gated helper functions called from rsx. See `desktop_sidebar_sections()`.
+  Dioxus.toml carries [android.app] with min_sdk_version=30.
 
 ## Bug-fix round notes
 

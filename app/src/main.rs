@@ -1,17 +1,24 @@
 mod i18n;
+#[cfg(not(target_os = "android"))]
 mod mini_widget;
 mod sync_ui;
 mod ui;
 
 use chrono::{Datelike, Local, Months, NaiveDate};
 use dioxus::prelude::*;
+#[cfg(not(target_os = "android"))]
 use dioxus_desktop::{Config, WindowBuilder};
 use kal_core::models::{Calendar, CalendarItem, Color};
-use kal_notify::{DesktopNotifier, ReminderScheduler as _, ThreadScheduler};
+#[cfg(not(target_os = "android"))]
+use kal_notify::DesktopNotifier;
+use kal_notify::{ReminderScheduler as _, ThreadScheduler};
 use kal_storage::Database;
 use std::sync::Arc;
-/// App-wide shared handle to the reminder scheduler.
+
+#[cfg(not(target_os = "android"))]
 pub type SchedulerHandle = Arc<ThreadScheduler<DesktopNotifier>>;
+#[cfg(target_os = "android")]
+pub type SchedulerHandle = Arc<ThreadScheduler<kal_notify::NullNotifier>>;
 
 /// App-wide shared handle to the SQLite database.
 pub type DbHandle = Arc<Database>;
@@ -50,6 +57,7 @@ fn ensure_default_calendars(db: &Database) -> Vec<Calendar> {
     db.list_calendars().unwrap_or_default()
 }
 
+#[cfg(not(target_os = "android"))]
 fn main() {
     // Frameless: hide the GTK titlebar/menu entirely (user preference).
     let cfg = Config::new().with_window(
@@ -59,6 +67,11 @@ fn main() {
             .with_maximized(true),
     );
     dioxus::LaunchBuilder::new().with_cfg(cfg).launch(App);
+}
+
+#[cfg(target_os = "android")]
+fn main() {
+    dioxus::launch(App);
 }
 
 #[component]
@@ -110,7 +123,10 @@ fn App() -> Element {
     use_context_provider(|| items_res);
 
     // Reminder scheduler shared app-wide; reconciled in the effect below.
+    #[cfg(not(target_os = "android"))]
     let scheduler: SchedulerHandle = Arc::new(ThreadScheduler::new(DesktopNotifier));
+    #[cfg(target_os = "android")]
+    let scheduler: SchedulerHandle = Arc::new(ThreadScheduler::new(kal_notify::NullNotifier));
     use_context_provider(|| scheduler);
 
     // Reload once default calendars are ensured.
@@ -309,18 +325,79 @@ fn source_label(cal: &Calendar) -> &'static str {
     }
 }
 
+#[cfg(not(target_os = "android"))]
+fn desktop_sidebar_sections(
+    db: &DbHandle,
+    mut cal_res: Resource<Vec<Calendar>>,
+    mut items_res: Resource<Vec<CalendarItem>>,
+) -> Element {
+    let db_import = db.clone();
+    let db_export = db.clone();
+    rsx! {
+        h2 { "Widget" }
+        button {
+            onclick: move |_| crate::mini_widget::launch_mini_window(),
+            "Open mini calendar"
+        }
+        h2 { "Import / Export" }
+        div { style: "display:flex; flex-direction:column; gap:6px;",
+            button {
+                onclick: move |_| {
+                    let db2 = db_import.clone();
+                    if let Some(path) = rfd::FileDialog::new()
+                        .add_filter("iCalendar", &["ics"])
+                        .pick_file()
+                    {
+                        match std::fs::read_to_string(path.as_path()) {
+                            Ok(text) => import_ics_file(&db2, &text),
+                            Err(e) => eprintln!("read failed: {e}"),
+                        }
+                        cal_res.restart();
+                        items_res.restart();
+                    }
+                },
+                "Import .ics…"
+            }
+            button {
+                onclick: move |_| {
+                    let db2 = db_export.clone();
+                    if let Some(path) = rfd::FileDialog::new()
+                        .set_file_name("Kal-export.ics")
+                        .save_file()
+                    {
+                        let cals = db2.list_calendars().unwrap_or_default();
+                        let items = db2.list_items(false).unwrap_or_default();
+                        let ics = kal_import::export_all(&cals, &items);
+                        if let Err(e) = std::fs::write(path.as_path(), ics) {
+                            eprintln!("write failed: {e}");
+                        }
+                    }
+                },
+                "Export all (.ics)"
+            }
+        }
+    }
+}
+
+#[cfg(target_os = "android")]
+fn desktop_sidebar_sections(
+    _db: &DbHandle,
+    _cal_res: Resource<Vec<Calendar>>,
+    _items_res: Resource<Vec<CalendarItem>>,
+) -> Element {
+    rsx! {}
+}
+
 #[component]
 fn Sidebar() -> Element {
     let mut layout = use_context::<Signal<ui::UiLayout>>();
 
     let db = use_context::<DbHandle>();
-    let mut items_res = use_context::<Resource<Vec<CalendarItem>>>();
+    let items_res = use_context::<Resource<Vec<CalendarItem>>>();
 
-    let mut cal_res = use_context::<Resource<Vec<Calendar>>>();
+    let cal_res = use_context::<Resource<Vec<Calendar>>>();
     let calendars = cal_res.value().read().clone().unwrap_or_default();
 
-    let db_import = db.clone();
-    let db_export = db.clone();
     let db_event = db.clone();
     let db_task = db.clone();
     let db_bday = db.clone();
@@ -345,48 +422,7 @@ fn Sidebar() -> Element {
                 }
             }
             sync_ui::SyncPanel {}
-            h2 { "Widget" }
-            button {
-                onclick: move |_| crate::mini_widget::launch_mini_window(),
-                "Open mini calendar"
-            }
-            h2 { "Import / Export" }
-            div { style: "display:flex; flex-direction:column; gap:6px;",
-                button {
-                    onclick: move |_| {
-                        let db2 = db_import.clone();
-                        if let Some(path) = rfd::FileDialog::new()
-                            .add_filter("iCalendar", &["ics"])
-                            .pick_file()
-                        {
-                            match std::fs::read_to_string(path.as_path()) {
-                                Ok(text) => import_ics_file(&db2, &text),
-                                Err(e) => eprintln!("read failed: {e}"),
-                            }
-                            cal_res.restart();
-                            items_res.restart();
-                        }
-                    },
-                    "Import .ics…"
-                }
-                button {
-                    onclick: move |_| {
-                        let db2 = db_export.clone();
-                        if let Some(path) = rfd::FileDialog::new()
-                            .set_file_name("Kal-export.ics")
-                            .save_file()
-                        {
-                            let cals = db2.list_calendars().unwrap_or_default();
-                            let items = db2.list_items(false).unwrap_or_default();
-                            let ics = kal_import::export_all(&cals, &items);
-                            if let Err(e) = std::fs::write(path.as_path(), ics) {
-                                eprintln!("write failed: {e}");
-                            }
-                        }
-                    },
-                    "Export all (.ics)"
-                }
-            }
+            {desktop_sidebar_sections(&db, cal_res, items_res)}
             h2 { "New item" }
             div { style: "display:flex; flex-direction:column; gap:6px;",
                 button {

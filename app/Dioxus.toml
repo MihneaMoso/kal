@@ -11,3 +11,12 @@ title = "Kal"
 
 [desktop]
 # Window defaults for the desktop shell
+
+[android.app]
+min_sdk_version = 30
+target_sdk_version = 34
+compile_sdk_version = 34
+
+[bundle]
+identifier = "com.kal.calendar"
+publisher = "kal"

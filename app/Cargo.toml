@@ -12,15 +12,23 @@ path = "src/main.rs"
 [dependencies]
 kal-core = { path = "../crates/kal-core" }
 kal-storage = { path = "../crates/kal-storage" }
-kal-notify = { path = "../crates/kal-notify", features = ["desktop"] }
 kal-import = { path = "../crates/kal-import" }
 kal-sync = { path = "../crates/kal-sync" }
 serde = { workspace = true }
 serde_json = { workspace = true }
-dioxus = { version = "0.7", features = ["desktop"] }
-dioxus-desktop = "0.7"
 tokio = { workspace = true }
 chrono = { workspace = true }
 ulid = { workspace = true }
 dirs-next = "2"
+
+# Desktop-only deps (gated behind target_os check in source).
+[target.'cfg(not(target_os = "android"))'.dependencies]
+dioxus = { version = "0.7", features = ["desktop"] }
+dioxus-desktop = "0.7"
+kal-notify = { path = "../crates/kal-notify", features = ["desktop"] }
 rfd = "0.15"
+
+# Android / mobile deps.
+[target.'cfg(target_os = "android")'.dependencies]
+dioxus = { version = "0.7", features = ["mobile"] }
+kal-notify = { path = "../crates/kal-notify" }
