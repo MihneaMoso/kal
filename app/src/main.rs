@@ -310,7 +310,7 @@ fn PreferencesControls() -> Element {
                 layout.write().theme = next.to_string();
                 let _ = db_theme.set_setting("theme", next);
             },
-            {if dark { crate::i18n::tr("theme-toggle-light") } else { crate::i18n::tr("theme-toggle-dark") }}
+            {if dark { crate::i18n::tr("theme-toggle-dark") } else { crate::i18n::tr("theme-toggle-light") }}
         }
     }
 }

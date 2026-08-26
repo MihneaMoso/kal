@@ -60,10 +60,10 @@ impl Settings {
             let cleaned = raw.trim_matches('"').to_string();
             prefs.theme = cleaned;
         }
-        // Dark is the new default.  Reset any stored legacy "light" value so
-        // fresh installs and existing users both open dark; subsequent toggles
-        // persist and survive restarts normally.
-        if prefs.theme != "dark" {
+        // Normalise: only reset genuinely invalid values (legacy JSON-encoded
+        // strings like "\"light\"").  Valid "dark" and "light" are kept as-is
+        // so the user's last choice survives restarts.
+        if prefs.theme != "dark" && prefs.theme != "light" {
             prefs.theme = "dark".into();
             let _ = db.set_setting("theme", "dark");
         }
