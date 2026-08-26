@@ -269,6 +269,10 @@ bite you again if ignored, plus the exact state to resume from.
   #[cfg] does NOT work inside rsx!{} — desktop-only UI sections must live in
   platform-gated helper functions called from rsx. See `desktop_sidebar_sections()`.
   Dioxus.toml carries [android.app] with min_sdk_version=30.
+- set_setting/get_setting for simple strings: do NOT wrap in
+  serde_json::to_string() — that adds literal quotes (""val"") that
+  corrupt the value on read. Write plain strings directly.
+  Settings::load() must tolerate both legacy quoted and plain values.
 
 ## Bug-fix round notes
 

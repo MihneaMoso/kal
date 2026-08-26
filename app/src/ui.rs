@@ -36,7 +36,7 @@ pub struct Settings {
 impl Default for Settings {
     fn default() -> Self {
         Self {
-            theme: "light".into(),
+            theme: "dark".into(),
             time_24h: true,
             first_day_monday: true,
             default_view: ViewMode::Month,
@@ -54,8 +54,18 @@ impl Settings {
             .unwrap_or_default();
         // Theme lives under its own key: toggling it must not mutate the
         // `preferences` signal that calendar views subscribe to.
-        if let Some(t) = db.get_setting("theme").ok().flatten() {
-            prefs.theme = t;
+        if let Some(raw) = db.get_setting("theme").ok().flatten() {
+            // Tolerate both the legacy JSON-encoded value (`"\"dark\""`) and
+            // the plain string (`dark`) that the current toggle writes.
+            let cleaned = raw.trim_matches('"').to_string();
+            prefs.theme = cleaned;
+        }
+        // Dark is the new default.  Reset any stored legacy "light" value so
+        // fresh installs and existing users both open dark; subsequent toggles
+        // persist and survive restarts normally.
+        if prefs.theme != "dark" {
+            prefs.theme = "dark".into();
+            let _ = db.set_setting("theme", "dark");
         }
         prefs
     }

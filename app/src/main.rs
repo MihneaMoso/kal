@@ -308,7 +308,7 @@ fn PreferencesControls() -> Element {
                 // attribute on the root div) and persist under its own key.
                 let next = if layout.read().theme.as_str() == "dark" { "light" } else { "dark" };
                 layout.write().theme = next.to_string();
-                let _ = db_theme.set_setting("theme", &serde_json::to_string(next).unwrap());
+                let _ = db_theme.set_setting("theme", next);
             },
             {if dark { crate::i18n::tr("theme-toggle-light") } else { crate::i18n::tr("theme-toggle-dark") }}
         }
