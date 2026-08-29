@@ -46,12 +46,14 @@ jobs:
           set -euo pipefail
           version="${GITHUB_REF_NAME#v}"
           bin="target/release/kal"
+          [ -f "$bin" ] || bin="../target/release/kal"
           [ -f "$bin" ] || bin="target/release/kal.exe"
+          [ -f "$bin" ] || bin="../target/release/kal.exe"
           base="kal-${version}-${GITHUB_SHA::8}-${{ matrix.artifact }}"
           if [[ "$bin" == *.exe ]]; then
             cp "$bin" "${base}"
           else
-            tar czf "${base}.tar.gz" -C target/release kal
+            tar czf "${base}.tar.gz" -C "$(dirname "$bin")" "$(basename "$bin")"
           fi
         working-directory: app
       - name: Upload artifact
