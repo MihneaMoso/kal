@@ -297,6 +297,48 @@ bite you again if ignored, plus the exact state to resume from.
   rapid-click desync). Dedicated `theme: Signal<String>` context + own
   `theme` settings key; views don't subscribe; css via use_memo.
 
+## Android cross-compile & packaging
+
+- **Toolchain env** (the linker `cc-rs` needs): NDK 25.2.9519653 at
+  `~/Android/Sdk/ndk/25.2.9519653`. For a `cargo check --target
+  aarch64-linux-android` (or clippy) set, per vector:
+  ```
+  export TOOLCHAIN=~/Android/Sdk/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin
+  export CC_aarch64_linux_android=$TOOLCHAIN/aarch64-linux-android24-clang
+  export CXX_aarch64_linux_android=$TOOLCHAIN/aarch64-linux-android24-clang++
+  export AR_aarch64_linux_android=$TOOLCHAIN/llvm-ar
+  export CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER=$TOOLCHAIN/aarch64-linux-android24-clang
+  ```
+  (NDK names the cross-clang `aarch64-linux-android<api>-clang`, e.g. `-24` for
+  minSdk 30 — no plain `aarch64-linux-android-clang` symlink.)
+- **Android `dirs_next::data_dir()` returns `None`** → `default_db_path()` used
+  to fall back to a relative `kal.db` on the read-only root FS → sync's
+  `os error 30`. Fix: `query_files_dir()` in main.rs uses
+  `ndk-context` + `jni` to call `Context.getFilesDir().getAbsolutePath()`
+  (cached in a OnceLock); Android data now lives in the app-private dir.
+  `jni` version must be the one `.cast()`-compatible with `ndk-context`
+  (`JavaVM::from_raw(ctx.vm().cast())`, `ctx.context().cast()` — both return
+  raw pointers, NOT `AndroidContext::is_null()` which doesn't exist).
+- **Overlay drawer (mobile)**: `UiLayout.mobile = cfg!(target_os="android"||ios)`
+  so sidebar is collapsed by default; on mobile the `.app.mobile .sidebar` is
+  `position:fixed` and slides in via translateX above a `.drawer-scrim`,
+  Google-Calendar style, instead of pushing content. Desktop keeps push+resize.
+- **Icons**: dx hardcodes its template launcher res/ (`ic_launcher.webp` +
+  vectors) and REGENERATES them on every `dx bundle`, with no config override.
+  So: `dx bundle` → `scripts/apply-icons.sh` (stages branded PNGs + adaptive
+  icon into res/ and deletes the template webp/xml) → rebuild APK with
+  `./gradlew :app:assembleDebug` DIRECTLY (never re-run dx, or it regenerates
+  the template and you get duplicate-resource errors). The debug APK carries
+  the branded PNG icons; the `release-unsigned` APK is resource-shrunk and
+  strips mipmaps (pre-existing dx quirk). APK lives under
+  `target/dx/kal/release/android/app/app/build/outputs/apk/{debug,release}/`
+  — the old CI glob `**/bundle/android/**` matches nothing.
+- `apply-icons.sh` generates desktop PNG/ICO/ICNS + Android density PNGs +
+  adaptive fg/bg + iOS AppIcon.appiconset from `logo.jpeg` (content bbox
+  x475-932/y123-597, center 703,360 → `-crop 600x600+403+60`). ICNS needs a
+  manual packer (ImageMagick only saves PNG-with-.icns); the script embeds a
+  small Python ic07/ic08/ic09/ic10 writer. Requires `magick` + `python3`.
+
 ## Future work (deferred deliberately, with entry points)
 
 - Live P2P transports: implement `kal_sync::Transport` for iroh and/or mDNS

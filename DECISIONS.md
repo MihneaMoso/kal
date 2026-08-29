@@ -83,6 +83,14 @@ Newest decisions may reference later phases; each entry notes the phase.
 
 | D41 | **FileTransport folder-gossip as the first real transport** (encrypted .kalblob files in a user-chosen outbox dir) | Zero-infrastructure P2P that works today via Syncthing/Dropbox/USB and honors the "relay only sees ciphertext" rule; iroh/mDNS plug into the same Transport trait later. |
 
+## Mobile / Android
+
+| # | Decision | Rationale |
+|---|----------|-----------|
+| D42 | **Android storage = `Context.getFilesDir()` (app-private) via ndk-context+jni**, not `dirs_next::data_dir()` | On Android `dirs_next` has no HOME/XDG so it returns None and we fell back to a relative `kal.db` on the read-only root FS (`os error 30`). filesDir is writable and app-private. |
+| D43 | **Mobile sidebar = overlay drawer** (new `UiLayout.mobile` flag; `position:fixed` + translateX + transparent scrim), collapsed by default | Google-Calendar mental model on phones where pushing content wastes screen space; desktop keeps the in-flow push/resize sidebar. Idea 0.7 `#[cfg]` can't appear inside `rsx!`, so the distinction is a runtime `mobile` flag, not a compile-time split. |
+| D44 | **Launcher icons staged post-`dx bundle` via `scripts/apply-icons.sh` + a direct `gradlew assemble`**, not a dx config | dx hardcodes and regenerates its template res/ on every bundle with no override hook; overwriting then re-running dx yields duplicate-resource merge failures. Rebuilding through Gradle directly bakes the branded icons into the APK. |
+
 - Sync CRDT engine: automerge vs yrs (phase 8).
 - Transport: iroh vs libp2p (phase 8).
 - ICS crate choice: `icalendar` vs `ics` (phase 5).
