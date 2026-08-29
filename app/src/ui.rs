@@ -22,6 +22,10 @@ pub struct UiLayout {
     /// "light" | "dark". Lives here because this signal is the one
     /// empirically proven to drive visual updates (sidebar resize uses it).
     pub theme: String,
+    /// True on phone-class targets (Android). Drives the overlay-drawer
+    /// sidebar behaviour: collapsed by default, hamburger slides it in above
+    /// the calendar with a scrim instead of pushing content aside.
+    pub mobile: bool,
 }
 
 /// Device-local preferences (§5.7), persisted in the `settings` table.

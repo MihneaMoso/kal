@@ -23,8 +23,65 @@ pub type SchedulerHandle = Arc<ThreadScheduler<kal_notify::NullNotifier>>;
 /// App-wide shared handle to the SQLite database.
 pub type DbHandle = Arc<Database>;
 
+/// Resolve the writable, app-private data directory for the current platform.
+///
+/// Desktop: `~/.local/share` (or the platform equivalent).
+/// Android: the app's private `getFilesDir()` on the data partition — the
+/// generic `dirs_next::data_dir()` has no `$HOME`/`XDG` env on Android and
+/// falls back to a relative path on the read-only root FS, which surfaces as
+/// "Read-only file system (os error 30)".
+fn app_data_dir() -> Option<std::path::PathBuf> {
+    #[cfg(not(target_os = "android"))]
+    {
+        dirs_next::data_dir()
+    }
+    #[cfg(target_os = "android")]
+    {
+        android_files_dir()
+    }
+}
+
+#[cfg(target_os = "android")]
+fn android_files_dir() -> Option<std::path::PathBuf> {
+    use std::sync::Mutex;
+    use std::sync::OnceLock;
+
+    // Cached so the (attached-thread) JNI lookup runs only once.
+    static CACHE: OnceLock<Mutex<Option<std::path::PathBuf>>> = OnceLock::new();
+    let mut cache = CACHE
+        .get_or_init(|| Mutex::new(None))
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
+    if cache.is_none() {
+        *cache = query_files_dir();
+    }
+    cache.clone()
+}
+
+#[cfg(target_os = "android")]
+fn query_files_dir() -> Option<std::path::PathBuf> {
+    let ctx = ndk_context::android_context();
+    // Rely on the DA function never being called before the context is set.
+    let vm = unsafe { jni::JavaVM::from_raw(ctx.vm().cast()) }.ok()?;
+    let mut env = vm.attach_current_thread().ok()?;
+    let activity = unsafe { jni::objects::JObject::from_raw(ctx.context().cast()) };
+    let file = env
+        .call_method(activity, "getFilesDir", "()Ljava/io/File;", &[])
+        .ok()?
+        .l()
+        .ok()?;
+    let abs: jni::objects::JObject = env
+        .call_method(&file, "getAbsolutePath", "()Ljava/lang/String;", &[])
+        .ok()?
+        .l()
+        .ok()?;
+    let jstring = jni::objects::JString::from(abs);
+    let s = env.get_string(&jstring).ok()?;
+    Some(std::path::PathBuf::from(s.to_string_lossy().to_string()))
+}
+
 pub fn default_db_path() -> Option<std::path::PathBuf> {
-    dirs_next::data_dir().map(|d| d.join("kal").join("calendar.db"))
+    app_data_dir().map(|d| d.join("kal").join("calendar.db"))
 }
 
 fn open_db() -> DbHandle {
@@ -97,11 +154,13 @@ fn App() -> Element {
 
     // Layout + theme in ONE signal: the resize path proves this signal
     // drives visual updates reliably; theme rides along on that proven path.
+    let mobile = cfg!(target_os = "android") || cfg!(target_os = "ios");
     use_context_provider(|| {
         Signal::new(ui::UiLayout {
-            sidebar_open: true,
+            sidebar_open: !mobile, // collapsed by default on mobile
             sidebar_width: 230,
             theme: prefs.theme.clone(),
+            mobile,
             ..Default::default()
         })
     });
@@ -179,8 +238,11 @@ fn App() -> Element {
     // Sidebar resize dragging (root-level so fast cursor movement can't
     // escape the handle).
     let mut layout = use_context::<Signal<ui::UiLayout>>();
+    let is_mobile = layout.read().mobile;
     let app_class = if layout.read().sidebar_resizing {
         "app resizing"
+    } else if is_mobile {
+        "app mobile"
     } else {
         "app"
     };
@@ -196,6 +258,8 @@ fn App() -> Element {
     // subscribes App, so toggling re-renders and the data-theme attribute —
     // the only theming hook the CSS needs — is recomputed.
     let cur_theme = layout.read().theme.clone();
+    let drawer_open = is_mobile && layout.read().sidebar_open;
+    let close_drawer = move |_| layout.write().sidebar_open = false;
 
     rsx! {
         div {
@@ -205,6 +269,14 @@ fn App() -> Element {
             onmouseup: end_resize,
             onmouseleave: end_resize,
             style { dangerous_inner_html: "{css}" }
+            if drawer_open {
+                // Semi-transparent scrim behind the mobile overlay drawer;
+                // tapping it closes the drawer. Doesn't push content aside.
+                div {
+                    class: "drawer-scrim",
+                    onclick: close_drawer,
+                }
+            }
             TopBar {}
             div { class: "body",
                 Sidebar {}
@@ -403,7 +475,16 @@ fn Sidebar() -> Element {
     let db_bday = db.clone();
 
     let l = layout.read();
-    let style_width = if l.sidebar_open {
+    let is_mobile = l.mobile;
+    // On desktop the sidebar is a flex child that pushes content; on mobile it
+    // is an overlay drawer that slides in above the calendar via translateX.
+    let style_width = if is_mobile {
+        if l.sidebar_open {
+            "width:280px;transform:translateX(0);visibility:visible;".to_string()
+        } else {
+            "width:280px;transform:translateX(-100%);visibility:hidden;".to_string()
+        }
+    } else if l.sidebar_open {
         format!("width:{}px", l.sidebar_width)
     } else {
         "width:0;padding:0;border-right:none".to_string()
@@ -525,6 +606,7 @@ fn ViewNav() -> Element {
     }
 }
 
+#[cfg(not(target_os = "android"))]
 fn import_ics_file(db: &DbHandle, text: &str) {
     match kal_import::import_ics(text, "Imported") {
         Ok(result) => {
