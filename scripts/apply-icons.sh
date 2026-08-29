@@ -114,8 +114,9 @@ JSON
 echo "Icons generated under $OUT/"
 
 # --- Copy Android launcher icons into the dx-generated Android project (best
-# effort; dx creates target/dx/** only during a bundle/serve).
-RES="$(find target/dx -path '*/app/src/main/res/drawable*' -type d 2>/dev/null | head -1 || true)"
+# effort; dx creates target/dx/** under either the repo root or app/ during a
+# bundle).
+RES="$(find target/dx app/target/dx -path '*/app/src/main/res/drawable*' -type d 2>/dev/null | head -1 || true)"
 if [ -n "$RES" ]; then
   for i in $(seq 0 2 $((${#DENSITY[@]}-1))); do
     d="${DENSITY[$i]}"; s="${DENSITY[$((i+1))]}"
