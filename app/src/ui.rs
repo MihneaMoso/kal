@@ -307,6 +307,23 @@ fn ItemRow(date: Option<NaiveDate>, item: CalendarItem, occ_start: DateTimeTz) -
     let done = item.completed.is_some();
     let is_task = item.kind == ItemKind::Task;
 
+    // Effective display color: override wins, else the calendar's color.
+    let cals_res = use_context::<Resource<Vec<kal_core::models::Calendar>>>();
+    let cal_color = cals_res
+        .value()
+        .read()
+        .clone()
+        .unwrap_or_default()
+        .into_iter()
+        .find(|c| c.id == item.calendar_id)
+        .map(|c| c.color.to_string())
+        .unwrap_or_else(|| "var(--accent)".into());
+    let dot_color = item
+        .color_override
+        .as_ref()
+        .map(|c| c.to_string())
+        .unwrap_or(cal_color);
+
     let when = if item.all_day {
         "all-day".to_string()
     } else {
@@ -335,6 +352,7 @@ fn ItemRow(date: Option<NaiveDate>, item: CalendarItem, occ_start: DateTimeTz) -
         li {
             key: "{item_id}",
             onclick: move |_| *EDITOR_OPEN.write() = Some(EditorState::edit_existing(&db_edit, item_id, Some(occ_start))),
+            span { class: "item-dot", style: "background:{dot_color};", "aria-hidden": "true" }
             if !date_str.is_empty() {
                 span { class: "agenda-date", "{date_str}" }
             }
@@ -620,7 +638,17 @@ pub struct EditorState {
     pub rrule_preset: RrulePreset,
     /// Selected reminder offsets in minutes before start.
     pub reminder_minutes: Vec<i64>,
+    /// Per-item color override. `None` = use the owning calendar's color.
+    pub color: Option<kal_core::models::Color>,
 }
+
+/// Default item color used when a new item is created (the app's blue).
+pub const DEFAULT_ITEM_COLOR: &str = "#3366cc";
+
+/// Preset swatches offered in the editor's per-item color picker.
+pub const COLOR_PRESETS: [&str; 8] = [
+    "#3366cc", "#6c99f0", "#e91e63", "#e67e22", "#27ae60", "#8e44ad", "#16a085", "#b0bec5",
+];
 
 /// Default reminder presets offered in the editor (§5.3).
 pub const REMINDER_PRESETS: [i64; 5] = [10, 30, 60, 1440, 10080];
@@ -746,6 +774,10 @@ impl EditorState {
                 RrulePreset::None
             },
             reminder_minutes: Vec::new(),
+            color: Some(
+                kal_core::models::Color::new(DEFAULT_ITEM_COLOR)
+                    .unwrap_or_else(|_| kal_core::models::Color("#3366cc".into())),
+            ),
         }
     }
 
@@ -777,6 +809,7 @@ impl EditorState {
             all_day: item.all_day,
             calendar_id: item.calendar_id,
             location: item.location.unwrap_or_default(),
+            color: item.color_override.clone(),
         }
     }
 }
@@ -872,6 +905,8 @@ pub fn EditorModal(state: EditorState) -> Element {
     let init_reminders = state.reminder_minutes.clone();
     let mut reminder_minutes = use_signal(move || init_reminders);
     let mut custom_reminder = use_signal(String::new);
+    let init_color = state.color.clone();
+    let mut color = use_signal(move || init_color);
 
     // Editing a recurring series instance? Then saving needs a scope choice.
     let is_recurring_edit = state
@@ -929,6 +964,13 @@ pub fn EditorModal(state: EditorState) -> Element {
                 mins.into_iter()
                     .map(kal_core::models::Reminder::minutes_before)
                     .collect()
+            };
+            item.color_override = {
+                let c = color.read().clone();
+                match &c {
+                    Some(col) if col.as_str().is_empty() => None,
+                    _ => c,
+                }
             };
             item.updated_at = Local::now().fixed_offset();
 
@@ -1074,6 +1116,42 @@ pub fn EditorModal(state: EditorState) -> Element {
                                 value: "{cal.id}",
                                 selected: *calendar_id.read() == cal.id,
                                 "{cal.name}"
+                            }
+                        }
+                    }
+                }
+                label { "Color"
+                    div { style: "display:flex;gap:6px;flex-wrap:wrap;align-items:center;",
+                        button {
+                            style: "font-size:12px;padding:2px 8px;",
+                            onclick: move |_| color.set(None),
+                            class: if color.read().is_none() { "primary" } else { "" },
+                            "Calendar"
+                        }
+                        for hex in COLOR_PRESETS {
+                            {
+                                let selected = match color.read().as_ref() {
+                                    Some(c) => c.as_str() == hex,
+                                    None => false,
+                                };
+                                let border = if selected {
+                                    "2px solid var(--fg)"
+                                } else {
+                                    "1px solid var(--border)"
+                                };
+                                rsx! {
+                                    button {
+                                        key: "{hex}",
+                                        "aria-label": "Set color {hex}",
+                                        title: "Set item color {hex}",
+                                        style: "width:22px;height:22px;border-radius:50%;border:{border};background:{hex};padding:0;",
+                                        onclick: move |_| {
+                                            if let Ok(c) = kal_core::models::Color::new(hex) {
+                                                color.set(Some(c));
+                                            }
+                                        },
+                                    }
+                                }
                             }
                         }
                     }

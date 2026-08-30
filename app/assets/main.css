@@ -283,6 +283,7 @@ input[type="checkbox"] { accent-color: var(--accent); cursor: pointer; }
 .agenda-date { min-width: 90px; color: var(--accent); font-size: 12px; font-weight: 600; }
 .empty { color: var(--fg-muted); padding: 24px; text-align: center; justify-content: center; }
 .task-check { flex: none; }
+.item-dot { flex: none; align-self: center; width: 8px; height: 8px; border-radius: 50%; }
 
 /* ---- editor modal ---- */
 
