@@ -93,9 +93,11 @@ AD_TMP="$(mktemp -d)"
   \( -size 432x432 xc:none \) +swap -gravity center -composite "$AD_TMP/fg.png"
 "$MAGICK" "$AD_TMP/fg.png" -background none -alpha extract "$AD_TMP/fgmask.png"
 "$MAGICK" "$AD_TMP/bg.png" "$AD_TMP/fg.png" "$AD_TMP/bg.png" \
-  -gravity center -compose over -composite "$OUT/android/ic_launcher.png"
-cp "$AD_TMP/fg.png" "$OUT/android/ic_launcher_foreground.png"
-cp "$AD_TMP/bg.png" "$OUT/android/ic_launcher_background.png"
+  -gravity center -compose over -composite -depth 8 "$OUT/android/ic_launcher.png"
+# Adaptive fg/bg must be 8-bit: AAPT resource linking drops 16-bit PNGs
+# (surfaces as "resource ... not found").
+"$MAGICK" "$AD_TMP/fg.png" -depth 8 "$OUT/android/ic_launcher_foreground.png"
+"$MAGICK" "$AD_TMP/bg.png" -depth 8 "$OUT/android/ic_launcher_background.png"
 rm -rf "$AD_TMP"
 
 # --- iOS AppIcon.appiconset (single-size 1024 master is all modern iOS needs;
@@ -137,11 +139,18 @@ if [ -n "$RES" ]; then
   # Adaptive icon lives in mipmap-anydpi-v26; foreground/background drawn as
   # bitmaps copied into drawable/. Replace the template's vector resources.
   DRAW="$(dirname "$RES")/drawable"
-  mkdir -p "$DRAW"
-  cp "$OUT/android/ic_launcher_foreground.png" "$DRAW/ic_launcher_foreground.png"
-  cp "$OUT/android/ic_launcher_background.png" "$DRAW/ic_launcher_background.png"
+  mkdir -p "$DRAW" "$DRAW-v24"
+  for target in "$DRAW" "$DRAW-v24"; do
+    cp "$OUT/android/ic_launcher_foreground.png" "$target/ic_launcher_foreground.png"
+    cp "$OUT/android/ic_launcher_background.png" "$target/ic_launcher_background.png"
+  done
   rm -f "$DRAW/ic_launcher_foreground.xml" "$DRAW-v24/ic_launcher_foreground.xml" \
         "$DRAW/ic_launcher_background.xml"
+  # Fail loudly if the foreground didn't land where the adaptive XML points.
+  test -f "$DRAW/ic_launcher_foreground.png" || {
+    echo "ERROR: adaptive foreground not staged at $DRAW/ic_launcher_foreground.png" >&2
+    exit 1
+  }
   ANYDPI="$(echo "$RES" | sed 's/drawable[^/]*/mipmap-anydpi-v26/')"
   mkdir -p "$ANYDPI"
   cat > "$ANYDPI/ic_launcher.xml" <<'XML'
