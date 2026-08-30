@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="@drawable/kal_widget_bg"
+    android:padding="12dp">
+
+    <TextView
+        android:id="@+id/kal_widget_header"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="8dp"
+        android:text="@string/kal_widget_schedule_header"
+        android:textColor="#E6E6E6"
+        android:textSize="14sp"
+        android:textStyle="bold" />
+
+    <TextView
+        android:id="@+id/kal_widget_empty"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:gravity="center"
+        android:text="@string/kal_widget_empty"
+        android:textColor="#8B919C"
+        android:textSize="13sp" />
+
+    <LinearLayout
+        android:id="@+id/kal_widget_items"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="vertical" />
+
+    <TextView
+        android:id="@+id/kal_widget_footer"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="6dp"
+        android:text="@string/kal_widget_open_hint"
+        android:textColor="#8B919C"
+        android:textSize="11sp" />
+</LinearLayout>

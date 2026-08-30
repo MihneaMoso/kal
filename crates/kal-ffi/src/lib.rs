@@ -138,6 +138,9 @@ pub unsafe extern "C" fn kal_month_grid_json(
         };
         let grid = kal_core::viewmodel::month_grid(year, month, first_day);
         let items = kal.db.list_items(false).map_err(|_| ())?;
+        let calendars = kal.db.list_calendars().map_err(|_| ())?;
+        let cal_by_id: std::collections::HashMap<_, _> =
+            calendars.iter().map(|c| (c.id, c)).collect();
         let first = grid[0][0];
         let last = grid[kal_core::viewmodel::MONTH_GRID_WEEKS - 1][6];
         let occ_map = kal_core::viewmodel::occurrences_by_date(&items, first, last);
@@ -158,6 +161,11 @@ pub unsafe extern "C" fn kal_month_grid_json(
                                         "time": if i.all_day { "".into() } else {
                                             o.start.format("%H:%M").to_string()
                                         },
+                                        "allDay": i.all_day,
+                                        "color": i
+                                            .effective_color(cal_by_id.get(&i.calendar_id).copied())
+                                            .map(|c| c.to_string())
+                                            .unwrap_or_default(),
                                     })
                                 })
                             })

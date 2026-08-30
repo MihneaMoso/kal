@@ -326,13 +326,25 @@ bite you again if ignored, plus the exact state to resume from.
 - **Icons**: dx hardcodes its template launcher res/ (`ic_launcher.webp` +
   vectors) and REGENERATES them on every `dx bundle`, with no config override.
   So: `dx bundle` → `scripts/apply-icons.sh` (stages branded PNGs + adaptive
-  icon into res/ and deletes the template webp/xml) → rebuild APK with
+  icon into res/ and deletes the template webp/xml) →
+  `scripts/stage-widgets.sh` (stages home-screen widgets: Kotlin under
+  `android/widget/` into `src/main/kotlin/`, widget res/ into `src/main/res/`
+  — merging `values/strings|styles.xml`, patching AndroidManifest.xml with the
+  two `<receiver>`s + `BOOT_COMPLETED`) → rebuild APK with
   `./gradlew :app:assembleDebug` DIRECTLY (never re-run dx, or it regenerates
   the template and you get duplicate-resource errors). The debug APK carries
   the branded PNG icons; the `release-unsigned` APK is resource-shrunk and
   strips mipmaps (pre-existing dx quirk). APK lives under
   `target/dx/kal/release/android/app/app/build/outputs/apk/{debug,release}/`
   — the old CI glob `**/bundle/android/**` matches nothing.
+- **Home-screen widgets**: two Google-Calendar-style widgets (a schedule list
+  and a month grid) are classic `AppWidgetProvider` + `RemoteViews`, staged by
+  `scripts/stage-widgets.sh` into the dx-generated project. Data comes from
+  JNI bridges in `app/src/widget_ffi.rs` (`Java_com_kal_calendar_widgets_…`)
+  that reuse `kal-ffi` — the widgets load the app's own `libmain.so`. Refresh
+  is `updatePeriodMillis` + a `BOOT_COMPLETED` receiver (no real-time push).
+  Taps launch `MainActivity` with a `kal_widget_open` extra (deep-linking to a
+  specific day/item is a documented follow-up).
 - `apply-icons.sh` generates desktop PNG/ICO/ICNS + Android density PNGs +
   adaptive fg/bg + iOS AppIcon.appiconset from `logo.jpeg` (content bbox
   x475-932/y123-597, center 703,360 → `-crop 600x600+403+60`). ICNS needs a

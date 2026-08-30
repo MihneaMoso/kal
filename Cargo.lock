@@ -2714,6 +2714,7 @@ dependencies = [
  "dirs-next",
  "jni 0.21.1",
  "kal-core",
+ "kal-ffi",
  "kal-import",
  "kal-notify",
  "kal-storage",

@@ -32,7 +32,12 @@ app/                Dioxus 0.7 desktop shell (views, editor modal, settings,
                     pairing UI). Single shared use_resource per dataset;
                     mutations restart resources; a global signal re-renders
                     after sync merges.
-widgets/            Kotlin Glance + Swift WidgetKit shims calling kal-ffi.
+android/widget/      In-repo Android home-screen widget sources (Kotlin
+                    AppWidgetProvider + RemoteViews + res/ + manifest patch),
+                    staged into the dx-generated Android project by
+                    scripts/stage-widgets.sh. They query the calendar through
+                    JNI bridges in app/src/widget_ffi.rs that reuse kal-ffi.
+widgets/            (future) Swift WidgetKit shim calling kal-ffi.
 ```
 
 ## Sync-chain design (Brave-Sync model)

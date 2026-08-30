@@ -4,6 +4,8 @@ mod mini_widget;
 mod profile;
 mod sync_ui;
 mod ui;
+#[cfg(target_os = "android")]
+mod widget_ffi;
 
 use chrono::{Datelike, Local, Months, NaiveDate};
 use dioxus::prelude::*;

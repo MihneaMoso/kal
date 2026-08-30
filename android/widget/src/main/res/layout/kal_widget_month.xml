@@ -1,0 +1,1124 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="@drawable/kal_widget_bg"
+    android:padding="8dp">
+
+    <TextView
+        android:id="@+id/kal_widget_month_title"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="4dp"
+        android:textColor="#E6E6E6"
+        android:textSize="14sp"
+        android:textStyle="bold"
+        android:text="Month" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal">
+
+        <TextView android:id="@+id/kal_widget_month_mon" style="@style/KalMonthHead" android:text="Mon" />
+        <TextView android:id="@+id/kal_widget_month_tue" style="@style/KalMonthHead" android:text="Tue" />
+        <TextView android:id="@+id/kal_widget_month_wed" style="@style/KalMonthHead" android:text="Wed" />
+        <TextView android:id="@+id/kal_widget_month_thu" style="@style/KalMonthHead" android:text="Thu" />
+        <TextView android:id="@+id/kal_widget_month_fri" style="@style/KalMonthHead" android:text="Fri" />
+        <TextView android:id="@+id/kal_widget_month_sat" style="@style/KalMonthHead" android:text="Sat" />
+        <TextView android:id="@+id/kal_widget_month_sun" style="@style/KalMonthHead" android:text="Sun" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/kal_widget_month_row1"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal">
+
+    <FrameLayout
+        android:id="@+id/day1"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:layout_margin="1dp"
+        android:padding="2dp">
+
+        <TextView
+            android:id="@+id/day1t"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:textColor="#E6E6E6"
+            android:textSize="13sp" />
+
+        <ImageView
+            android:id="@+id/dot1"
+            android:layout_width="5dp"
+            android:layout_height="5dp"
+            android:layout_gravity="center_horizontal|bottom"
+            android:layout_marginBottom="1dp"
+            android:importantForAccessibility="no"
+            android:src="@drawable/kal_dot" />
+    </FrameLayout>
+    <FrameLayout
+        android:id="@+id/day2"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:layout_margin="1dp"
+        android:padding="2dp">
+
+        <TextView
+            android:id="@+id/day2t"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:textColor="#E6E6E6"
+            android:textSize="13sp" />
+
+        <ImageView
+            android:id="@+id/dot2"
+            android:layout_width="5dp"
+            android:layout_height="5dp"
+            android:layout_gravity="center_horizontal|bottom"
+            android:layout_marginBottom="1dp"
+            android:importantForAccessibility="no"
+            android:src="@drawable/kal_dot" />
+    </FrameLayout>
+    <FrameLayout
+        android:id="@+id/day3"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:layout_margin="1dp"
+        android:padding="2dp">
+
+        <TextView
+            android:id="@+id/day3t"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:textColor="#E6E6E6"
+            android:textSize="13sp" />
+
+        <ImageView
+            android:id="@+id/dot3"
+            android:layout_width="5dp"
+            android:layout_height="5dp"
+            android:layout_gravity="center_horizontal|bottom"
+            android:layout_marginBottom="1dp"
+            android:importantForAccessibility="no"
+            android:src="@drawable/kal_dot" />
+    </FrameLayout>
+    <FrameLayout
+        android:id="@+id/day4"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:layout_margin="1dp"
+        android:padding="2dp">
+
+        <TextView
+            android:id="@+id/day4t"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:textColor="#E6E6E6"
+            android:textSize="13sp" />
+
+        <ImageView
+            android:id="@+id/dot4"
+            android:layout_width="5dp"
+            android:layout_height="5dp"
+            android:layout_gravity="center_horizontal|bottom"
+            android:layout_marginBottom="1dp"
+            android:importantForAccessibility="no"
+            android:src="@drawable/kal_dot" />
+    </FrameLayout>
+    <FrameLayout
+        android:id="@+id/day5"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:layout_margin="1dp"
+        android:padding="2dp">
+
+        <TextView
+            android:id="@+id/day5t"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:textColor="#E6E6E6"
+            android:textSize="13sp" />
+
+        <ImageView
+            android:id="@+id/dot5"
+            android:layout_width="5dp"
+            android:layout_height="5dp"
+            android:layout_gravity="center_horizontal|bottom"
+            android:layout_marginBottom="1dp"
+            android:importantForAccessibility="no"
+            android:src="@drawable/kal_dot" />
+    </FrameLayout>
+    <FrameLayout
+        android:id="@+id/day6"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:layout_margin="1dp"
+        android:padding="2dp">
+
+        <TextView
+            android:id="@+id/day6t"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:textColor="#E6E6E6"
+            android:textSize="13sp" />
+
+        <ImageView
+            android:id="@+id/dot6"
+            android:layout_width="5dp"
+            android:layout_height="5dp"
+            android:layout_gravity="center_horizontal|bottom"
+            android:layout_marginBottom="1dp"
+            android:importantForAccessibility="no"
+            android:src="@drawable/kal_dot" />
+    </FrameLayout>
+    <FrameLayout
+        android:id="@+id/day7"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:layout_margin="1dp"
+        android:padding="2dp">
+
+        <TextView
+            android:id="@+id/day7t"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:textColor="#E6E6E6"
+            android:textSize="13sp" />
+
+        <ImageView
+            android:id="@+id/dot7"
+            android:layout_width="5dp"
+            android:layout_height="5dp"
+            android:layout_gravity="center_horizontal|bottom"
+            android:layout_marginBottom="1dp"
+            android:importantForAccessibility="no"
+            android:src="@drawable/kal_dot" />
+    </FrameLayout>
+    </LinearLayout>
+    <LinearLayout
+        android:id="@+id/kal_widget_month_row2"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal">
+
+    <FrameLayout
+        android:id="@+id/day8"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:layout_margin="1dp"
+        android:padding="2dp">
+
+        <TextView
+            android:id="@+id/day8t"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:textColor="#E6E6E6"
+            android:textSize="13sp" />
+
+        <ImageView
+            android:id="@+id/dot8"
+            android:layout_width="5dp"
+            android:layout_height="5dp"
+            android:layout_gravity="center_horizontal|bottom"
+            android:layout_marginBottom="1dp"
+            android:importantForAccessibility="no"
+            android:src="@drawable/kal_dot" />
+    </FrameLayout>
+    <FrameLayout
+        android:id="@+id/day9"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:layout_margin="1dp"
+        android:padding="2dp">
+
+        <TextView
+            android:id="@+id/day9t"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:textColor="#E6E6E6"
+            android:textSize="13sp" />
+
+        <ImageView
+            android:id="@+id/dot9"
+            android:layout_width="5dp"
+            android:layout_height="5dp"
+            android:layout_gravity="center_horizontal|bottom"
+            android:layout_marginBottom="1dp"
+            android:importantForAccessibility="no"
+            android:src="@drawable/kal_dot" />
+    </FrameLayout>
+    <FrameLayout
+        android:id="@+id/day10"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:layout_margin="1dp"
+        android:padding="2dp">
+
+        <TextView
+            android:id="@+id/day10t"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:textColor="#E6E6E6"
+            android:textSize="13sp" />
+
+        <ImageView
+            android:id="@+id/dot10"
+            android:layout_width="5dp"
+            android:layout_height="5dp"
+            android:layout_gravity="center_horizontal|bottom"
+            android:layout_marginBottom="1dp"
+            android:importantForAccessibility="no"
+            android:src="@drawable/kal_dot" />
+    </FrameLayout>
+    <FrameLayout
+        android:id="@+id/day11"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:layout_margin="1dp"
+        android:padding="2dp">
+
+        <TextView
+            android:id="@+id/day11t"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:textColor="#E6E6E6"
+            android:textSize="13sp" />
+
+        <ImageView
+            android:id="@+id/dot11"
+            android:layout_width="5dp"
+            android:layout_height="5dp"
+            android:layout_gravity="center_horizontal|bottom"
+            android:layout_marginBottom="1dp"
+            android:importantForAccessibility="no"
+            android:src="@drawable/kal_dot" />
+    </FrameLayout>
+    <FrameLayout
+        android:id="@+id/day12"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:layout_margin="1dp"
+        android:padding="2dp">
+
+        <TextView
+            android:id="@+id/day12t"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:textColor="#E6E6E6"
+            android:textSize="13sp" />
+
+        <ImageView
+            android:id="@+id/dot12"
+            android:layout_width="5dp"
+            android:layout_height="5dp"
+            android:layout_gravity="center_horizontal|bottom"
+            android:layout_marginBottom="1dp"
+            android:importantForAccessibility="no"
+            android:src="@drawable/kal_dot" />
+    </FrameLayout>
+    <FrameLayout
+        android:id="@+id/day13"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:layout_margin="1dp"
+        android:padding="2dp">
+
+        <TextView
+            android:id="@+id/day13t"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:textColor="#E6E6E6"
+            android:textSize="13sp" />
+
+        <ImageView
+            android:id="@+id/dot13"
+            android:layout_width="5dp"
+            android:layout_height="5dp"
+            android:layout_gravity="center_horizontal|bottom"
+            android:layout_marginBottom="1dp"
+            android:importantForAccessibility="no"
+            android:src="@drawable/kal_dot" />
+    </FrameLayout>
+    <FrameLayout
+        android:id="@+id/day14"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:layout_margin="1dp"
+        android:padding="2dp">
+
+        <TextView
+            android:id="@+id/day14t"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:textColor="#E6E6E6"
+            android:textSize="13sp" />
+
+        <ImageView
+            android:id="@+id/dot14"
+            android:layout_width="5dp"
+            android:layout_height="5dp"
+            android:layout_gravity="center_horizontal|bottom"
+            android:layout_marginBottom="1dp"
+            android:importantForAccessibility="no"
+            android:src="@drawable/kal_dot" />
+    </FrameLayout>
+    </LinearLayout>
+    <LinearLayout
+        android:id="@+id/kal_widget_month_row3"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal">
+
+    <FrameLayout
+        android:id="@+id/day15"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:layout_margin="1dp"
+        android:padding="2dp">
+
+        <TextView
+            android:id="@+id/day15t"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:textColor="#E6E6E6"
+            android:textSize="13sp" />
+
+        <ImageView
+            android:id="@+id/dot15"
+            android:layout_width="5dp"
+            android:layout_height="5dp"
+            android:layout_gravity="center_horizontal|bottom"
+            android:layout_marginBottom="1dp"
+            android:importantForAccessibility="no"
+            android:src="@drawable/kal_dot" />
+    </FrameLayout>
+    <FrameLayout
+        android:id="@+id/day16"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:layout_margin="1dp"
+        android:padding="2dp">
+
+        <TextView
+            android:id="@+id/day16t"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:textColor="#E6E6E6"
+            android:textSize="13sp" />
+
+        <ImageView
+            android:id="@+id/dot16"
+            android:layout_width="5dp"
+            android:layout_height="5dp"
+            android:layout_gravity="center_horizontal|bottom"
+            android:layout_marginBottom="1dp"
+            android:importantForAccessibility="no"
+            android:src="@drawable/kal_dot" />
+    </FrameLayout>
+    <FrameLayout
+        android:id="@+id/day17"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:layout_margin="1dp"
+        android:padding="2dp">
+
+        <TextView
+            android:id="@+id/day17t"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:textColor="#E6E6E6"
+            android:textSize="13sp" />
+
+        <ImageView
+            android:id="@+id/dot17"
+            android:layout_width="5dp"
+            android:layout_height="5dp"
+            android:layout_gravity="center_horizontal|bottom"
+            android:layout_marginBottom="1dp"
+            android:importantForAccessibility="no"
+            android:src="@drawable/kal_dot" />
+    </FrameLayout>
+    <FrameLayout
+        android:id="@+id/day18"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:layout_margin="1dp"
+        android:padding="2dp">
+
+        <TextView
+            android:id="@+id/day18t"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:textColor="#E6E6E6"
+            android:textSize="13sp" />
+
+        <ImageView
+            android:id="@+id/dot18"
+            android:layout_width="5dp"
+            android:layout_height="5dp"
+            android:layout_gravity="center_horizontal|bottom"
+            android:layout_marginBottom="1dp"
+            android:importantForAccessibility="no"
+            android:src="@drawable/kal_dot" />
+    </FrameLayout>
+    <FrameLayout
+        android:id="@+id/day19"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:layout_margin="1dp"
+        android:padding="2dp">
+
+        <TextView
+            android:id="@+id/day19t"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:textColor="#E6E6E6"
+            android:textSize="13sp" />
+
+        <ImageView
+            android:id="@+id/dot19"
+            android:layout_width="5dp"
+            android:layout_height="5dp"
+            android:layout_gravity="center_horizontal|bottom"
+            android:layout_marginBottom="1dp"
+            android:importantForAccessibility="no"
+            android:src="@drawable/kal_dot" />
+    </FrameLayout>
+    <FrameLayout
+        android:id="@+id/day20"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:layout_margin="1dp"
+        android:padding="2dp">
+
+        <TextView
+            android:id="@+id/day20t"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:textColor="#E6E6E6"
+            android:textSize="13sp" />
+
+        <ImageView
+            android:id="@+id/dot20"
+            android:layout_width="5dp"
+            android:layout_height="5dp"
+            android:layout_gravity="center_horizontal|bottom"
+            android:layout_marginBottom="1dp"
+            android:importantForAccessibility="no"
+            android:src="@drawable/kal_dot" />
+    </FrameLayout>
+    <FrameLayout
+        android:id="@+id/day21"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:layout_margin="1dp"
+        android:padding="2dp">
+
+        <TextView
+            android:id="@+id/day21t"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:textColor="#E6E6E6"
+            android:textSize="13sp" />
+
+        <ImageView
+            android:id="@+id/dot21"
+            android:layout_width="5dp"
+            android:layout_height="5dp"
+            android:layout_gravity="center_horizontal|bottom"
+            android:layout_marginBottom="1dp"
+            android:importantForAccessibility="no"
+            android:src="@drawable/kal_dot" />
+    </FrameLayout>
+    </LinearLayout>
+    <LinearLayout
+        android:id="@+id/kal_widget_month_row4"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal">
+
+    <FrameLayout
+        android:id="@+id/day22"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:layout_margin="1dp"
+        android:padding="2dp">
+
+        <TextView
+            android:id="@+id/day22t"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:textColor="#E6E6E6"
+            android:textSize="13sp" />
+
+        <ImageView
+            android:id="@+id/dot22"
+            android:layout_width="5dp"
+            android:layout_height="5dp"
+            android:layout_gravity="center_horizontal|bottom"
+            android:layout_marginBottom="1dp"
+            android:importantForAccessibility="no"
+            android:src="@drawable/kal_dot" />
+    </FrameLayout>
+    <FrameLayout
+        android:id="@+id/day23"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:layout_margin="1dp"
+        android:padding="2dp">
+
+        <TextView
+            android:id="@+id/day23t"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:textColor="#E6E6E6"
+            android:textSize="13sp" />
+
+        <ImageView
+            android:id="@+id/dot23"
+            android:layout_width="5dp"
+            android:layout_height="5dp"
+            android:layout_gravity="center_horizontal|bottom"
+            android:layout_marginBottom="1dp"
+            android:importantForAccessibility="no"
+            android:src="@drawable/kal_dot" />
+    </FrameLayout>
+    <FrameLayout
+        android:id="@+id/day24"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:layout_margin="1dp"
+        android:padding="2dp">
+
+        <TextView
+            android:id="@+id/day24t"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:textColor="#E6E6E6"
+            android:textSize="13sp" />
+
+        <ImageView
+            android:id="@+id/dot24"
+            android:layout_width="5dp"
+            android:layout_height="5dp"
+            android:layout_gravity="center_horizontal|bottom"
+            android:layout_marginBottom="1dp"
+            android:importantForAccessibility="no"
+            android:src="@drawable/kal_dot" />
+    </FrameLayout>
+    <FrameLayout
+        android:id="@+id/day25"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:layout_margin="1dp"
+        android:padding="2dp">
+
+        <TextView
+            android:id="@+id/day25t"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:textColor="#E6E6E6"
+            android:textSize="13sp" />
+
+        <ImageView
+            android:id="@+id/dot25"
+            android:layout_width="5dp"
+            android:layout_height="5dp"
+            android:layout_gravity="center_horizontal|bottom"
+            android:layout_marginBottom="1dp"
+            android:importantForAccessibility="no"
+            android:src="@drawable/kal_dot" />
+    </FrameLayout>
+    <FrameLayout
+        android:id="@+id/day26"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:layout_margin="1dp"
+        android:padding="2dp">
+
+        <TextView
+            android:id="@+id/day26t"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:textColor="#E6E6E6"
+            android:textSize="13sp" />
+
+        <ImageView
+            android:id="@+id/dot26"
+            android:layout_width="5dp"
+            android:layout_height="5dp"
+            android:layout_gravity="center_horizontal|bottom"
+            android:layout_marginBottom="1dp"
+            android:importantForAccessibility="no"
+            android:src="@drawable/kal_dot" />
+    </FrameLayout>
+    <FrameLayout
+        android:id="@+id/day27"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:layout_margin="1dp"
+        android:padding="2dp">
+
+        <TextView
+            android:id="@+id/day27t"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:textColor="#E6E6E6"
+            android:textSize="13sp" />
+
+        <ImageView
+            android:id="@+id/dot27"
+            android:layout_width="5dp"
+            android:layout_height="5dp"
+            android:layout_gravity="center_horizontal|bottom"
+            android:layout_marginBottom="1dp"
+            android:importantForAccessibility="no"
+            android:src="@drawable/kal_dot" />
+    </FrameLayout>
+    <FrameLayout
+        android:id="@+id/day28"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:layout_margin="1dp"
+        android:padding="2dp">
+
+        <TextView
+            android:id="@+id/day28t"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:textColor="#E6E6E6"
+            android:textSize="13sp" />
+
+        <ImageView
+            android:id="@+id/dot28"
+            android:layout_width="5dp"
+            android:layout_height="5dp"
+            android:layout_gravity="center_horizontal|bottom"
+            android:layout_marginBottom="1dp"
+            android:importantForAccessibility="no"
+            android:src="@drawable/kal_dot" />
+    </FrameLayout>
+    </LinearLayout>
+    <LinearLayout
+        android:id="@+id/kal_widget_month_row5"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal">
+
+    <FrameLayout
+        android:id="@+id/day29"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:layout_margin="1dp"
+        android:padding="2dp">
+
+        <TextView
+            android:id="@+id/day29t"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:textColor="#E6E6E6"
+            android:textSize="13sp" />
+
+        <ImageView
+            android:id="@+id/dot29"
+            android:layout_width="5dp"
+            android:layout_height="5dp"
+            android:layout_gravity="center_horizontal|bottom"
+            android:layout_marginBottom="1dp"
+            android:importantForAccessibility="no"
+            android:src="@drawable/kal_dot" />
+    </FrameLayout>
+    <FrameLayout
+        android:id="@+id/day30"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:layout_margin="1dp"
+        android:padding="2dp">
+
+        <TextView
+            android:id="@+id/day30t"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:textColor="#E6E6E6"
+            android:textSize="13sp" />
+
+        <ImageView
+            android:id="@+id/dot30"
+            android:layout_width="5dp"
+            android:layout_height="5dp"
+            android:layout_gravity="center_horizontal|bottom"
+            android:layout_marginBottom="1dp"
+            android:importantForAccessibility="no"
+            android:src="@drawable/kal_dot" />
+    </FrameLayout>
+    <FrameLayout
+        android:id="@+id/day31"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:layout_margin="1dp"
+        android:padding="2dp">
+
+        <TextView
+            android:id="@+id/day31t"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:textColor="#E6E6E6"
+            android:textSize="13sp" />
+
+        <ImageView
+            android:id="@+id/dot31"
+            android:layout_width="5dp"
+            android:layout_height="5dp"
+            android:layout_gravity="center_horizontal|bottom"
+            android:layout_marginBottom="1dp"
+            android:importantForAccessibility="no"
+            android:src="@drawable/kal_dot" />
+    </FrameLayout>
+    <FrameLayout
+        android:id="@+id/day32"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:layout_margin="1dp"
+        android:padding="2dp">
+
+        <TextView
+            android:id="@+id/day32t"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:textColor="#E6E6E6"
+            android:textSize="13sp" />
+
+        <ImageView
+            android:id="@+id/dot32"
+            android:layout_width="5dp"
+            android:layout_height="5dp"
+            android:layout_gravity="center_horizontal|bottom"
+            android:layout_marginBottom="1dp"
+            android:importantForAccessibility="no"
+            android:src="@drawable/kal_dot" />
+    </FrameLayout>
+    <FrameLayout
+        android:id="@+id/day33"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:layout_margin="1dp"
+        android:padding="2dp">
+
+        <TextView
+            android:id="@+id/day33t"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:textColor="#E6E6E6"
+            android:textSize="13sp" />
+
+        <ImageView
+            android:id="@+id/dot33"
+            android:layout_width="5dp"
+            android:layout_height="5dp"
+            android:layout_gravity="center_horizontal|bottom"
+            android:layout_marginBottom="1dp"
+            android:importantForAccessibility="no"
+            android:src="@drawable/kal_dot" />
+    </FrameLayout>
+    <FrameLayout
+        android:id="@+id/day34"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:layout_margin="1dp"
+        android:padding="2dp">
+
+        <TextView
+            android:id="@+id/day34t"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:textColor="#E6E6E6"
+            android:textSize="13sp" />
+
+        <ImageView
+            android:id="@+id/dot34"
+            android:layout_width="5dp"
+            android:layout_height="5dp"
+            android:layout_gravity="center_horizontal|bottom"
+            android:layout_marginBottom="1dp"
+            android:importantForAccessibility="no"
+            android:src="@drawable/kal_dot" />
+    </FrameLayout>
+    <FrameLayout
+        android:id="@+id/day35"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:layout_margin="1dp"
+        android:padding="2dp">
+
+        <TextView
+            android:id="@+id/day35t"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:textColor="#E6E6E6"
+            android:textSize="13sp" />
+
+        <ImageView
+            android:id="@+id/dot35"
+            android:layout_width="5dp"
+            android:layout_height="5dp"
+            android:layout_gravity="center_horizontal|bottom"
+            android:layout_marginBottom="1dp"
+            android:importantForAccessibility="no"
+            android:src="@drawable/kal_dot" />
+    </FrameLayout>
+    </LinearLayout>
+    <LinearLayout
+        android:id="@+id/kal_widget_month_row6"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal">
+
+    <FrameLayout
+        android:id="@+id/day36"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:layout_margin="1dp"
+        android:padding="2dp">
+
+        <TextView
+            android:id="@+id/day36t"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:textColor="#E6E6E6"
+            android:textSize="13sp" />
+
+        <ImageView
+            android:id="@+id/dot36"
+            android:layout_width="5dp"
+            android:layout_height="5dp"
+            android:layout_gravity="center_horizontal|bottom"
+            android:layout_marginBottom="1dp"
+            android:importantForAccessibility="no"
+            android:src="@drawable/kal_dot" />
+    </FrameLayout>
+    <FrameLayout
+        android:id="@+id/day37"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:layout_margin="1dp"
+        android:padding="2dp">
+
+        <TextView
+            android:id="@+id/day37t"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:textColor="#E6E6E6"
+            android:textSize="13sp" />
+
+        <ImageView
+            android:id="@+id/dot37"
+            android:layout_width="5dp"
+            android:layout_height="5dp"
+            android:layout_gravity="center_horizontal|bottom"
+            android:layout_marginBottom="1dp"
+            android:importantForAccessibility="no"
+            android:src="@drawable/kal_dot" />
+    </FrameLayout>
+    <FrameLayout
+        android:id="@+id/day38"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:layout_margin="1dp"
+        android:padding="2dp">
+
+        <TextView
+            android:id="@+id/day38t"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:textColor="#E6E6E6"
+            android:textSize="13sp" />
+
+        <ImageView
+            android:id="@+id/dot38"
+            android:layout_width="5dp"
+            android:layout_height="5dp"
+            android:layout_gravity="center_horizontal|bottom"
+            android:layout_marginBottom="1dp"
+            android:importantForAccessibility="no"
+            android:src="@drawable/kal_dot" />
+    </FrameLayout>
+    <FrameLayout
+        android:id="@+id/day39"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:layout_margin="1dp"
+        android:padding="2dp">
+
+        <TextView
+            android:id="@+id/day39t"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:textColor="#E6E6E6"
+            android:textSize="13sp" />
+
+        <ImageView
+            android:id="@+id/dot39"
+            android:layout_width="5dp"
+            android:layout_height="5dp"
+            android:layout_gravity="center_horizontal|bottom"
+            android:layout_marginBottom="1dp"
+            android:importantForAccessibility="no"
+            android:src="@drawable/kal_dot" />
+    </FrameLayout>
+    <FrameLayout
+        android:id="@+id/day40"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:layout_margin="1dp"
+        android:padding="2dp">
+
+        <TextView
+            android:id="@+id/day40t"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:textColor="#E6E6E6"
+            android:textSize="13sp" />
+
+        <ImageView
+            android:id="@+id/dot40"
+            android:layout_width="5dp"
+            android:layout_height="5dp"
+            android:layout_gravity="center_horizontal|bottom"
+            android:layout_marginBottom="1dp"
+            android:importantForAccessibility="no"
+            android:src="@drawable/kal_dot" />
+    </FrameLayout>
+    <FrameLayout
+        android:id="@+id/day41"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:layout_margin="1dp"
+        android:padding="2dp">
+
+        <TextView
+            android:id="@+id/day41t"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:textColor="#E6E6E6"
+            android:textSize="13sp" />
+
+        <ImageView
+            android:id="@+id/dot41"
+            android:layout_width="5dp"
+            android:layout_height="5dp"
+            android:layout_gravity="center_horizontal|bottom"
+            android:layout_marginBottom="1dp"
+            android:importantForAccessibility="no"
+            android:src="@drawable/kal_dot" />
+    </FrameLayout>
+    <FrameLayout
+        android:id="@+id/day42"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:layout_margin="1dp"
+        android:padding="2dp">
+
+        <TextView
+            android:id="@+id/day42t"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:textColor="#E6E6E6"
+            android:textSize="13sp" />
+
+        <ImageView
+            android:id="@+id/dot42"
+            android:layout_width="5dp"
+            android:layout_height="5dp"
+            android:layout_gravity="center_horizontal|bottom"
+            android:layout_marginBottom="1dp"
+            android:importantForAccessibility="no"
+            android:src="@drawable/kal_dot" />
+    </FrameLayout>
+    </LinearLayout></LinearLayout>

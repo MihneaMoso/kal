@@ -33,6 +33,7 @@ rfd = "0.15"
 [target.'cfg(target_os = "android")'.dependencies]
 dioxus = { version = "0.7", features = ["mobile"] }
 kal-notify = { path = "../crates/kal-notify" }
+kal-ffi = { path = "../crates/kal-ffi" }
 # App-private writable data dir resolution.
 ndk-context = "0.1"
 jni = "0.21"

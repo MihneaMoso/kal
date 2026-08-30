@@ -111,6 +111,9 @@ jobs:
           # the generated Android project's res/, then rebuild with gradle (dx
           # would regenerate the template over our overwrite).
           ../scripts/apply-icons.sh
+          # Stage the in-repo home-screen widgets (Kotlin + res + manifest)
+          # into the generated Android project so they compile with libmain.so.
+          ../scripts/stage-widgets.sh
           # dx writes the generated Android project to the repo-root target/,
           # even when run from app/.
           cd ../target/dx/kal/release/android/app

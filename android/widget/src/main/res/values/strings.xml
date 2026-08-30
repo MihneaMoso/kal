@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="kal_widget_schedule_desc">Upcoming events and tasks at a glance</string>
+    <string name="kal_widget_month_desc">Month calendar overview</string>
+    <string name="kal_widget_schedule_header">Upcoming</string>
+    <string name="kal_widget_empty">Nothing scheduled</string>
+    <string name="kal_widget_open_hint">Tap to open calendar</string>
+</resources>
