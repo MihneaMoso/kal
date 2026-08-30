@@ -16,6 +16,7 @@ kal-import = { path = "../crates/kal-import" }
 kal-sync = { path = "../crates/kal-sync" }
 serde = { workspace = true }
 serde_json = { workspace = true }
+base64 = "0.22"
 tokio = { workspace = true }
 chrono = { workspace = true }
 ulid = { workspace = true }

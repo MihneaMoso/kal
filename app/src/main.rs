@@ -1,6 +1,7 @@
 mod i18n;
 #[cfg(not(target_os = "android"))]
 mod mini_widget;
+mod profile;
 mod sync_ui;
 mod ui;
 
@@ -151,6 +152,7 @@ fn App() -> Element {
     use_context_provider(|| calendars_res);
 
     let prefs = ui::Settings::load(&db);
+    *profile::PROFILE_VIEW.write() = profile::load_profile(&db);
 
     // Layout + theme in ONE signal: the resize path proves this signal
     // drives visual updates reliably; theme rides along on that proven path.
@@ -287,6 +289,10 @@ fn App() -> Element {
                 Some(state) => rsx! { ui::EditorModal { state } },
                 None => rsx! {},
             }
+
+            if *profile::SETTINGS_SCREEN_OPEN.read() {
+                profile::SettingsScreen {}
+            }
         }
     }
 }
@@ -383,6 +389,13 @@ fn PreferencesControls() -> Element {
                 let _ = db_theme.set_setting("theme", next);
             },
             {if dark { crate::i18n::tr("theme-toggle-dark") } else { crate::i18n::tr("theme-toggle-light") }}
+        }
+        button {
+            class: "icon-btn",
+            "aria-label": "Settings",
+            title: "Settings",
+            onclick: move |_| profile::open_settings_screen(&db),
+            "\u{2699}"
         }
     }
 }

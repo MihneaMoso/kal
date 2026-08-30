@@ -284,6 +284,45 @@ input[type="checkbox"] { accent-color: var(--accent); cursor: pointer; }
 .empty { color: var(--fg-muted); padding: 24px; text-align: center; justify-content: center; }
 .task-check { flex: none; }
 .item-dot { flex: none; align-self: center; width: 8px; height: 8px; border-radius: 50%; }
+img.profile-avatar, .profile-avatar-initials {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    object-fit: cover;
+    flex: none;
+}
+.profile-avatar-initials {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--accent);
+    color: #fff;
+    font-weight: 600;
+    font-size: 15px;
+}
+button.profile-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 8px;
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    font-size: 13px;
+}
+button.profile-header:hover { background: var(--accent-soft); border-radius: 8px; }
+.profile-name { font-weight: 600; color: var(--fg); }
+label.file-upload {
+    display: inline-flex;
+    align-items: center;
+    cursor: pointer;
+    font-size: 12px;
+    padding: 2px 8px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--bg-alt);
+}
+label.file-upload:hover { border-color: var(--accent); }
 
 /* ---- editor modal ---- */
 

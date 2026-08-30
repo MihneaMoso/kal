@@ -166,6 +166,7 @@ pub fn SyncPanel() -> Element {
     rsx! {
         div { style: "display:flex;flex-direction:column;gap:6px;",
             h2 { "Sync" }
+            ProfileHeader {}
             match state.read().clone() {
                 SyncUiState::NotPaired => rsx! {
                     button { class: "primary", onclick: start_chain, "Start sync chain" }
@@ -269,6 +270,29 @@ fn LeaveSyncControls(on_leave: EventHandler<()>) -> Element {
     } else {
         rsx! {
             button { style: "color:#c0392b;", onclick: move |_| confirm.set(true), "Leave sync chain\u{2026}" }
+        }
+    }
+}
+
+/// Sync-chain identity header: avatar + username, tappable to open settings.
+#[component]
+fn ProfileHeader() -> Element {
+    let db = use_context::<crate::DbHandle>();
+    let profile = crate::profile::PROFILE_VIEW.read().clone();
+
+    let initials = profile.initials();
+    let avatar = profile.avatar_data_uri();
+
+    rsx! {
+        button {
+            class: "profile-header",
+            onclick: move |_| crate::profile::open_settings_screen(&db),
+            if let Some(uri) = &avatar {
+                img { class: "profile-avatar", src: "{uri}", alt: "", width: "40", height: "40" }
+            } else {
+                div { class: "profile-avatar profile-avatar-initials", "{initials}" }
+            }
+            span { class: "profile-name", "{profile.display_name()}" }
         }
     }
 }
