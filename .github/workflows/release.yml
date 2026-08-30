@@ -107,7 +107,8 @@ jobs:
         run: |
           # Flatten the managed APK to a single, predictable filename so the
           # release upload doesn't inherit the gradle build/ directories.
-          apk="$(find target/dx/kal/release/android/app/app/build/outputs/apk -name '*.apk' | head -1)"
+          # dx writes the Android project under the repo-root target/ dir.
+          apk="$(find ../target/dx/kal/release/android/app/app/build/outputs/apk -name '*.apk' | head -1)"
           test -n "$apk"
           version="${GITHUB_REF_NAME#v}"
           cp "$apk" "kal-${version}-android.apk"
