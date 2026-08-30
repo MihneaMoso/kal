@@ -17,8 +17,16 @@ cd "$(dirname "$0")/.."
 
 SRC="logo.jpeg"
 OUT="assets/icons"
-MAGICK="${MAGICK:-magick}"
-command -v "$MAGICK" >/dev/null || { echo "ImageMagick ($MAGICK) not found" >&2; exit 1; }
+# Prefer the ImageMagick 7 launcher (`magick`); fall back to ImageMagick 6's
+# `convert` (what Ubuntu's `imagemagick` apt package installs on CI runners).
+if command -v magick >/dev/null 2>&1; then
+  MAGICK="magick"
+elif command -v convert >/dev/null 2>&1; then
+  MAGICK="convert"
+else
+  echo "need ImageMagick: install imagemagick (convert) or ImageMagick 7 (magick)" >&2
+  exit 1
+fi
 [ -f "$SRC" ] || { echo "missing $SRC" >&2; exit 1; }
 
 # --- Master: crop the (nearly square) calendar art centered on itself. The

@@ -88,6 +88,8 @@ jobs:
         run: sdkmanager "ndk;25.2.9519653" "cmake;3.22.1"
       - name: Install dx CLI
         run: curl -sSL https://dioxus.dev/install.sh | bash
+      - name: Install ImageMagick (launcher icon resizing)
+        run: sudo apt-get update && sudo apt-get install -y imagemagick
       - name: Build Android APK
         working-directory: app
         run: |
