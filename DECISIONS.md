@@ -92,6 +92,7 @@ Newest decisions may reference later phases; each entry notes the phase.
 | D44 | **Launcher icons staged post-`dx bundle` via `scripts/apply-icons.sh` + a direct `gradlew assemble`**, not a dx config | dx hardcodes and regenerates its template res/ on every bundle with no override hook; overwriting then re-running dx yields duplicate-resource merge failures. Rebuilding through Gradle directly bakes the branded icons into the APK. |
 | D45 | **"Leave sync chain" is a purely local act**: delete `sync-identity.json` + the local `sync-outbox/` folder; two-step inline confirm in `sync_ui.rs` below "Sync now". | The chain is folder-gossip with no central membership to revoke, so leaving is local-only; other devices simply stop receiving snapshots. Matches the two-step inline-confirm pattern used elsewhere (no OS dialogs). |
 | D46 | **Item-level color = `Option<Color>` in the editor**; `None` renders as "Calendar" (inherit the owning calendar's color). New items default to app blue `#3366cc`. | The model already had `color_override: Option<Color>` — reuse it rather than adding a parallel field; "Calendar" keeps inheritance available while the default satisfies "default blue". |
+| D47 | **Per-item delete stays in the editor modal, made two-step** ("Delete" → "Delete this item? Delete/Keep"); no per-row delete button. | User-scoped: editor-only was requested. Two-step inline confirm matches the leave-sync-chain and OS-dialog-free pattern. |
 
 - Sync CRDT engine: automerge vs yrs (phase 8).
 - Transport: iroh vs libp2p (phase 8).

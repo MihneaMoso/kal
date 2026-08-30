@@ -1179,7 +1179,7 @@ pub fn EditorModal(state: EditorState) -> Element {
                 }
                 div { class: "modal-actions",
                     if is_edit {
-                        button { class: "danger", onclick: delete, "Delete" }
+                        DeleteControls { on_delete: delete }
                     } else {
                         span {}
                     }
@@ -1195,6 +1195,24 @@ pub fn EditorModal(state: EditorState) -> Element {
                     }
                 }
             }
+        }
+    }
+}
+
+/// Two-step delete: first click asks, second click confirms.
+#[component]
+fn DeleteControls(on_delete: EventHandler<()>) -> Element {
+    let mut confirm = use_signal(|| false);
+    if *confirm.read() {
+        rsx! {
+            span { style: "font-size:12px;color:#c0392b;align-self:center;", "Delete this item?" }
+            button { class: "danger", onclick: move |_| on_delete.call(()), "Delete" }
+            button { onclick: move |_| confirm.set(false), "Keep" }
+        }
+    } else {
+        rsx! {
+            span {}
+            button { class: "danger", onclick: move |_| confirm.set(true), "Delete" }
         }
     }
 }
