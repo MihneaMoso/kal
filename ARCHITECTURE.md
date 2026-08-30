@@ -72,6 +72,11 @@ whole-record registers for field-level or Automerge/Yrs documents inside
 envelopes are then rejected before merge. Full key-rotation-with-repair UX is
 tracked as future work.
 
+**Leaving the chain.** In the UI, "Leave sync chain" (below "Sync now", with a
+two-step inline confirm) deletes the local `sync-identity.json` and the local
+`sync-outbox/` folder. The gossip chain has no central membership, so this is
+purely local: other devices simply stop receiving snapshots from this one.
+
 ## Reminders
 
 Reminders are computed, not pushed: `kal_core::reminders::compute_firings`

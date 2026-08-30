@@ -53,6 +53,18 @@ fn persist(identity: &ChainIdentity) -> Result<(), String> {
     Ok(())
 }
 
+/// Remove this device from the sync chain: deletes the local identity file and
+/// the device-local outbox folder. This is a local-only act — the gossip
+/// chain has no central membership to revoke — so other devices simply stop
+/// receiving snapshots from this one.
+fn leave_chain() {
+    let path = identity_path(&db_file());
+    let _ = std::fs::remove_file(&path);
+    if let Some(outbox) = path.parent().map(|p| p.join("sync-outbox")) {
+        let _ = std::fs::remove_dir_all(&outbox);
+    }
+}
+
 /// Bumped after a successful merge so App-level effects restart resources.
 pub static RESOURCES_DIRTY: GlobalSignal<u32> = Signal::global(|| 0);
 
@@ -221,6 +233,12 @@ pub fn SyncPanel() -> Element {
                         },
                         "Sync now"
                     }
+                    div { style: "margin-top:10px;border-top:1px solid var(--border,#2a2f3a);padding-top:10px;",
+                        LeaveSyncControls { on_leave: move |_| {
+                            leave_chain();
+                            state.set(SyncUiState::NotPaired);
+                        } }
+                    }
                 },
                 SyncUiState::Error(msg) => rsx! {
                     span { class: "when", style: "color:#c0392b", "{msg}" }
@@ -230,6 +248,27 @@ pub fn SyncPanel() -> Element {
                     }
                 },
             }
+        }
+    }
+}
+
+/// Two-step "Leave sync chain" control with inline confirmation.
+#[component]
+fn LeaveSyncControls(on_leave: EventHandler<()>) -> Element {
+    let mut confirm = use_signal(|| false);
+    if *confirm.read() {
+        rsx! {
+            p { style: "font-size:12px;color:var(--fg-muted);",
+                "Leave the sync chain? This device will stop exchanging snapshots with other paired devices."
+            }
+            div { style: "display:flex;gap:8px;",
+                button { class: "danger", onclick: move |_| on_leave.call(()), "Leave" }
+                button { onclick: move |_| confirm.set(false), "Cancel" }
+            }
+        }
+    } else {
+        rsx! {
+            button { style: "color:#c0392b;", onclick: move |_| confirm.set(true), "Leave sync chain\u{2026}" }
         }
     }
 }
