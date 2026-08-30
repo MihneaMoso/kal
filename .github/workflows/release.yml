@@ -103,13 +103,21 @@ jobs:
           cd ../target/dx/kal/release/android/app
           ./gradlew :app:assembleDebug --no-daemon
       - name: Upload APK
+        working-directory: app
+        run: |
+          # Flatten the managed APK to a single, predictable filename so the
+          # release upload doesn't inherit the gradle build/ directories.
+          apk="$(find target/dx/kal/release/android/app/app/build/outputs/apk -name '*.apk' | head -1)"
+          test -n "$apk"
+          version="${GITHUB_REF_NAME#v}"
+          cp "$apk" "kal-${version}-android.apk"
+          ls -la "kal-${version}-android.apk"
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: android-apk
           if-no-files-found: error
-          path: |
-            target/dx/kal/release/android/app/app/build/outputs/apk/debug/*.apk
-            target/dx/kal/release/android/app/app/build/outputs/apk/release/*.apk
+          path: app/kal-*.apk
 
   publish:
     needs: [desktop, android]
@@ -124,9 +132,13 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          # Only attach regular files -- gh release create/upload reject directories.
+          mapfile -d '' -t assets < <(find dist -type f -print0)
+          test "${#assets[@]}" -gt 0 || { echo "no release assets found" >&2; exit 1; }
           gh release create "${GITHUB_REF_NAME}" \
             --repo "${GITHUB_REPOSITORY}" \
             --title "Kal ${GITHUB_REF_NAME}" \
             --generate-notes \
-            dist/* \
-          || gh release upload "${GITHUB_REF_NAME}" dist/* --clobber --repo "${GITHUB_REPOSITORY}"
+            "${assets[@]}" \
+          || gh release upload "${GITHUB_REF_NAME}" "${assets[@]}" \
+               --clobber --repo "${GITHUB_REPOSITORY}"
