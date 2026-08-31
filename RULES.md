@@ -210,9 +210,13 @@ bite you again if ignored, plus the exact state to resume from.
   (`apply_staged_update()` at the very top of desktop `main()`, before any
   window/DB work; Unix overwrites in place, Windows renames running exe to
   `.old~`). Android = download APK + fire PackageInstaller via JNI→Kotlin.
-- **Version bump gate**: `CURRENT_VERSION` in `updater.rs` is MANUAL — it must
-  equal the latest release tag (`v0.1.7` now) or the updater never finds an
-  update. Bump it on every release alongside `REPO`/tokens if they change.
+- **Version comes from build time, not a constant**: `app/build.rs` injects
+  `KAL_VERSION` from the nearest git tag (`git describe --tags --abbrev=0`),
+  overridable via `KAL_RELEASE_VERSION` (set from the tag in the release CI),
+  falling back to `CARGO_PKG_VERSION`. `updater::CURRENT_VERSION =
+  env!("KAL_VERSION")` reads it, so there is **no hand-maintained version to
+  bump**. The `embedded_version_is_real` test fails if it ever falls back to
+  the stale `0.1.0` manifest value.
 - deps: `ureq`+`sha2` (all native), `tar`+`flate2` (desktop-only, gated under
   `cfg(not(target_os="android"))`). Android updater reuses the existing
   `jni`/`ndk-context` deps already in `[target.'cfg(target_os="android")']`.

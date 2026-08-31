@@ -39,6 +39,10 @@ jobs:
           workspaces: app
       - name: Build release binary
         working-directory: app
+        env:
+          # Pin the version embedded by app/build.rs to the release tag so the
+          # in-app updater compares correctly even if tags aren't fetched.
+          KAL_RELEASE_VERSION: ${{ github.ref_name }}
         run: cargo build --release
       - name: Package
         shell: bash
@@ -92,6 +96,9 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y imagemagick
       - name: Build Android APK
         working-directory: app
+        env:
+          # Pin the version embedded by app/build.rs to the release tag.
+          KAL_RELEASE_VERSION: ${{ github.ref_name }}
         run: |
           dx bundle --android --release --target aarch64-linux-android --package-types apk
           # dx hardcodes template launcher icons; stage our branded ones into

@@ -13,10 +13,12 @@ pub static UPDATE_STATUS: GlobalSignal<Option<String>> = Signal::global(|| None)
 /// True once a newer release has been downloaded and is ready to apply.
 pub static UPDATE_READY: GlobalSignal<bool> = Signal::global(|| false);
 
-/// The version this binary reports for comparison against release tags. Bump
-/// on every tagged release (kept in sync with the tag, not the workspace
-/// manifest, whose version stays 0.1.0 across all tags).
-pub const CURRENT_VERSION: &str = "0.1.7";
+/// The version this binary reports for comparison against release tags.
+///
+/// Injected at build time by `app/build.rs` (from the nearest git tag, or the
+/// `KAL_RELEASE_VERSION` env override in CI), so it always matches the release
+/// and never needs hand-editing. Falls back to the workspace manifest version.
+pub const CURRENT_VERSION: &str = env!("KAL_VERSION");
 
 /// GitHub repo owning the releases, as "owner/name".
 const REPO: &str = "MihneaMoso/kal";
@@ -486,6 +488,29 @@ mod tests {
         assert!(is_newer("1.0.0", "0.1.7"));
         assert!(!is_newer("0.1.7", "0.1.7"));
         assert!(!is_newer("0.1.6", "0.1.7"));
+    }
+
+    #[test]
+    fn embedded_version_is_real() {
+        // CURRENT_VERSION comes from build.rs (git tag / KAL_RELEASE_VERSION).
+        // It must be non-empty and parseable, otherwise the updater can never
+        // detect anything (never mind the stale-manual-constant case).
+        assert!(!CURRENT_VERSION.is_empty());
+        assert!(!CURRENT_VERSION.contains('v'));
+        assert!(!parse_version(CURRENT_VERSION).is_empty());
+        // Where git is available, the embedded version must match the nearest
+        // tag (build.rs's primary source) rather than the "0.1.0" fallback.
+        if let Ok(out) = std::process::Command::new("git")
+            .args(["describe", "--tags", "--abbrev=0"])
+            .output()
+        {
+            if out.status.success() {
+                let tag = String::from_utf8_lossy(&out.stdout).trim().to_string();
+                if !tag.is_empty() {
+                    assert_eq!(CURRENT_VERSION, tag.trim_start_matches('v'));
+                }
+            }
+        }
     }
 
     #[test]
