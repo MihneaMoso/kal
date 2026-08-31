@@ -21,6 +21,8 @@ tokio = { workspace = true }
 chrono = { workspace = true }
 ulid = { workspace = true }
 dirs-next = "2"
+ureq = { version = "2", features = ["json"] }
+sha2 = "0.10"
 
 # Desktop-only deps (gated behind target_os check in source).
 [target.'cfg(not(target_os = "android"))'.dependencies]
@@ -28,6 +30,8 @@ dioxus = { version = "0.7", features = ["desktop"] }
 dioxus-desktop = "0.7"
 kal-notify = { path = "../crates/kal-notify", features = ["desktop"] }
 rfd = "0.15"
+tar = "0.4"
+flate2 = "1"
 
 # Android / mobile deps.
 [target.'cfg(target_os = "android")'.dependencies]

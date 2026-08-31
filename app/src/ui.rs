@@ -35,6 +35,8 @@ pub struct Settings {
     pub time_24h: bool,
     pub first_day_monday: bool,
     pub default_view: ViewMode,
+    /// Check the GitHub Releases latest at startup and offer to update.
+    pub auto_check_updates: bool,
 }
 
 impl Default for Settings {
@@ -44,6 +46,7 @@ impl Default for Settings {
             time_24h: true,
             first_day_monday: true,
             default_view: ViewMode::Month,
+            auto_check_updates: true,
         }
     }
 }

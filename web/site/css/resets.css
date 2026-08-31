@@ -1,0 +1,83 @@
+/* hide page scrollbar */
+html {
+    scrollbar-width: none;
+} /* Firefox */
+body {
+    -ms-overflow-style: none;
+} /* IE and Edge */
+body::-webkit-scrollbar,
+body::-webkit-scrollbar-button {
+    display: none;
+} /* Chrome */
+/* end hide page scrollbar */
+/* Tweak: center content and add top padding for nicer spacing */
+body {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding-top: 4rem; /* adjust this value to increase/decrease top spacing */
+    min-height: 100vh;
+    box-sizing: border-box;
+    gap: 1.25rem;
+    background: var(--bg, transparent);
+}
+
+/* Keep Pico's container sizing but center it and add horizontal padding */
+.container {
+    width: 100%;
+    max-width: 70rem;
+    padding-inline: 1rem;
+}
+
+/* Center all text within header, main, and footer */
+header.container,
+main.container,
+footer.container {
+    text-align: center;
+}
+
+/* Ensure footer sticks to the bottom when content is short */
+footer.container {
+    margin-top: auto;
+}
+
+/* Improve readability for article text */
+article {
+    max-width: 60ch;
+    margin: 0 auto;
+}
+
+/* Global: make long words/URLs wrap instead of overflowing */
+:where(
+        p,
+        li,
+        a,
+        h1,
+        h2,
+        h3,
+        h4,
+        h5,
+        h6,
+        blockquote,
+        small,
+        figcaption,
+        td,
+        th
+    ) {
+    overflow-wrap: anywhere; /* modern, friendly wrapping */
+    word-break: normal;
+    hyphens: auto;
+}
+
+/* Cap text measure across typical typographic blocks for readability */
+:where(header.container, main.container, footer.container)
+    > :where(p, h1, h2, h3, ul, ol, blockquote, pre, small) {
+    max-width: 65ch;
+    margin-inline: auto;
+}
+
+/* Preserve code blocks but allow wrapping if needed */
+pre {
+    white-space: pre-wrap;
+    overflow-x: auto;
+}

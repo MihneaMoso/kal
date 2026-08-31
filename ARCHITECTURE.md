@@ -31,12 +31,24 @@ crates/
 app/                Dioxus 0.7 desktop shell (views, editor modal, settings,
                     pairing UI). Single shared use_resource per dataset;
                     mutations restart resources; a global signal re-renders
-                    after sync merges.
+                    after sync merges. app/src/updater.rs = in-app updates
+                    (GitHub latest via ureq; desktop stage+restart swap;
+                    Android APK self-install; compiled out on wasm).
 android/widget/      In-repo Android home-screen widget sources (Kotlin
                     AppWidgetProvider + RemoteViews + res/ + manifest patch),
                     staged into the dx-generated Android project by
                     scripts/stage-widgets.sh. They query the calendar through
                     JNI bridges in app/src/widget_ffi.rs that reuse kal-ffi.
+android/updater/     In-repo Android APK self-update sources (KalUpdater.kt
+                    intent launcher + KalFileProvider.kt, a dependency-free
+                    ContentProvider serving the staged APK), staged by
+                    scripts/stage-updater.sh with a <provider> manifest entry.
+install.sh          Cross-platform installer: downloads the matching release
+                    asset (linux/macos/windows/android + Termux) and verifies
+                    it against the release's sha256 via the GitHub API.
+web/site/           Landing page for mihneamoso.github.io/kal (Pico template-
+                    only, relative URLs), deployed by .github/workflows/pages.yml.
+web/app/            Future Dioxus web shell location (deferred — see RULES).
 widgets/            (future) Swift WidgetKit shim calling kal-ffi.
 ```
 

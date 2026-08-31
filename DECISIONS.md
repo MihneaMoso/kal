@@ -100,6 +100,15 @@ Newest decisions may reference later phases; each entry notes the phase.
 | D52 | **Widget `month_grid` JSON gained an additive `color` field per day-item; `kal_upcoming_json` already carried `color` — no ABI break elsewhere.** | RemoteViews needs the effective hex color in the JSON (ABI tests use `contains`, so the addition is backward-compatible). |
 | D53 | **Widget taps deep-link by launching `MainActivity` with a `kal_widget_open` extra (written but not yet consumed to jump to a specific day/item).** | Launching the app from a home-screen widget is the platform-mandated minimal path; honoring the extra to land on a date is a small follow-up. |
 
+## Packaging / updates / web
+
+| # | Decision | Rationale |
+|---|----------|-----------|
+| D54 | **A single curl-able `install.sh` downloads the matching release asset by a platform substring token** (`kal-linux.tar.gz`, `kal-windows.exe`, `android.apk`, …) and verifies it against the release's published `sha256:` digest via the GitHub API. | Right-sized for a local-first tool: no native package managers per OS, works from Termux too, and reuses the exact same JSON the in-app updater parses. JSON is parsed with `python3` (arbitrary-precision) rather than sed/grep because the API payload is minified to one line but also legitimately pretty-printed. |
+| D55 | **Desktop updates = "stage + restart to apply"**: background-download the new binary, show *Update ready*, and on the next launch swap the running executable and relaunch. | `apply_staged_update` runs at the very top of desktop `main()` (before any window/DB work) so the swap is atomic with respect to the app: the old inode persists for the still-running process on Unix, and Windows handles the running-exe restriction by renaming the old to `.old~` first. |
+| D56 | **Android updates = download the APK app-privately, then hand it to the system PackageInstaller** via a `ACTION_VIEW` intent served over a custom `ContentProvider` (`KalFileProvider`), not a raw `file://` URI. | A `file://` URI throws `FileUriExposedException` on API 24+, and `androidx.core.fileprovider.FileProvider` would pull in a new dependency; a tiny first-party provider is dependency-free and `grantUriPermissions` lets the installer read it with `FLAG_GRANT_READ_URI_PERMISSION`. The intent logic lives in Kotlin (staged by `scripts/stage-updater.sh` — same pattern as the widgets), launched from Rust via JNI. |
+| D57 | **In-app updater is compiled out on web** (`target_arch = "wasm32"`), and the web app build at `/kal/app/` is deferred. The landing page (`web/site/`) deploys to `mihneamoso.github.io/kal/` now. | The web shell depends on SQLite-backed storage + native TLS (`getrandom`/`ring`) which don't target `wasm32-unknown-unknown` today; forcing a web build would require a wasm SQLite backend and JS-feature rewiring — out of scope for this pass. The web app "updates" implicitly on each deploy, so the updater is meaningless there anyway. |
+
 - Sync CRDT engine: automerge vs yrs (phase 8).
 - Transport: iroh vs libp2p (phase 8).
 - ICS crate choice: `icalendar` vs `ics` (phase 5).

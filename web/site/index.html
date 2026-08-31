@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <meta
+            name="description"
+            content="Kal — a free, open-source, local-first calendar for desktop, mobile and web."
+        />
+        <title>Kal — your calendar, your data</title>
+        <!-- Favicon stuff -->
+        <link
+            rel="apple-touch-icon"
+            sizes="180x180"
+            href="icons/apple-touch-icon.png"
+        />
+        <link
+            rel="icon"
+            type="image/png"
+            sizes="32x32"
+            href="icons/favicon-32x32.png"
+        />
+        <link
+            rel="icon"
+            type="image/png"
+            sizes="16x16"
+            href="icons/favicon-16x16.png"
+        />
+        <link rel="manifest" href="icons/site.webmanifest" />
+        <!-- Pico.css theme - default = jade -->
+        <link rel="stylesheet" href="css/pico.jade.min.css" id="picolink" />
+        <!-- Custom CSS reset -->
+        <link rel="stylesheet" href="css/resets.css" />
+        <!-- Dropdown styles -->
+        <link rel="stylesheet" href="css/dropdown.css" />
+    </head>
+    <body>
+        <!-- Theme selector dropdown -->
+        <div class="dropdown" style="display: inline-block">
+            <button
+                id="theme-dropdown-btn"
+                class="dropdown-btn"
+                onclick="toggleThemeDropdown()"
+            >
+                Theme ▼
+            </button>
+            <div id="theme-dropdown" class="dropdown-content">
+                <a href="#" onclick="changeTheme('red'); return false;">Red</a>
+                <a href="#" onclick="changeTheme('amber'); return false;"
+                    >Amber</a
+                >
+                <a href="#" onclick="changeTheme('blue'); return false;"
+                    >Blue</a
+                >
+                <a href="#" onclick="changeTheme('cyan'); return false;"
+                    >Cyan</a
+                >
+                <a href="#" onclick="changeTheme('fuchsia'); return false;"
+                    >Fuchsia</a
+                >
+                <a href="#" onclick="changeTheme('green'); return false;"
+                    >Green</a
+                >
+                <a href="#" onclick="changeTheme('grey'); return false;"
+                    >Grey</a
+                >
+                <a href="#" onclick="changeTheme('indigo'); return false;"
+                    >Indigo</a
+                >
+                <a href="#" onclick="changeTheme('jade'); return false;"
+                    >Jade</a
+                >
+                <a href="#" onclick="changeTheme('lime'); return false;"
+                    >Lime</a
+                >
+                <a href="#" onclick="changeTheme('orange'); return false;"
+                    >Orange</a
+                >
+                <a href="#" onclick="changeTheme('pumpkin'); return false;"
+                    >Pumpkin</a
+                >
+                <a href="#" onclick="changeTheme('purple'); return false;"
+                    >Purple</a
+                >
+                <a href="#" onclick="changeTheme('sand'); return false;"
+                    >Sand</a
+                >
+                <a href="#" onclick="changeTheme('slate'); return false;"
+                    >Slate</a
+                >
+                <a href="#" onclick="changeTheme('violet'); return false;"
+                    >Violet</a
+                >
+                <a href="#" onclick="changeTheme('yellow'); return false;"
+                    >Yellow</a
+                >
+                <a href="#" onclick="changeTheme('Zinc'); return false;"
+                    >Zinc</a
+                >
+            </div>
+        </div>
+
+        <header class="container">
+            <h1>Kal</h1>
+            <p>
+                Your calendar, your data. Free, open-source and local-first for
+                desktop, mobile and web.
+            </p>
+            <a role="button" href="app/">Open Kal</a>
+        </header>
+
+        <main class="container">
+            <section aria-label="Features">
+                <div class="grid">
+                    <article>
+                        <h3>Events, tasks &amp; birthdays</h3>
+                        <p>
+                            Full RFC 5545 recurrence, per-instance editing and
+                            multi-calendar organization — all in one place.
+                        </p>
+                    </article>
+                    <article>
+                        <h3>Private by default</h3>
+                        <p>
+                            Local-first storage on your own device. Optional
+                            account-free peer-to-peer sync — no accounts, no
+                            cloud vendor lock-in.
+                        </p>
+                    </article>
+                    <article>
+                        <h3>Reminders &amp; import</h3>
+                        <p>
+                            Unlimited locally-scheduled OS notifications, plus
+                            .ics round-trip and Google Calendar import.
+                        </p>
+                    </article>
+                </div>
+            </section>
+        </main>
+
+        <footer class="container">
+            <hr />
+            <small
+                >© <span id="year"></span> Mihnea Mosorescu. All rights
+                reserved.</small
+            >
+        </footer>
+        <script>
+            document.getElementById("year").textContent =
+                new Date().getFullYear();
+        </script>
+
+        <script defer src="js/theme-selector.js"></script>
+    </body>
+</html>

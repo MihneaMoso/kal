@@ -219,6 +219,7 @@ pub fn SettingsScreen() -> Element {
                 if !SCREEN_ERROR.read().is_empty() {
                     span { style: "color:#c0392b;font-size:12px;", "{SCREEN_ERROR.read()}" }
                 }
+                SoftwareSection { }
                 div { class: "modal-actions",
                     span {}
                     div { style: "display:flex;gap:8px;flex-wrap:wrap;",
@@ -250,6 +251,58 @@ fn AvatarPreview() -> Element {
     } else {
         rsx! {
             div { class: "profile-avatar profile-avatar-initials", "{initials}" }
+        }
+    }
+}
+
+/// Software version + update checking controls. Shows the current release,
+/// lets the user check for newer builds (or toggle the startup check) and
+/// apply a downloaded update (desktop: restart; Android: package installer).
+#[component]
+fn SoftwareSection() -> Element {
+    let db = use_context::<crate::DbHandle>();
+    let mut settings = use_context::<Signal<crate::ui::Settings>>();
+    let db_auto = db.clone();
+
+    let status = crate::updater::UPDATE_STATUS.read().clone();
+    let ready = *crate::updater::UPDATE_READY.read();
+    let auto = settings.read().auto_check_updates;
+
+    rsx! {
+        hr {}
+        h3 { style: "font-size:14px;margin:12px 0 6px;", "Software & updates" }
+        div { style: "display:flex;gap:10px;flex-wrap:wrap;align-items:center;",
+            span { style: "font-size:13px;", "Kal v{crate::updater::CURRENT_VERSION}" }
+            button {
+                onclick: move |_| crate::updater::run_check(),
+                "Check for updates"
+            }
+            label { style: "display:flex;align-items:center;gap:4px;font-size:12px;",
+                input {
+                    r#type: "checkbox",
+                    checked: auto,
+                    onchange: move |e| {
+                        let mut p = settings.read().clone();
+                        p.auto_check_updates = e.checked();
+                        p.save(&db_auto);
+                        settings.set(p);
+                    },
+                }
+                "Check at startup"
+            }
+        }
+        if let Some(status) = status {
+            span { style: "display:block;font-size:12px;color:var(--fg-muted);margin-top:6px;", "{status}" }
+        }
+        if ready {
+            button {
+                class: "primary",
+                style: "margin-top:6px;",
+                onclick: move |_| {
+                    crate::updater::apply_now();
+                },
+                "Apply update now"
+            }
         }
     }
 }

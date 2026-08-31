@@ -194,6 +194,42 @@ bite you again if ignored, plus the exact state to resume from.
 - Then Phase 5 (.ics import/export via `icalendar` crate + Google OAuth),
   Phase 6 mobile, etc. Full plan: README.md §Roadmap and master prompt §7.
 
+## Installer, in-app updater & web
+
+- ✅ `install.sh` — cross-platform installer matching release assets by
+  platform substring token; **`json_get` must read the body on stdin** (the
+  GitHub API body is huge/minified) — pipe it: `curl … | json_get 'expr'`. Fix
+  history: it previously passed the body as argv but read `sys.stdin`, so under
+  `set -e` it silently aborted after "platform:". Release JSON is minified, so
+  don't sed/grep it greedily; digest comes from the `digest: "sha256:…"` field.
+  Dry-run check: `KAL_DRYRUN=1 bash install.sh`.
+- ✅ In-app updater (`app/src/updater.rs`): queries GitHub releases/latest with
+  `ureq` (rustls — cross-compiles to Android), `pick_asset` matches by token,
+  `is_newer` is semver-ish. Settings gained `auto_check_updates`. UI under
+  *Settings → Software & updates*. Desktop = stage + swap on next launch
+  (`apply_staged_update()` at the very top of desktop `main()`, before any
+  window/DB work; Unix overwrites in place, Windows renames running exe to
+  `.old~`). Android = download APK + fire PackageInstaller via JNI→Kotlin.
+- **Version bump gate**: `CURRENT_VERSION` in `updater.rs` is MANUAL — it must
+  equal the latest release tag (`v0.1.7` now) or the updater never finds an
+  update. Bump it on every release alongside `REPO`/tokens if they change.
+- deps: `ureq`+`sha2` (all native), `tar`+`flate2` (desktop-only, gated under
+  `cfg(not(target_os="android"))`). Android updater reuses the existing
+  `jni`/`ndk-context` deps already in `[target.'cfg(target_os="android")']`.
+- Web target gate: the updater must compile out on wasm — keep `#[cfg(target_arch
+  = "wasm32")]` stubs in sync with every native fn. Global-signal writes on
+  globals use `*SIG.write() = …`, not `.set()` (which needs `&mut` on a static).
+- ✅ Landing page `web/site/` (Pico/static-site template only — no extra CSS/JS,
+  no inline styles, mobile-first, Hero + 3-col feature grid + footer) deployed
+  to `mihneamoso.github.io/kal/` by `.github/workflows/pages.yml` (Pages source
+  must be "GitHub Actions" — one-time repo setting). Pages uses relative URLs,
+  works under the `/kal/` prefix.
+- **Web app at `/kal/app/` is DEFERRED**: `dx build --platform web` fails
+  because kal-app depends on SQLite (`rusqlite` bundled) + `getrandom`/`ring`
+  which don't target `wasm32-unknown-unknown`. Would need a wasm SQLite backend
+  + JS-feature rewiring. The landing page's *Open Kal* button points at `app/`
+  for when that ships. Keep `web/app/` with `.nojekyll` as the future home.
+
 ## Verification checklist before declaring a phase done
 
 - `cargo test --workspace` green
@@ -326,11 +362,14 @@ bite you again if ignored, plus the exact state to resume from.
 - **Icons**: dx hardcodes its template launcher res/ (`ic_launcher.webp` +
   vectors) and REGENERATES them on every `dx bundle`, with no config override.
   So: `dx bundle` → `scripts/apply-icons.sh` (stages branded PNGs + adaptive
-  icon into res/ and deletes the template webp/xml) →
-  `scripts/stage-widgets.sh` (stages home-screen widgets: Kotlin under
-  `android/widget/` into `src/main/kotlin/`, widget res/ into `src/main/res/`
-  — merging `values/strings|styles.xml`, patching AndroidManifest.xml with the
-  two `<receiver>`s + `BOOT_COMPLETED`) → rebuild APK with
+   icon into res/ and deletes the template webp/xml) →
+   `scripts/stage-widgets.sh` (stages home-screen widgets: Kotlin under
+   `android/widget/` into `src/main/kotlin/`, widget res/ into `src/main/res/`
+   — merging `values/strings|styles.xml`, patching AndroidManifest.xml with the
+   two `<receiver>`s + `BOOT_COMPLETED`) →
+   `scripts/stage-updater.sh` (stages `android/updater/`: `KalUpdater.kt` +
+   `KalFileProvider.kt` and a `<provider>` manifest entry for APK self-update;
+   idempotent, marker-commented) → rebuild APK with
   `./gradlew :app:assembleDebug` DIRECTLY (never re-run dx, or it regenerates
   the template and you get duplicate-resource errors). The debug APK carries
   the branded PNG icons; the `release-unsigned` APK is resource-shrunk and
@@ -361,3 +400,7 @@ bite you again if ignored, plus the exact state to resume from.
 - Widget shims need Xcode/Android SDK builds (sources in widgets/).
 - Sync-chain key rotation & re-pairing UX (revocation blocklist exists).
 - fluent-rs runtime when locale #2 lands (parser swap documented in D43).
+- **Web build of the app (`/kal/app/`)**: needs a wasm SQLite backend + wasm-js
+  wiring for `getrandom`/`ring`; the updater sinks are already compiled out on
+  wasm, so the shell itself is the remaining work.
+- Widget `kal_widget_open` deep-link: honor the extra to land on a specific day/item.

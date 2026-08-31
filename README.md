@@ -19,10 +19,45 @@ peer-to-peer sync — all in one Rust codebase (Dioxus 0.7).
 | i18n scaffolding (en-US), a11y pass | ✅ |
 | Desktop always-on-top mini-calendar window | ✅ |
 | Widget C ABI (`kal-ffi`) + Android/iOS shim sources | ✅ (shims need SDKs to build) |
+| Android home-screen widgets (schedule + month) | ✅ |
+| Cross-platform installer (`install.sh`) + in-app updater | ✅ desktop/Android |
 | Live P2P transports (iroh/mDNS), mobile app targets, packaging pipelines | 🔜 |
 
 Design decisions: `DECISIONS.md` · Sync internals: `ARCHITECTURE.md` ·
 Contributing: `CONTRIBUTING.md` · Environment gotchas: `RULES.md`.
+
+## Install
+
+Prebuilt binaries are published to the [GitHub Releases](https://github.com/MihneaMoso/kal/releases)
+for every version tag. The easiest way to install the latest release is the
+curl-able installer:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/MihneaMoso/kal/master/install.sh | bash
+```
+
+What it does, by platform:
+
+- **Linux / macOS** — downloads the release binary and installs it to
+  `~/.local/bin/kal` (add that to your `PATH` if needed).
+- **Windows** — downloads `kal.exe` into `%LOCALAPPDATA%\Programs\Kal\`.
+- **Android / Termux** — downloads the APK into your `~/Download` folder;
+  open it on the device to install (allow *Install from unknown sources* if
+  prompted).
+
+Every download is verified against the SHA-256 digest published on the release
+(`shasum -a 256` / `sha256sum`). Env overrides:
+
+| Env var | Meaning |
+|---|---|
+| `KAL_VERSION` | Pin a version instead of the latest (`v0.1.7`) |
+| `KAL_PREFIX` | Install to a custom prefix instead of the default |
+| `KAL_DRYRUN=1` | Print what would be downloaded/installed without touching disk |
+
+The app also ships an **in-app updater**: *Settings → Software & updates →
+Check for updates* downloads and verifies the newest release. On desktop it
+stages the binary and offers **Apply update now** (swaps on restart); on
+Android it downloads the APK and hands it to the system package installer.
 
 ## Build & run (desktop)
 
@@ -82,7 +117,20 @@ Native widgets read the same SQLite file through the C ABI in
 - Direct APK / TestFlight come with the mobile shells.
 
 CI (`.github/workflows/ci.yml`) builds and attaches desktop artifacts on every
-push to `main`.
+push to `master`.
+
+## Web
+
+A lightweight landing page lives in [`web/site/`](web/site/) (built from the
+`mihneamoso/static-site` template — Pico.css classes only) and is deployed to
+**https://mihneamoso.github.io/kal/** by the `pages` workflow
+(`.github/workflows/pages.yml`). One-time setup: **Settings → Pages → Source:
+GitHub Actions**.
+
+The in-app web build at `/kal/app/` is currently **deferred**: the app's
+SQLite-backed storage and native TLS stack don't target `wasm32` yet (tracked
+in `RULES.md`). The landing page's *Open Kal* button points there for when the
+web shell ships.
 
 ## License
 

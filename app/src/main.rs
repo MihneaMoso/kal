@@ -4,6 +4,7 @@ mod mini_widget;
 mod profile;
 mod sync_ui;
 mod ui;
+mod updater;
 #[cfg(target_os = "android")]
 mod widget_ffi;
 
@@ -119,6 +120,9 @@ fn ensure_default_calendars(db: &Database) -> Vec<Calendar> {
 
 #[cfg(not(target_os = "android"))]
 fn main() {
+    // Swap in a staged update (if any) before any window/DB work, so the new
+    // binary relaunches cleanly. No-op when nothing is staged.
+    updater::apply_staged_update();
     // Frameless: hide the GTK titlebar/menu entirely (user preference).
     let cfg = Config::new().with_window(
         WindowBuilder::new()
@@ -177,6 +181,16 @@ fn App() -> Element {
     use_context_provider(|| Signal::new(today));
     let settings = Signal::new(prefs);
     use_context_provider(|| settings);
+
+    // Background auto-update check on startup, if enabled. Runs once on mount;
+    // the result lands in the settings screen's update section.
+    let auto_check = settings.read().auto_check_updates;
+    use_effect(move || {
+        if auto_check {
+            updater::run_check();
+        }
+    });
+
     // Single shared item list; views read it via context and restart it after
     // mutations.
     let mut items_res = use_resource(move || {

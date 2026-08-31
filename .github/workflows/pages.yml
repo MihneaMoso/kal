@@ -1,0 +1,43 @@
+# Deploys the Kal landing page (web/site) to GitHub Pages.
+#
+# The repo is the `kal` project itself, so GitHub Pages for a project site
+# publishes at https://mihneamoso.github.io/kal/. The landing page uses only
+# relative URLs (`css/…`, `icons/…`, `app/`), so it works unchanged under the
+# `/kal/` path prefix.
+#
+# The in-app web build at /kal/app/ is deferred (the Dioxus app depends on
+# SQLite + native TLS, which don't target wasm32 yet) — see README.
+#
+# Setup (one time): Settings → Pages → Source: "GitHub Actions".
+name: pages
+
+on:
+  push:
+    branches: [master]
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+      - name: Upload landing site
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: web/site
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
