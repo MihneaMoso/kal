@@ -241,11 +241,11 @@ bite you again if ignored, plus the exact state to resume from.
   in-memory IndexedDB-backed `Database` on wasm (same synchronous 13-method
   API; `schedule_persist()` writes snapshots to IndexedDB and `load_into()`
   restores them on boot — see DECISIONS D59). `app/Dioxus.toml` sets
-  `[web.app] base_path = "kal/app"`, and the bundle is committed under
-  `web/app/` (regenerate with `dx bundle --platform web -p kal-app
-  --out-dir web/app`, then move `web/app/public/*` up). `pages.yml` deploys
-  both `web/site` → `/kal/` and `web/app` → `/kal/app/`. The landing page's
-  *Open Kal* button (`href="app/"`) now resolves.
+  `[web.app] base_path = "kal/app"`. The bundle is built FROM SOURCE (never
+  committed — `/web/app/` is gitignored) by `scripts/build-web.sh`, which
+  `pages.yml` runs on every master push and `release.yml`'s `web` job runs on
+  every version tag, then deploys to `mihneamoso.github.io/kal/app`. The
+  landing page's *Open Kal* button (`href="app/"`) resolves.
 
 ## Verification checklist before declaring a phase done
 

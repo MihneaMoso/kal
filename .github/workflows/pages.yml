@@ -1,15 +1,21 @@
-# Deploys the Kal landing page (web/site) and the in-app web build (web/app)
-# to GitHub Pages.
+# Deploys the Kal landing page and the in-app web build to GitHub Pages.
+#
+# The app's web build is produced FROM SOURCE here (not from a committed
+# bundle): every push to master rebuilds the Dioxus wasm app via
+# scripts/build-web.sh (shared with the release workflow) and deploys it.
 #
 # The repo is the `kal` project itself, so GitHub Pages for a project site
-# publishes at https://mihneamoso.github.io/kal/. We assemble a single staging
-# directory so the pages artifact keeps the correct mapping:
-#   web/site/* -> https://mihneamoso.github.io/kal/          (landing page)
-#   web/app/*  -> https://mihneamoso.github.io/kal/app/      (Dioxus wasm app)
+# publishes at https://mihneamoso.github.io/kal/. scripts/build-web.sh assembles
+# a single staging directory with the correct mapping:
+#   site/index.html...  -> https://mihneamoso.github.io/kal/     (landing page)
+#   app/index.html...   -> https://mihneamoso.github.io/kal/app/ (Dioxus app)
 #
-# The landing page uses only relative URLs (`css/…`, `icons/…`, `app/`), and
-# the app is built with `base_path = "kal/app"` in `app/Dioxus.toml`, so both
-# work unchanged under the `/kal/` path prefix.
+# The landing page uses only relative URLs, and the app is built with
+# `base_path = "kal/app"` in `app/Dioxus.toml`, so both work unchanged under
+# the `/kal/` path prefix.
+#
+# The release workflow (release.yml) also deploys the web build on version tags
+# using the same script.
 #
 # Setup (one time): Settings → Pages → Source: "GitHub Actions".
 name: pages
@@ -35,13 +41,18 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: app
+      - name: Install dx CLI
+        run: curl -sSL https://dioxus.dev/install.sh | bash
       - name: Configure Pages
         uses: actions/configure-pages@v5
-      - name: Assemble Pages artifact (site at root, app at /app)
-        run: |
-          mkdir -p _deploy/app
-          cp -rT web/site _deploy
-          cp -rT web/app _deploy/app
+      - name: Build web bundle
+        run: bash scripts/build-web.sh
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:

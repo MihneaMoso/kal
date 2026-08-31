@@ -132,6 +132,43 @@ jobs:
           if-no-files-found: error
           path: app/kal-*.apk
 
+  # The web app is deployed to GitHub Pages, not attached to the Release, so it
+  # runs independently of the binary builds. It rebuilds the wasm bundle from
+  # the tagged source and redeploys https://mihneamoso.github.io/kal/app/.
+  web:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: app
+      - name: Install dx CLI
+        run: curl -sSL https://dioxus.dev/install.sh | bash
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+      - name: Build web bundle
+        env:
+          # Pin the version embedded by app/build.rs to the release tag.
+          KAL_RELEASE_VERSION: ${{ github.ref_name }}
+        run: bash scripts/build-web.sh
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _deploy
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+
   publish:
     needs: [desktop, android]
     runs-on: ubuntu-latest

@@ -3,3 +3,7 @@
 *.db-wal
 *.db-shm
 .DS_Store
+# Web build output. The wasm bundle for /kal/app/ is built from source in CI by
+# scripts/build-web.sh (pages.yml + release.yml), so it is never committed.
+/web/app/
+/_deploy/

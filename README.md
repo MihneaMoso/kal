@@ -132,10 +132,17 @@ The app itself also runs in the browser as a wasm build at
 workflow). On `wasm32` the storage crate swaps SQLite for an in-memory,
 IndexedDB-backed `Database` that keeps the same synchronous 13-method API and
 persists snapshots to the browser's IndexedDB (`base_path = "kal/app"` in
-`app/Dioxus.toml`). Regenerate the committed bundle in `web/app/` with:
+`app/Dioxus.toml`).
+
+The web bundle is never committed — it is built from source automatically:
+**every push to `master`** rebuilds it (`.github/workflows/pages.yml`) and
+**every version tag** rebuilds it too (`.github/workflows/release.yml`), both
+via the shared [`scripts/build-web.sh`](scripts/build-web.sh), then deploys to
+`/kal/app/`. To build it locally (requires `dx` + the `wasm32-unknown-unknown`
+target):
 
 ```
-dx bundle --platform web -p kal-app --out-dir web/app && mv web/app/public/* web/app/
+bash scripts/build-web.sh            # assembles ./_deploy (site at root, app at /app)
 ```
 
 ## License
