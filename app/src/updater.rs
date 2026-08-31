@@ -21,21 +21,28 @@ pub static UPDATE_READY: GlobalSignal<bool> = Signal::global(|| false);
 pub const CURRENT_VERSION: &str = env!("KAL_VERSION");
 
 /// GitHub repo owning the releases, as "owner/name".
+#[cfg(not(target_arch = "wasm32"))]
 const REPO: &str = "MihneaMoso/kal";
 
 /// Asset name token matched against published asset names. The published
 /// basenames embed a git SHA (e.g. `kal-0.1.7-9f77d464-kal-linux.tar.gz`), so
 /// we match by this stable substring.
+#[cfg(not(target_arch = "wasm32"))]
 const LINUX_TOKEN: &str = "kal-linux.tar.gz";
+#[cfg(not(target_arch = "wasm32"))]
 const MACOS_TOKEN: &str = "kal-macos.tar.gz";
+#[cfg(not(target_arch = "wasm32"))]
 const WINDOWS_TOKEN: &str = "kal-windows.exe";
+#[cfg(not(target_arch = "wasm32"))]
 const ANDROID_TOKEN: &str = "android.apk";
 
 /// A discovered candidate release for the current platform.
 #[derive(Debug, Clone)]
 pub struct ReleaseInfo {
     pub version: String,
+    #[allow(dead_code)] // consumed by the native fetch_update staging path
     pub asset_url: String,
+    #[allow(dead_code)] // consumed by the native fetch_update staging path
     pub sha256: Option<String>,
 }
 
@@ -67,6 +74,7 @@ pub struct ReadyUpdate {
 }
 
 /// Query the GitHub latest release and resolve the current platform's asset.
+#[cfg(not(target_arch = "wasm32"))]
 pub fn latest_release() -> Result<ReleaseInfo, String> {
     let url = format!("https://api.github.com/repos/{REPO}/releases/latest");
     let resp = ureq::Agent::new()
@@ -86,6 +94,7 @@ pub fn latest_release() -> Result<ReleaseInfo, String> {
 }
 
 /// Find the asset matching `token` from a release JSON body.
+#[cfg(not(target_arch = "wasm32"))]
 fn pick_asset(body: &str, token: &str) -> Result<ReleaseInfo, String> {
     let v: serde_json::Value =
         serde_json::from_str(body).map_err(|e| format!("bad release payload: {e}"))?;
@@ -122,6 +131,7 @@ fn pick_asset(body: &str, token: &str) -> Result<ReleaseInfo, String> {
     })
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 fn platform_token() -> Result<&'static str, String> {
     match std::env::consts::OS {
         "linux" => Ok(LINUX_TOKEN),
@@ -133,6 +143,7 @@ fn platform_token() -> Result<&'static str, String> {
 }
 
 /// Download `url` into `dest` and verify the (optional) SHA-256 digest.
+#[cfg(not(target_arch = "wasm32"))]
 fn download_to(url: &str, dest: &std::path::Path, sha256: Option<&str>) -> Result<(), String> {
     use std::io::Read;
     let mut buf = Vec::new();
@@ -159,6 +170,7 @@ fn download_to(url: &str, dest: &std::path::Path, sha256: Option<&str>) -> Resul
     std::fs::write(dest, &buf).map_err(|e| format!("write failed: {e}"))
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 fn hex_digest(bytes: &[u8]) -> String {
     use sha2::Digest;
     let mut hasher = sha2::Sha256::new();
@@ -174,6 +186,7 @@ fn hex_digest(bytes: &[u8]) -> String {
 /// the transitioned status. On desktop this stages a swap-on-next-launch; on
 /// Android it just downloads the APK (the user then confirms the system
 /// PackageInstaller prompt).
+#[cfg(not(target_arch = "wasm32"))]
 pub fn fetch_update(info: &ReleaseInfo) -> Result<ReadyUpdate, String> {
     let Some(dir) = updates_dir() else {
         return Err("no writable data dir".into());
@@ -207,10 +220,12 @@ pub fn fetch_update(info: &ReleaseInfo) -> Result<ReadyUpdate, String> {
 // Update staging directory
 // ---------------------------------------------------------------------------
 
+#[cfg(not(target_arch = "wasm32"))]
 fn updates_dir() -> Option<std::path::PathBuf> {
     data_root().map(|p| p.join("kal").join("updates"))
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 fn data_root() -> Option<std::path::PathBuf> {
     #[cfg(target_os = "android")]
     {
@@ -255,7 +270,7 @@ fn android_files_dir() -> Option<std::path::PathBuf> {
 
 /// Extract the single root binary from the gzip'd tarball to `dir/kal.new` and
 /// write a marker naming the executable to swap on the next launch.
-#[cfg(not(target_os = "android"))]
+#[cfg(all(not(target_os = "android"), not(target_arch = "wasm32")))]
 fn stage_desktop_binary(dir: &std::path::Path, archive: &std::path::Path) -> Result<(), String> {
     use std::io::Read;
     let gz = std::fs::File::open(archive).map_err(|e| format!("open archive: {e}"))?;
@@ -297,7 +312,7 @@ fn stage_desktop_binary(dir: &std::path::Path, archive: &std::path::Path) -> Res
 
 /// Swap the running executable for the staged one and relaunch it, then exit
 /// this process. Returns false (without exiting) if nothing is staged.
-#[cfg(not(target_os = "android"))]
+#[cfg(all(not(target_os = "android"), not(target_arch = "wasm32")))]
 pub fn apply_staged_update() -> bool {
     let Some(dir) = updates_dir() else {
         return false;
@@ -412,6 +427,7 @@ pub fn request_android_install() -> Result<(), String> {
 }
 
 #[cfg(target_arch = "wasm32")]
+#[allow(dead_code)]
 pub fn request_android_install() -> Result<(), String> {
     Err("not applicable".into())
 }

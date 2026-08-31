@@ -3,15 +3,32 @@ name = "kal-storage"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
-description = "SQLite schema, migrations and repository layer for Kal."
+description = "Persistence layer for Kal: SQLite on native, IndexedDB-backed JSON store on wasm."
 
 [dependencies]
 kal-core = { path = "../kal-core" }
-rusqlite = { workspace = true }
 chrono = { workspace = true }
 ulid = { workspace = true }
 thiserror = { workspace = true }
+serde = { version = "1", features = ["derive"] }
 serde_json = { workspace = true }
+
+# Native (desktop / mobile): SQLite via rusqlite. Kept out of the base deps so
+# the bundled C SQLite never compiles for the wasm32 target.
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+rusqlite = { workspace = true }
+
+# WebAssembly: browser IndexedDB snapshot store (via indexed_db_futures).
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+indexed_db_futures = "0.6"
+wasm-bindgen = "0.2"
+wasm-bindgen-futures = "0.4"
+web-sys = { version = "0.3", features = ["console"] }
+# ulid -> rand pulls getrandom, whose default backend doesn't cover
+# wasm32-unknown-unknown. Declare it here so feature unification enables the
+# `wasm_js` (Web Crypto via wasm-bindgen) backend — the officially documented
+# fix (see docs.rs/getrandom#webassembly-support).
+getrandom = { version = "0.3", features = ["wasm_js"] }
 
 [dev-dependencies]
 tempfile = "3"

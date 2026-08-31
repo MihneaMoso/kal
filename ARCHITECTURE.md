@@ -9,9 +9,11 @@ crates/
 ├── kal-core/       Pure domain: models, recurrence expansion, view-models,
 │                   reminder firing computation. ZERO UI deps — reused by the
 │                   app AND linked into widget shims via kal-ffi.
-├── kal-storage/    SQLite (rusqlite, bundled). Append-only PRAGMA-versioned
-│                   migrations. Repository exposes upsert_* only (sync-ready)
-│                   plus soft-delete tombstones.
+├── kal-storage/    Storage backend, gated by platform: SQLite (rusqlite,
+│                   bundled) on native; in-memory IndexedDB-backed on wasm.
+│                   Same synchronous 13-method `Database` API on both.
+│                   Append-only PRAGMA-versioned migrations. Repository exposes
+│                   upsert_* only (sync-ready) plus soft-delete tombstones.
 ├── kal-sync/       Account-free P2P sync: LWW CRDT merge, BIP39 sync-chain
 │                   identity, XChaCha20-Poly1305 encrypted envelopes,
 │                   pluggable Transport trait (folder-gossip today, iroh/mDNS
@@ -48,7 +50,9 @@ install.sh          Cross-platform installer: downloads the matching release
                     it against the release's sha256 via the GitHub API.
 web/site/           Landing page for mihneamoso.github.io/kal (Pico template-
                     only, relative URLs), deployed by .github/workflows/pages.yml.
-web/app/            Future Dioxus web shell location (deferred — see RULES).
+web/app/            Dioxus wasm web shell for mihneamoso.github.io/kal/app,
+                    committed bundle + .nojekyll (base_path "kal/app"),
+                    deployed together with web/site by pages.yml.
 widgets/            (future) Swift WidgetKit shim calling kal-ffi.
 ```
 

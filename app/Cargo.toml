@@ -13,19 +13,24 @@ path = "src/main.rs"
 kal-core = { path = "../crates/kal-core" }
 kal-storage = { path = "../crates/kal-storage" }
 kal-import = { path = "../crates/kal-import" }
-kal-sync = { path = "../crates/kal-sync" }
 serde = { workspace = true }
 serde_json = { workspace = true }
 base64 = "0.22"
-tokio = { workspace = true }
 chrono = { workspace = true }
 ulid = { workspace = true }
 dirs-next = "2"
+
+# Native (desktop + mobile) deps shared by the updater / mini-widget / sync.
+# Kept out of the base deps so the wasm build doesn't compile rustls/ring,
+# the tokio multi-thread runtime, or bip39/rand — none of which target wasm.
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+kal-sync = { path = "../crates/kal-sync" }
+tokio = { workspace = true }
 ureq = { version = "2", features = ["json"] }
 sha2 = "0.10"
 
 # Desktop-only deps (gated behind target_os check in source).
-[target.'cfg(not(target_os = "android"))'.dependencies]
+[target.'cfg(all(not(target_os = "android"), not(target_arch = "wasm32")))'.dependencies]
 dioxus = { version = "0.7", features = ["desktop"] }
 dioxus-desktop = "0.7"
 kal-notify = { path = "../crates/kal-notify", features = ["desktop"] }
@@ -41,3 +46,7 @@ kal-ffi = { path = "../crates/kal-ffi" }
 # App-private writable data dir resolution.
 ndk-context = "0.1"
 jni = "0.21"
+
+# Web / wasm deps.
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+dioxus = { version = "0.7", features = ["web"] }

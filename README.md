@@ -127,10 +127,16 @@ A lightweight landing page lives in [`web/site/`](web/site/) (built from the
 (`.github/workflows/pages.yml`). One-time setup: **Settings → Pages → Source:
 GitHub Actions**.
 
-The in-app web build at `/kal/app/` is currently **deferred**: the app's
-SQLite-backed storage and native TLS stack don't target `wasm32` yet (tracked
-in `RULES.md`). The landing page's *Open Kal* button points there for when the
-web shell ships.
+The app itself also runs in the browser as a wasm build at
+**https://mihneamoso.github.io/kal/app/** (deployed by the same `pages`
+workflow). On `wasm32` the storage crate swaps SQLite for an in-memory,
+IndexedDB-backed `Database` that keeps the same synchronous 13-method API and
+persists snapshots to the browser's IndexedDB (`base_path = "kal/app"` in
+`app/Dioxus.toml`). Regenerate the committed bundle in `web/app/` with:
+
+```
+dx bundle --platform web -p kal-app --out-dir web/app && mv web/app/public/* web/app/
+```
 
 ## License
 

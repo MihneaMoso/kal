@@ -1,7 +1,8 @@
 mod i18n;
-#[cfg(not(target_os = "android"))]
+#[cfg(all(not(target_os = "android"), not(target_arch = "wasm32")))]
 mod mini_widget;
 mod profile;
+#[cfg(not(target_arch = "wasm32"))]
 mod sync_ui;
 mod ui;
 mod updater;
@@ -10,19 +11,38 @@ mod widget_ffi;
 
 use chrono::{Datelike, Local, Months, NaiveDate};
 use dioxus::prelude::*;
-#[cfg(not(target_os = "android"))]
+#[cfg(all(not(target_os = "android"), not(target_arch = "wasm32")))]
 use dioxus_desktop::{Config, WindowBuilder};
 use kal_core::models::{Calendar, CalendarItem, Color};
-#[cfg(not(target_os = "android"))]
+#[cfg(all(not(target_os = "android"), not(target_arch = "wasm32")))]
 use kal_notify::DesktopNotifier;
+#[cfg(not(target_arch = "wasm32"))]
 use kal_notify::{ReminderScheduler as _, ThreadScheduler};
 use kal_storage::Database;
 use std::sync::Arc;
 
-#[cfg(not(target_os = "android"))]
+#[cfg(all(not(target_os = "android"), not(target_arch = "wasm32")))]
 pub type SchedulerHandle = Arc<ThreadScheduler<DesktopNotifier>>;
 #[cfg(target_os = "android")]
 pub type SchedulerHandle = Arc<ThreadScheduler<kal_notify::NullNotifier>>;
+#[cfg(target_arch = "wasm32")]
+pub type SchedulerHandle = Arc<WebNoopScheduler>;
+
+/// Web-only no-op reminder scheduler: browser notifications are out of scope
+/// for this build, but the app has a shared `SchedulerHandle` so it stays
+/// structurally uniform across platforms.
+#[cfg(target_arch = "wasm32")]
+#[derive(Default)]
+pub struct WebNoopScheduler;
+
+#[cfg(target_arch = "wasm32")]
+impl WebNoopScheduler {
+    pub fn new() -> Self {
+        Self
+    }
+    #[allow(clippy::needless_lifetimes)]
+    pub fn reschedule<'a>(&self, _firings: &'a [kal_core::reminders::ReminderFiring]) {}
+}
 
 /// App-wide shared handle to the SQLite database.
 pub type DbHandle = Arc<Database>;
@@ -34,6 +54,7 @@ pub type DbHandle = Arc<Database>;
 /// generic `dirs_next::data_dir()` has no `$HOME`/`XDG` env on Android and
 /// falls back to a relative path on the read-only root FS, which surfaces as
 /// "Read-only file system (os error 30)".
+#[cfg(not(target_arch = "wasm32"))]
 fn app_data_dir() -> Option<std::path::PathBuf> {
     #[cfg(not(target_os = "android"))]
     {
@@ -84,10 +105,12 @@ fn query_files_dir() -> Option<std::path::PathBuf> {
     Some(std::path::PathBuf::from(s.to_string_lossy().to_string()))
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 pub fn default_db_path() -> Option<std::path::PathBuf> {
     app_data_dir().map(|d| d.join("kal").join("calendar.db"))
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 fn open_db() -> DbHandle {
     match default_db_path() {
         Some(p) => {
@@ -98,6 +121,29 @@ fn open_db() -> DbHandle {
         }
         None => Arc::new(Database::open_in_memory().expect("failed to open in-memory database")),
     }
+}
+
+// Web: the database is an in-memory store backed by IndexedDB. `App` hands out
+// an `Arc` of this single shared instance; the async snapshot restore then runs
+// in-place (via `load_into`) once the renderer is up, so every handle observes
+// the loaded data. The wasm store is `!Send`/`!Sync` (it wraps `Rc`), so it
+// lives in a thread-local rather than a `Sync` static — fine on single-threaded
+// wasm. `dioxus::launch` drives persistence because the wasm `Database`
+// schedules IndexedDB flushes on its own.
+#[cfg(target_arch = "wasm32")]
+thread_local! {
+    static WEB_DB: std::cell::RefCell<Option<DbHandle>> = const { std::cell::RefCell::new(None) };
+}
+
+#[cfg(target_arch = "wasm32")]
+fn open_db() -> DbHandle {
+    WEB_DB.with(|slot| {
+        slot.borrow_mut()
+            .get_or_insert_with(|| {
+                Arc::new(Database::open_in_memory().expect("failed to init web store"))
+            })
+            .clone()
+    })
 }
 
 /// Ensure the default "Personal" and auto-created "Birthdays" calendars exist.
@@ -118,7 +164,7 @@ fn ensure_default_calendars(db: &Database) -> Vec<Calendar> {
     db.list_calendars().unwrap_or_default()
 }
 
-#[cfg(not(target_os = "android"))]
+#[cfg(all(not(target_os = "android"), not(target_arch = "wasm32")))]
 fn main() {
     // Swap in a staged update (if any) before any window/DB work, so the new
     // binary relaunches cleanly. No-op when nothing is staged.
@@ -134,6 +180,11 @@ fn main() {
 }
 
 #[cfg(target_os = "android")]
+fn main() {
+    dioxus::launch(App);
+}
+
+#[cfg(target_arch = "wasm32")]
 fn main() {
     dioxus::launch(App);
 }
@@ -200,10 +251,12 @@ fn App() -> Element {
     use_context_provider(|| items_res);
 
     // Reminder scheduler shared app-wide; reconciled in the effect below.
-    #[cfg(not(target_os = "android"))]
+    #[cfg(all(not(target_os = "android"), not(target_arch = "wasm32")))]
     let scheduler: SchedulerHandle = Arc::new(ThreadScheduler::new(DesktopNotifier));
     #[cfg(target_os = "android")]
     let scheduler: SchedulerHandle = Arc::new(ThreadScheduler::new(kal_notify::NullNotifier));
+    #[cfg(target_arch = "wasm32")]
+    let scheduler: SchedulerHandle = Arc::new(WebNoopScheduler::new());
     use_context_provider(|| scheduler);
 
     // Reload once default calendars are ensured.
@@ -215,15 +268,41 @@ fn App() -> Element {
     });
 
     // After a sync merge (sync_ui bumps this), reload everything.
-    let mut cal_res_sync = calendars_res;
-    let db_dirty = db.clone();
-    use_effect(move || {
-        if *sync_ui::RESOURCES_DIRTY.read() > 0 {
-            cal_res_sync.restart();
-            let _ = &db_dirty;
-            items_res.restart();
-        }
-    });
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        let mut cal_res_sync = calendars_res;
+        let db_dirty = db.clone();
+        use_effect(move || {
+            if *sync_ui::RESOURCES_DIRTY.read() > 0 {
+                cal_res_sync.restart();
+                let _ = &db_dirty;
+                items_res.restart();
+            }
+        });
+    }
+
+    // Web: restore the persisted IndexedDB snapshot into the shared store once,
+    // then reload the views so the restored data is shown. Runs as an effect so
+    // it has the Dioxus runtime (for the async IndexedDB calls) available.
+    #[cfg(target_arch = "wasm32")]
+    {
+        let db_load = db.clone();
+        let mut cal_res_w = calendars_res;
+        let mut items_res_w = items_res;
+        let mut loaded = use_signal(|| false);
+        use_effect(move || {
+            if *loaded.read() {
+                return;
+            }
+            let db2 = db_load.clone();
+            spawn(async move {
+                let _ = db2.load_into().await;
+                cal_res_w.restart();
+                items_res_w.restart();
+            });
+            *loaded.write() = true;
+        });
+    }
 
     // Reconcile scheduled reminders whenever items change (§5.3: reschedule
     // on foreground / after mutations / after sync merges).
@@ -426,7 +505,17 @@ fn source_label(cal: &Calendar) -> &'static str {
     }
 }
 
-#[cfg(not(target_os = "android"))]
+#[cfg(not(target_arch = "wasm32"))]
+fn sync_panel() -> Element {
+    rsx! { sync_ui::SyncPanel {} }
+}
+
+#[cfg(target_arch = "wasm32")]
+fn sync_panel() -> Element {
+    rsx! {}
+}
+
+#[cfg(all(not(target_os = "android"), not(target_arch = "wasm32")))]
 fn desktop_sidebar_sections(
     db: &DbHandle,
     mut cal_res: Resource<Vec<Calendar>>,
@@ -489,6 +578,17 @@ fn desktop_sidebar_sections(
     rsx! {}
 }
 
+// Web has no desktop mini-window policy nor a native filesystem for the .ics
+// import/export file dialogs, so the corresponding sidebar sections are absent.
+#[cfg(target_arch = "wasm32")]
+fn desktop_sidebar_sections(
+    _db: &DbHandle,
+    _cal_res: Resource<Vec<Calendar>>,
+    _items_res: Resource<Vec<CalendarItem>>,
+) -> Element {
+    rsx! {}
+}
+
 #[component]
 fn Sidebar() -> Element {
     let mut layout = use_context::<Signal<ui::UiLayout>>();
@@ -531,7 +631,7 @@ fn Sidebar() -> Element {
                     CalendarRow { key: "{cal.id}", calendar: cal }
                 }
             }
-            sync_ui::SyncPanel {}
+            {sync_panel()}
             {desktop_sidebar_sections(&db, cal_res, items_res)}
             h2 { "New item" }
             div { style: "display:flex; flex-direction:column; gap:6px;",
@@ -635,7 +735,7 @@ fn ViewNav() -> Element {
     }
 }
 
-#[cfg(not(target_os = "android"))]
+#[cfg(all(not(target_os = "android"), not(target_arch = "wasm32")))]
 fn import_ics_file(db: &DbHandle, text: &str) {
     match kal_import::import_ics(text, "Imported") {
         Ok(result) => {

@@ -1,12 +1,15 @@
-# Deploys the Kal landing page (web/site) to GitHub Pages.
+# Deploys the Kal landing page (web/site) and the in-app web build (web/app)
+# to GitHub Pages.
 #
 # The repo is the `kal` project itself, so GitHub Pages for a project site
-# publishes at https://mihneamoso.github.io/kal/. The landing page uses only
-# relative URLs (`css/…`, `icons/…`, `app/`), so it works unchanged under the
-# `/kal/` path prefix.
+# publishes at https://mihneamoso.github.io/kal/. We assemble a single staging
+# directory so the pages artifact keeps the correct mapping:
+#   web/site/* -> https://mihneamoso.github.io/kal/          (landing page)
+#   web/app/*  -> https://mihneamoso.github.io/kal/app/      (Dioxus wasm app)
 #
-# The in-app web build at /kal/app/ is deferred (the Dioxus app depends on
-# SQLite + native TLS, which don't target wasm32 yet) — see README.
+# The landing page uses only relative URLs (`css/…`, `icons/…`, `app/`), and
+# the app is built with `base_path = "kal/app"` in `app/Dioxus.toml`, so both
+# work unchanged under the `/kal/` path prefix.
 #
 # Setup (one time): Settings → Pages → Source: "GitHub Actions".
 name: pages
@@ -34,10 +37,15 @@ jobs:
       - uses: actions/checkout@v4
       - name: Configure Pages
         uses: actions/configure-pages@v5
-      - name: Upload landing site
+      - name: Assemble Pages artifact (site at root, app at /app)
+        run: |
+          mkdir -p _deploy/app
+          cp -rT web/site _deploy
+          cp -rT web/app _deploy/app
+      - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: web/site
+          path: _deploy
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4

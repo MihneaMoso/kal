@@ -8,6 +8,9 @@ title = "Kal"
 
 [web.app]
 title = "Kal"
+# The web build is deployed at /kal/app/ on GitHub Pages (project site under
+# the `/kal/` path prefix, with the app in its own subdirectory).
+base_path = "kal/app"
 
 [desktop]
 # Window defaults for the desktop shell

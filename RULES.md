@@ -228,11 +228,15 @@ bite you again if ignored, plus the exact state to resume from.
   to `mihneamoso.github.io/kal/` by `.github/workflows/pages.yml` (Pages source
   must be "GitHub Actions" — one-time repo setting). Pages uses relative URLs,
   works under the `/kal/` prefix.
-- **Web app at `/kal/app/` is DEFERRED**: `dx build --platform web` fails
-  because kal-app depends on SQLite (`rusqlite` bundled) + `getrandom`/`ring`
-  which don't target `wasm32-unknown-unknown`. Would need a wasm SQLite backend
-  + JS-feature rewiring. The landing page's *Open Kal* button points at `app/`
-  for when that ships. Keep `web/app/` with `.nojekyll` as the future home.
+- ✅ Web app at `/kal/app/` SHIPS: `kal-storage` swaps SQLite for an
+  in-memory IndexedDB-backed `Database` on wasm (same synchronous 13-method
+  API; `schedule_persist()` writes snapshots to IndexedDB and `load_into()`
+  restores them on boot — see DECISIONS D59). `app/Dioxus.toml` sets
+  `[web.app] base_path = "kal/app"`, and the bundle is committed under
+  `web/app/` (regenerate with `dx bundle --platform web -p kal-app
+  --out-dir web/app`, then move `web/app/public/*` up). `pages.yml` deploys
+  both `web/site` → `/kal/` and `web/app` → `/kal/app/`. The landing page's
+  *Open Kal* button (`href="app/"`) now resolves.
 
 ## Verification checklist before declaring a phase done
 
@@ -404,7 +408,4 @@ bite you again if ignored, plus the exact state to resume from.
 - Widget shims need Xcode/Android SDK builds (sources in widgets/).
 - Sync-chain key rotation & re-pairing UX (revocation blocklist exists).
 - fluent-rs runtime when locale #2 lands (parser swap documented in D43).
-- **Web build of the app (`/kal/app/`)**: needs a wasm SQLite backend + wasm-js
-  wiring for `getrandom`/`ring`; the updater sinks are already compiled out on
-  wasm, so the shell itself is the remaining work.
 - Widget `kal_widget_open` deep-link: honor the extra to land on a specific day/item.
