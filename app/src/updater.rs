@@ -424,7 +424,11 @@ pub fn request_android_install() -> Result<(), String> {
 /// newer version exists, updating the shared status globals. Safe to call from
 /// any platform; on web it reports "not applicable".
 pub fn run_check() {
-    std::thread::spawn(|| {
+    // Run the blocking network/staging work as a Dioxus task rather than a raw
+    // OS thread: dioxus tasks execute with the runtime context established, so
+    // the GlobalSignal writes below (UPDATE_STATUS / UPDATE_READY) are legal
+    // and trigger re-renders. A std::thread would not carry the runtime.
+    spawn(async move {
         let outcome = (|| -> Result<String, String> {
             let latest = latest_release()?;
             if is_newer(&latest.version, CURRENT_VERSION) {
