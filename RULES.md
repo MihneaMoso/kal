@@ -14,6 +14,15 @@
 > say Chrono in historical entries. Old DB dir ~/.local/share/Kal is orphaned;
 > new DB lives in ~/.local/share/kal/calendar.db.
 
+> IMPORTANT (user constraint): NEVER invent a git author/committer. Your git
+> identity is already configured globally as **Mihnea Moso
+> <mihnea.mosorescu@gmail.com>** — just `git add -A && git commit -qm "<msg>"`
+> with NO `-c user.name/user.email` and NO `GIT_AUTHOR_*`/`GIT_COMMITTER_*`
+> overrides. Using a placeholder (e.g. `Kal Dev <dev@kal.local>`) rewrites the
+> commit attribution to the wrong person; it must be corrected with
+> `git commit --amend --reset-author --no-edit`. The git author = the real
+> account owner's GitHub account (Mihnea Moso).
+
 Read this FIRST when resuming work. It contains hard-won discoveries that will
 bite you again if ignored, plus the exact state to resume from.
 
