@@ -3,6 +3,8 @@ mod i18n;
 mod mini_widget;
 mod profile;
 #[cfg(not(target_arch = "wasm32"))]
+mod sync_live;
+#[cfg(not(target_arch = "wasm32"))]
 mod sync_ui;
 mod ui;
 mod updater;
@@ -170,13 +172,68 @@ fn main() {
     // binary relaunches cleanly. No-op when nothing is staged.
     updater::apply_staged_update();
     // Frameless: hide the GTK titlebar/menu entirely (user preference).
-    let cfg = Config::new().with_window(
+    let mut cfg = Config::new().with_window(
         WindowBuilder::new()
             .with_title("Kal")
             .with_decorations(false)
             .with_maximized(true),
     );
+    // Brand the window/taskbar with the project logo. The PNG is embedded at
+    // compile time so the icon is identical whether running via `cargo run`,
+    // `dx serve`, or a packaged/installable build (it never depends on the
+    // current working directory). `image` is already a runtime dependency of
+    // dioxus-desktop, so decoding PNG -> RGBA needs no extra crate.
+    if let Ok(icon) = dioxus_desktop::icon_from_memory::<dioxus_desktop::tao::window::Icon>(
+        include_bytes!("../../assets/icons/desktop/kal-256.png"),
+    ) {
+        cfg = cfg.with_icon(icon);
+    }
+    // Wayland/GNOME resolves the taskbar & dash icon from the app's .desktop
+    // file (looked up by the GTK app id) rather than the window icon above,
+    // which is what X11 and other WMs use. Install the branded .desktop +
+    // icon under the user's XDG data dir so the logo shows whether run via
+    // `dx serve` or a packaged build. Best-effort; never blocks launch.
+    #[cfg(target_os = "linux")]
+    register_desktop_app();
     dioxus::LaunchBuilder::new().with_cfg(cfg).launch(App);
+}
+
+#[cfg(target_os = "linux")]
+fn register_desktop_app() {
+    use std::path::PathBuf;
+    let data_home = std::env::var("XDG_DATA_HOME")
+        .ok()
+        .filter(|p| !p.trim().is_empty())
+        .map(PathBuf::from)
+        .or_else(|| {
+            std::env::var("HOME")
+                .ok()
+                .map(|home| PathBuf::from(home).join(".local/share"))
+        });
+    let Some(data_home) = data_home else { return };
+    let icon = include_bytes!("../../assets/icons/desktop/kal-256.png");
+    let desktop = include_str!("../../assets/applications/kal.desktop");
+    write_if_changed(
+        data_home.join("applications/kal.desktop"),
+        desktop.as_bytes(),
+    );
+    write_if_changed(data_home.join("icons/hicolor/256x256/apps/kal.png"), icon);
+    write_if_changed(data_home.join("pixmaps/kal.png"), icon);
+}
+
+#[cfg(target_os = "linux")]
+fn write_if_changed(path: std::path::PathBuf, bytes: &[u8]) {
+    use std::fs;
+    if fs::read(&path)
+        .map(|existing| existing == bytes)
+        .unwrap_or(false)
+    {
+        return;
+    }
+    if let Some(parent) = path.parent() {
+        let _ = fs::create_dir_all(parent);
+    }
+    let _ = fs::write(path, bytes);
 }
 
 #[cfg(target_os = "android")]

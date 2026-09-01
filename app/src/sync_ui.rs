@@ -68,10 +68,19 @@ fn leave_chain() {
 /// Bumped after a successful merge so App-level effects restart resources.
 pub static RESOURCES_DIRTY: GlobalSignal<u32> = Signal::global(|| 0);
 
-/// One full gossip round against the shared outbox folder.
+/// One full gossip round: live P2P when the chain has peers, otherwise the
+/// shared outbox folder.
 fn run_sync_once(db: &crate::DbHandle) -> Result<usize, String> {
     let identity = load_identity().ok_or("not paired")?;
     let device_id = ulid::Ulid::new(); // per-round id; stable ids land with settings store
+
+    // Live P2P first: when the gossip topic has peers, sync over the network
+    // (mobile joiners reach the desktop without any shared folder).
+    if let Ok(merged) = crate::sync_live::sync_round(&identity, db) {
+        return Ok(merged);
+    }
+    // Not joined yet / unavailable — fall back to the shared folder.
+
     let outbox = identity_path(&db_file())
         .parent()
         .unwrap_or_else(|| std::path::Path::new("."))

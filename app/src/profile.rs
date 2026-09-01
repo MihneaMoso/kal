@@ -175,13 +175,18 @@ pub fn SettingsScreen() -> Element {
                                 }
                             }
                             div { style: "display:flex;gap:6px;flex-wrap:wrap;",
-                                label {
+                                button {
                                     class: "file-upload",
-                                    "Upload picture"
+                                    r#type: "button",
+                                    // The actual file input is overlaid invisibly on top of
+                                    // this button. Overlaying (rather than a `display:none`
+                                    // input inside a `<label>`) is what makes the OS file
+                                    // picker open reliably on Android WebViews, where
+                                    // label-forwarding to a hidden input is dropped.
+                                    span { "Upload picture" }
                                     input {
                                         r#type: "file",
                                         accept: "image/*",
-                                        style: "display:none",
                                         onchange: move |e: Event<FormData>| {
                                             let Some(file) = e.files().first().cloned() else { return; };
                                             let mime = file.content_type();

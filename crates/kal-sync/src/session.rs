@@ -17,6 +17,9 @@ pub enum SyncError {
     /// Payload decrypts but came from a device that has been revoked.
     #[error("device revoked")]
     Revoked,
+    /// The live (iroh) transport failed.
+    #[error("live transport: {0}")]
+    Live(String),
 }
 
 /// Moves opaque encrypted blobs between devices.

@@ -16,8 +16,8 @@ crates/
 │                   upsert_* only (sync-ready) plus soft-delete tombstones.
 ├── kal-sync/       Account-free P2P sync: LWW CRDT merge, BIP39 sync-chain
 │                   identity, XChaCha20-Poly1305 encrypted envelopes,
-│                   pluggable Transport trait (folder-gossip today, iroh/mDNS
-│                   later).
+│                   pluggable Transport trait (live iroh gossip + DHT discovery,
+│                   folder-gossip fallback; LAN mDNS later).
 ├── kal-notify/     Reminder scheduling: pure firing computation lives in
 │                   kal-core; this crate materializes firings as platform
 │                   local notifications (notify-rust on desktop; threads with
@@ -70,11 +70,16 @@ Device B types the same phrase → derives identical keys → is now authorized.
 No server account exists anywhere.
 
 **Transport.** `kal_sync::Transport` moves opaque blobs between devices. The
-first shipped implementation is *file gossip*: sealed `.kalblob` files in a
-user-chosen outbox folder that can be moved by anything (Syncthing, Dropbox, a
-USB stick). Because payloads are AEAD-encrypted under the chain key, any
-carrier works without trusting it. iroh (QUIC hole-punching + relay) and LAN
-mDNS plug into the same trait; relays only ever see ciphertext.
+primary implementation is *live P2P* (`kal_sync::live`, native only): each
+device derives the same gossip topic id from the chain fingerprint, publishes
+its iroh node id to a distributed hash table under that topic, and joins the
+shared gossip swarm via the public n0 relay — so two devices that hold the same
+phrase find each other from anywhere with zero configuration. The *file gossip*
+implementation (sealed `.kalblob` files in a user-chosen outbox folder movable
+by Syncthing/Dropbox/USB) remains the fallback for offline/air-gap setups.
+Because payloads are AEAD-encrypted under the chain key, both carriers are
+untrusted; relays only ever see ciphertext. LAN mDNS plugs into the same trait
+later.
 
 **Merge.** State-based CRDT with whole-record LWW registers. Every record
 carries `updated_at`; winners are chosen by
@@ -96,8 +101,11 @@ tracked as future work.
 
 **Leaving the chain.** In the UI, "Leave sync chain" (below "Sync now", with a
 two-step inline confirm) deletes the local `sync-identity.json` and the local
-`sync-outbox/` folder. The gossip chain has no central membership, so this is
-purely local: other devices simply stop receiving snapshots from this one.
+`sync-outbox/` folder; the in-memory live transport is dropped by the next
+sync round (it is keyed by chain fingerprint). The gossip chain has no central
+membership, so this is purely local: other devices simply stop receiving
+snapshots from this one. The per-device `sync-node.json` (iroh identity) is
+kept — it belongs to the device, not the chain.
 
 ## Reminders
 

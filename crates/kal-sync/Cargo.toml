@@ -17,6 +17,16 @@ serde_json = { workspace = true }
 ulid = { workspace = true }
 thiserror = { workspace = true }
 
+# Live P2P transport (iroh gossip). Native-only: iroh does not support wasm32,
+# and the app already gates kal-sync to non-wasm builds.
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+iroh = "1"
+iroh-gossip = "0.101"
+distributed-topic-tracker = "0.3"
+ed25519-dalek = "3"
+tokio = { workspace = true, features = ["sync"] }
+bytes = "1"
+
 [dev-dependencies]
 rand = "0.8"
 tempfile = "3"

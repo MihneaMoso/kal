@@ -2,6 +2,8 @@
 
 pub mod crdt;
 pub mod keys;
+#[cfg(not(target_arch = "wasm32"))]
+pub mod live;
 pub mod session;
 pub mod transport_file;
 

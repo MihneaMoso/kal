@@ -1,0 +1,13 @@
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=Kal
+Name[en-US]=Kal
+Comment=Calendar, reminders and encrypted sync
+Comment[en-US]=Calendar, reminders and encrypted sync
+Exec=kal
+Icon=kal
+Terminal=false
+Categories=Office;Calendar;Utility;
+StartupWMClass=kal
+StartupNotify=false

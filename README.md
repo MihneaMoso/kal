@@ -14,7 +14,7 @@ peer-to-peer sync — all in one Rust codebase (Dioxus 0.7).
 | RRULE recurrence + per-instance edit scoping | ✅ |
 | Unlimited reminders → OS notifications | ✅ desktop |
 | .ics round-trip + Google Calendar import | ✅ |
-| Sync chain: phrase pairing, encrypted folder-gossip merge | ✅ |
+| Sync chain: phrase pairing, encrypted live P2P (iroh) + folder-gossip merge | ✅ |
 | Settings (theme, clock, week start, default view) | ✅ |
 | i18n scaffolding (en-US), a11y pass | ✅ |
 | Desktop always-on-top mini-calendar window | ✅ |
@@ -22,7 +22,8 @@ peer-to-peer sync — all in one Rust codebase (Dioxus 0.7).
 | Android home-screen widgets (schedule + month) | ✅ |
 | Cross-platform installer (`install.sh`) + in-app updater | ✅ desktop/Android |
 | Web app (`/kal/app/` — wasm build with IndexedDB storage) | ✅ built in CI on every master push + release tag |
-| Live P2P transports (iroh/mDNS), mobile app targets, packaging pipelines | 🔜 |
+| Live P2P: iroh gossip + DHT discovery (same-phrase devices find each other) | ✅ native |
+| LAN mDNS transport, iOS/mobile app targets | 🔜 |
 
 Design decisions: `DECISIONS.md` · Sync internals: `ARCHITECTURE.md` ·
 Contributing: `CONTRIBUTING.md` · Environment gotchas: `RULES.md`.
