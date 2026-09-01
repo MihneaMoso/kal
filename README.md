@@ -21,6 +21,7 @@ peer-to-peer sync — all in one Rust codebase (Dioxus 0.7).
 | Widget C ABI (`kal-ffi`) + Android/iOS shim sources | ✅ (shims need SDKs to build) |
 | Android home-screen widgets (schedule + month) | ✅ |
 | Cross-platform installer (`install.sh`) + in-app updater | ✅ desktop/Android |
+| Web app (`/kal/app/` — wasm build with IndexedDB storage) | ✅ built in CI on every master push + release tag |
 | Live P2P transports (iroh/mDNS), mobile app targets, packaging pipelines | 🔜 |
 
 Design decisions: `DECISIONS.md` · Sync internals: `ARCHITECTURE.md` ·

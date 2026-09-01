@@ -50,9 +50,10 @@ install.sh          Cross-platform installer: downloads the matching release
                     it against the release's sha256 via the GitHub API.
 web/site/           Landing page for mihneamoso.github.io/kal (Pico template-
                     only, relative URLs), deployed by .github/workflows/pages.yml.
-web/app/            Dioxus wasm web shell for mihneamoso.github.io/kal/app,
-                    committed bundle + .nojekyll (base_path "kal/app"),
-                    deployed together with web/site by pages.yml.
+web/app/            Dioxus wasm web shell output for mihneamoso.github.io/kal/app
+                    (built from source in CI by scripts/build-web.sh — never
+                    committed; gitignored). base_path "kal/app"; deployed by
+                    pages.yml (master) and release.yml (tags).
 widgets/            (future) Swift WidgetKit shim calling kal-ffi.
 ```
 
