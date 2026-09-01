@@ -14,8 +14,10 @@
 # `base_path = "kal/app"` in `app/Dioxus.toml`, so both work unchanged under
 # the `/kal/` path prefix.
 #
-# The release workflow (release.yml) also deploys the web build on version tags
-# using the same script.
+# The web app is deployed here FROM SOURCE (not from a committed bundle) on
+# every push to master. Release version tags deliberately do NOT redeploy
+# (see release.yml); Pages deployments are restricted to the default branch by
+# the github-pages environment protection rules.
 #
 # Setup (one time): Settings → Pages → Source: "GitHub Actions".
 name: pages
