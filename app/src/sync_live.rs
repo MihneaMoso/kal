@@ -8,13 +8,49 @@
 use std::sync::{Arc, Mutex, OnceLock};
 
 use kal_sync::live::IrohTransport;
-use kal_sync::{ChainIdentity, SyncSession, SyncState, Transport as _};
+use kal_sync::{ChainIdentity, SyncSession, SyncState};
 
 use crate::DbHandle;
 
 /// One transport per device, keyed by the chain fingerprint it joined.
 type LiveSlot = (String, Arc<IrohTransport>);
 static LIVE: OnceLock<Mutex<Option<LiveSlot>>> = OnceLock::new();
+
+/// The slice of a live transport that a sync round needs.
+///
+/// Kept as a trait (rather than reaching for `IrohTransport` directly) so the
+/// orchestration in [`live_round_core`] can be unit-tested against a fake,
+/// in-memory transport — the real DHT/gossip networking can't run in CI.
+pub trait LiveSink {
+    fn device_id(&self) -> &str;
+    /// Whether the gossip topic currently has at least one peer.
+    fn is_joined(&self) -> bool;
+    /// Remember the latest sealed state so newly-joined peers get it pushed.
+    fn set_state(&self, blob: Vec<u8>);
+    /// Broadcast our sealed state to all current peers.
+    fn broadcast(&self, blob: &[u8]) -> Result<(), String>;
+    /// Drain any state peers have pushed to us.
+    fn recv(&self) -> Option<(String, Vec<u8>)>;
+}
+
+impl LiveSink for IrohTransport {
+    fn device_id(&self) -> &str {
+        IrohTransport::device_id(self)
+    }
+    fn is_joined(&self) -> bool {
+        IrohTransport::is_joined(self)
+    }
+    fn set_state(&self, blob: Vec<u8>) {
+        IrohTransport::set_state(self, blob)
+    }
+    fn broadcast(&self, blob: &[u8]) -> Result<(), String> {
+        // addr is unused by the gossip transport, so "" is fine.
+        kal_sync::Transport::send(self, "", blob).map_err(|e| e.to_string())
+    }
+    fn recv(&self) -> Option<(String, Vec<u8>)> {
+        kal_sync::Transport::recv(self)
+    }
+}
 
 /// Per-device (not chain) identity: the iroh endpoint secret + a stable ULID.
 /// Stored next to the chain identity so app restarts reuse the same endpoint
@@ -58,6 +94,12 @@ impl NodeCfg {
 
 /// The live transport for `identity`, creating it on first use. Returns `None`
 /// when the chain changed or the transport could not start.
+///
+/// Safe to call from any thread: `IrohTransport::connect` internally calls
+/// `tokio::runtime::Runtime::block_on`, which panics if invoked from within an
+/// existing tokio runtime (e.g. a Dioxus render/effect thread). So whenever a
+/// fresh transport must be built, it is built on a dedicated OS thread that is
+/// not driving any runtime; callers here may block briefly for that build.
 pub fn live_transport(identity: &ChainIdentity) -> Option<Arc<IrohTransport>> {
     let fingerprint = identity.fingerprint().fingerprint_hex.clone();
     let guard = LIVE.get_or_init(|| Mutex::new(None));
@@ -70,21 +112,66 @@ pub fn live_transport(identity: &ChainIdentity) -> Option<Arc<IrohTransport>> {
     let cfg = NodeCfg::load_or_create()?;
     let device_id = cfg.device_id.parse().ok()?;
     let node_key = decode_hex(&cfg.node_key)?;
-    let transport = IrohTransport::connect(identity, device_id, node_key).ok()?;
+
+    // Clone the data we need into a 'static closure so the builder can run on
+    // its own thread. The construction is synchronous and needs the ChainIdentity
+    // only to derive the topic; rebuild entries are cheap enough.
+    let phrase = identity.to_owned();
+    let build = std::thread::Builder::new()
+        .name("kal-live-connect".into())
+        .spawn(move || IrohTransport::connect(&phrase, device_id, node_key))
+        .ok()?;
+    let transport = build.join().ok()?.ok()?;
     *slot = Some((fingerprint, Arc::new(transport)));
     slot.as_ref().map(|(_, t)| t.clone())
 }
 
-/// Run one full live sync round. Succeeds only when the gossip topic has peers
-/// (revealing current local state and draining theirs); callers fall back to
-/// the folder transport when it returns `Err`.
+/// Run one full live sync round. Creates the transport on first call (if not
+/// already cached) and waits up to `PEER_TIMEOUT` for DHT peer discovery
+/// before giving up.  Callers fall back to the folder transport when this
+/// returns `Err`.
 pub fn sync_round(identity: &ChainIdentity, db: &DbHandle) -> Result<usize, String> {
     let transport = live_transport(identity).ok_or("live P2P unavailable")?;
-    if !transport.is_joined() {
-        return Err("live P2P: no peers yet".to_string());
+    let sink: &dyn LiveSink = &*transport;
+
+    // The transport's DHT record + gossip join happen asynchronously.  Give
+    // the network up to 15 s to discover the first peer before we bail.
+    const PEER_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(15);
+    const POLL: std::time::Duration = std::time::Duration::from_millis(250);
+    let deadline = std::time::Instant::now() + PEER_TIMEOUT;
+    while !sink.is_joined() {
+        if std::time::Instant::now() >= deadline {
+            break;
+        }
+        std::thread::sleep(POLL);
+    }
+    if !sink.is_joined() {
+        return Err("live P2P: no peers yet — try again in a moment".into());
     }
 
-    let device_id: ulid::Ulid = transport
+    live_round_core(identity, db, sink)
+}
+
+/// The pure orchestration of one live sync round, factored out so it can be
+/// tested against an in-memory fake transport instead of the real gossip
+/// network.
+///
+/// Behavior contract (the "should work" spec):
+///  1. Seal our current local state and remember it for the transport
+///     (`set_state`) so late-joining peers receive it via the transport's
+///     auto-rebroadcast.
+///  2. Broadcast our full state to the topic.
+///  3. Drain everything peers sent and merge it into our session; count merged
+///     peer envelopes.
+///  4. Self-broadcasts (our own device id) are ignored — never counted/merged.
+///  5. After any merge, persist the converged calendars + items to the DB.
+///  6. Returns the number of peer envelopes merged (0 means nothing changed).
+pub fn live_round_core(
+    identity: &ChainIdentity,
+    db: &DbHandle,
+    sink: &dyn LiveSink,
+) -> Result<usize, String> {
+    let device_id: ulid::Ulid = sink
         .device_id()
         .parse()
         .map_err(|e| format!("bad device id: {e}"))?;
@@ -98,12 +185,12 @@ pub fn sync_round(identity: &ChainIdentity, db: &DbHandle) -> Result<usize, Stri
     );
 
     let sealed = session.seal_state().map_err(|e| e.to_string())?;
-    transport.set_state(sealed.clone());
-    transport.send("", &sealed).map_err(|e| e.to_string())?;
+    sink.set_state(sealed.clone());
+    sink.broadcast(&sealed).map_err(|e| e.to_string())?;
 
-    let self_id = transport.device_id().to_string();
+    let self_id = sink.device_id().to_string();
     let mut merged = 0usize;
-    while let Some((sender, bytes)) = transport.recv() {
+    while let Some((sender, bytes)) = sink.recv() {
         if sender == self_id {
             continue;
         }
@@ -138,4 +225,246 @@ fn decode_hex(s: &str) -> Option<[u8; 32]> {
         out[i] = u8::from_str_radix(&s[i * 2..i * 2 + 2], 16).ok()?;
     }
     Some(out)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use kal_core::models::{Calendar, CalendarItem, Color, ItemKind};
+    use kal_storage::Database;
+    use std::collections::{HashMap, VecDeque};
+    use std::sync::Mutex as StdMutex;
+
+    const PHRASE: &str =
+        "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
+
+    /// Shared gossip mailboxes keyed by recipient device id. When any sink
+    /// broadcasts, the blob is delivered to every OTHER sink's inbox — the
+    /// same fan-out a real gossip topic provides.
+    type MailboxMap = HashMap<String, VecDeque<(String, Vec<u8>)>>;
+    #[derive(Clone, Default)]
+    struct Mailboxes(Arc<StdMutex<MailboxMap>>);
+
+    impl Mailboxes {
+        fn push(&self, to: &str, from: String, blob: Vec<u8>) {
+            self.0
+                .lock()
+                .unwrap()
+                .entry(to.to_string())
+                .or_default()
+                .push_back((from, blob));
+        }
+        fn pop(&self, me: &str) -> Option<(String, Vec<u8>)> {
+            self.0
+                .lock()
+                .unwrap()
+                .entry(me.to_string())
+                .or_default()
+                .pop_front()
+        }
+        fn members(&self) -> Vec<String> {
+            self.0.lock().unwrap().keys().cloned().collect()
+        }
+    }
+
+    /// A fake live transport with the same contract as `IrohTransport`, but
+    /// fully in-memory so the sync orchestration can be exercised in CI.
+    ///
+    /// `me` must be a well-formed ULID (the real transport's device id always
+    /// is), because `live_round_core` parses it into a `Ulid`.
+    struct FakeSink {
+        me: String,
+        joined: bool,
+        mail: Mailboxes,
+        state: StdMutex<Option<Vec<u8>>>,
+    }
+
+    impl FakeSink {
+        fn new(me: &str, mail: Mailboxes) -> Self {
+            Self {
+                me: me.to_string(),
+                joined: true, // fake sinks are considered joined to keep the test focused on merge logic
+                mail,
+                state: StdMutex::new(None),
+            }
+        }
+        fn ulid() -> String {
+            ulid::Ulid::new().to_string()
+        }
+    }
+
+    impl LiveSink for FakeSink {
+        fn device_id(&self) -> &str {
+            &self.me
+        }
+        fn is_joined(&self) -> bool {
+            self.joined
+        }
+        fn set_state(&self, blob: Vec<u8>) {
+            *self.state.lock().unwrap() = Some(blob);
+        }
+        fn broadcast(&self, blob: &[u8]) -> Result<(), String> {
+            for peer in self.mail.members() {
+                if peer != self.me {
+                    self.mail.push(&peer, self.me.clone(), blob.to_vec());
+                }
+            }
+            Ok(())
+        }
+        fn recv(&self) -> Option<(String, Vec<u8>)> {
+            self.mail.pop(&self.me)
+        }
+    }
+
+    fn sample_item(calendar_id: ulid::Ulid, title: &str, ts_secs: i64) -> CalendarItem {
+        use chrono::TimeZone;
+        let start = chrono::Utc
+            .timestamp_opt(ts_secs, 0)
+            .single()
+            .unwrap()
+            .fixed_offset();
+        CalendarItem::new(ItemKind::Event, title, calendar_id, start)
+    }
+
+    fn cal(name: &str) -> Calendar {
+        Calendar::local(name, Color("#3366cc".into()))
+    }
+
+    /// Seed one calendar + one event onto the chain and return the sealed blob
+    /// a peer would broadcast. The event is attached to the seeded calendar so
+    /// the in-memory DB's `items.calendar_id REFERENCES calendars(id)` FK holds.
+    fn sealed_state_with(identity: &ChainIdentity, cal_name: &str, item_title: &str) -> Vec<u8> {
+        let mut s = SyncState::default();
+        let cal_id = ulid::Ulid::new();
+        let mut calendar = cal(cal_name);
+        calendar.id = cal_id; // keep map key in lockstep with the row id so the FK holds
+        s.calendars.insert(cal_id, calendar);
+        s.items.insert(
+            ulid::Ulid::new(),
+            sample_item(cal_id, item_title, 1_700_000_000),
+        );
+        let session = SyncSession::new(identity, ulid::Ulid::new(), "seeder", s);
+        session.seal_state().unwrap()
+    }
+
+    fn empty_db() -> DbHandle {
+        Arc::new(Database::open_in_memory().unwrap())
+    }
+
+    /// Phone (fresh Android install, empty DB) joins a chain that a desktop has
+    /// already populated. The desktop's state is sitting in the phone's inbox
+    /// (pushed via the transport's NeighborUp rebroadcast). Tapping "Sync now"
+    /// must bring the desktop's calendar + event into the phone's DB.
+    #[test]
+    fn phone_joining_chain_pulls_desktops_state_into_its_db() {
+        let identity = ChainIdentity::from_phrase(PHRASE).unwrap();
+        let mail = Mailboxes::default();
+
+        // Desktop: publishes its populated state once, which lands in the
+        // phone's mailbox (and any other peer) via the transport's
+        // NeighborUp-style rebroadcast.
+        let desktop_id = FakeSink::ulid();
+        let desktop_blob = sealed_state_with(&identity, "Work", "Standup");
+
+        // Phone: joins with an empty DB, with the desktop's state sitting in
+        // its inbox, then syncs.
+        let phone_id = FakeSink::ulid();
+        let phone = FakeSink::new(&phone_id, mail.clone());
+        mail.push(&phone_id, desktop_id, desktop_blob);
+        let db = empty_db();
+        let merged = live_round_core(&identity, &db, &phone).unwrap();
+
+        assert!(merged >= 1, "phone must merge the desktop's state");
+        let cals = db.list_calendars().unwrap();
+        let items = db.list_items(false).unwrap();
+        assert_eq!(cals.len(), 1);
+        assert_eq!(cals[0].name, "Work");
+        assert_eq!(items.len(), 1);
+        assert_eq!(items[0].title, "Standup");
+    }
+
+    /// Gossip broadcasts come back to the sender; a round must never count or
+    /// persist its own echo.
+    #[test]
+    fn self_broadcast_is_never_merged_or_counted() {
+        let identity = ChainIdentity::from_phrase(PHRASE).unwrap();
+        let mail = Mailboxes::default();
+        let phone_id = FakeSink::ulid();
+        let phone = FakeSink::new(&phone_id, mail.clone());
+        let own_blob = sealed_state_with(&identity, "Me", "Mine");
+        mail.push(&phone_id, phone_id.clone(), own_blob);
+
+        let db = empty_db();
+        let merged = live_round_core(&identity, &db, &phone).unwrap();
+        assert_eq!(merged, 0, "self-broadcast must not count as a merge");
+        assert_eq!(db.list_items(false).unwrap().len(), 0);
+        assert_eq!(db.list_calendars().unwrap().len(), 0);
+    }
+
+    /// Merging from two independent peers unions both — a phone receiving
+    /// different events from two desktops keeps both.
+    #[test]
+    fn merges_from_multiple_peers_are_unioned() {
+        let identity = ChainIdentity::from_phrase(PHRASE).unwrap();
+        let mail = Mailboxes::default();
+
+        let a_blob = sealed_state_with(&identity, "CalA", "A-event");
+        let b_blob = sealed_state_with(&identity, "CalB", "B-event");
+
+        let phone_id = FakeSink::ulid();
+        let phone = FakeSink::new(&phone_id, mail.clone());
+        mail.push(&phone_id, FakeSink::ulid(), a_blob);
+        mail.push(&phone_id, FakeSink::ulid(), b_blob);
+
+        let db = empty_db();
+        let merged = live_round_core(&identity, &db, &phone).unwrap();
+        assert_eq!(merged, 2, "both peers' envelopes are merged");
+        let cals = db.list_calendars().unwrap();
+        let items = db.list_items(false).unwrap();
+        let titles: std::collections::HashSet<String> =
+            items.iter().map(|i| i.title.clone()).collect();
+        assert!(titles.contains("A-event"));
+        assert!(titles.contains("B-event"));
+        let cal_names: std::collections::HashSet<String> =
+            cals.iter().map(|c| c.name.clone()).collect();
+        assert!(cal_names.contains("CalA"));
+        assert!(cal_names.contains("CalB"));
+    }
+
+    /// A fresh identity has no data, so an empty chain round is a clean
+    /// no-op — the phone DB stays empty but the round must not error/panic.
+    #[test]
+    fn empty_chain_round_is_a_clean_noop() {
+        let identity = ChainIdentity::from_phrase(PHRASE).unwrap();
+        let mail = Mailboxes::default();
+        let phone = FakeSink::new(&FakeSink::ulid(), mail);
+        let db = empty_db();
+        let merged = live_round_core(&identity, &db, &phone).unwrap();
+        assert_eq!(merged, 0);
+        assert_eq!(db.list_items(false).unwrap().len(), 0);
+    }
+
+    /// The node-secret hex codec that keys the per-device transport must be a
+    /// lossless 32-byte / 64-char round trip (corrupting it would make a phone
+    /// unable to reconnect to its own DHT identity across restarts).
+    #[test]
+    fn node_secret_hex_round_trips_and_chains_differ() {
+        let key = IrohTransport::new_node_secret();
+        let hex = encode_hex(&key);
+        assert_eq!(hex.len(), 64);
+        assert_eq!(decode_hex(&hex), Some(key));
+        // Distinct chains must never collide on the same topic fingerprint.
+        let a = ChainIdentity::from_phrase(PHRASE).unwrap();
+        let b = ChainIdentity::generate().unwrap();
+        assert_ne!(
+            a.fingerprint().fingerprint_hex,
+            b.fingerprint().fingerprint_hex
+        );
+        // The same phrase always resolves to the same fingerprint on any device.
+        let a2 = ChainIdentity::from_phrase(PHRASE).unwrap();
+        assert_eq!(
+            a.fingerprint().fingerprint_hex,
+            a2.fingerprint().fingerprint_hex
+        );
+    }
 }

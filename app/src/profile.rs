@@ -108,10 +108,10 @@ pub fn clear_avatar(profile: &mut UserProfile) {
 }
 
 fn looks_like_image(bytes: &[u8]) -> bool {
-    matches!(
-        &bytes[..bytes.len().min(12)],
-        [0x89, b'P', b'N', b'G', ..] | [0xFF, 0xD8, 0xFF, ..] | b"GIF8" | b"RIFF" // WEBP
-    )
+    let head = &bytes[..bytes.len().min(12)];
+    matches!(head, [0x89, b'P', b'N', b'G', ..] | [0xFF, 0xD8, 0xFF, ..])
+        || head.starts_with(b"GIF8")
+        || head.starts_with(b"RIFF")
 }
 
 fn base64_encode(bytes: &[u8]) -> String {
@@ -139,6 +139,32 @@ pub fn open_settings_screen(db: &crate::DbHandle) {
     *SETTINGS_SCREEN_OPEN.write() = true;
 }
 
+/// Android: launch the native image picker (via JNI) instead of the WebView's
+/// file input, whose selected bytes never reach Rust. Runs the blocking JNI
+/// pick on a background thread so the UI thread is not frozen.
+#[cfg(target_os = "android")]
+fn upload_native() {
+    let rx = crate::android_picker::pick_image_async();
+    spawn(async move {
+        let picked = tokio::task::spawn_blocking(move || rx.recv().ok().flatten())
+            .await
+            .ok()
+            .flatten();
+        if let Some(picked) = picked {
+            *SCREEN_ERROR.write() = String::new();
+            if let Err(msg) = set_avatar(&mut PROFILE_EDIT.write(), picked.mime, &picked.bytes) {
+                *SCREEN_ERROR.write() = msg;
+            }
+        } else {
+            // Picker dismissed without a selection: leave the current avatar.
+        }
+    });
+}
+
+/// Non-Android: unused (the overlaid file input handles desktop/web).
+#[cfg(not(target_os = "android"))]
+fn upload_native() {}
+
 /// Modal screen for editing the username + profile picture (avatar).
 #[component]
 pub fn SettingsScreen() -> Element {
@@ -148,6 +174,55 @@ pub fn SettingsScreen() -> Element {
         save_profile(&db, &PROFILE_EDIT.read().clone());
         *PROFILE_VIEW.write() = PROFILE_EDIT.read().clone();
         *SETTINGS_SCREEN_OPEN.write() = false;
+    };
+
+    // The profile-picture control differs by platform: Android routes the tap
+    // to the native JNI picker (the WebView file input never returns bytes);
+    // desktop/web use the overlaid <input type="file">. Computed here so the
+    // rsx! below stays single-source and free of attribute-level cfg.
+    let upload_control = if cfg!(target_os = "android") {
+        rsx! {
+            button {
+                class: "file-upload",
+                r#type: "button",
+                onclick: move |_| upload_native(),
+                "Upload picture"
+            }
+        }
+    } else {
+        rsx! {
+            button {
+                class: "file-upload",
+                r#type: "button",
+                span { "Upload picture" }
+                input {
+                    r#type: "file",
+                    accept: "image/*",
+                    onchange: move |e: Event<FormData>| {
+                        let Some(file) = e.files().first().cloned() else { return; };
+                        let mime = file.content_type();
+                        spawn(async move {
+                            match file.read_bytes().await {
+                                Ok(bytes) => {
+                                    *SCREEN_ERROR.write() = String::new();
+                                    if let Err(msg) = set_avatar(
+                                        &mut PROFILE_EDIT.write(),
+                                        mime,
+                                        &bytes,
+                                    ) {
+                                        *SCREEN_ERROR.write() = msg;
+                                    }
+                                }
+                                Err(err) => {
+                                    *SCREEN_ERROR.write() =
+                                        format!("Could not read image: {err}");
+                                }
+                            }
+                        });
+                    },
+                }
+            }
+        }
     };
 
     rsx! {
@@ -175,42 +250,7 @@ pub fn SettingsScreen() -> Element {
                                 }
                             }
                             div { style: "display:flex;gap:6px;flex-wrap:wrap;",
-                                button {
-                                    class: "file-upload",
-                                    r#type: "button",
-                                    // The actual file input is overlaid invisibly on top of
-                                    // this button. Overlaying (rather than a `display:none`
-                                    // input inside a `<label>`) is what makes the OS file
-                                    // picker open reliably on Android WebViews, where
-                                    // label-forwarding to a hidden input is dropped.
-                                    span { "Upload picture" }
-                                    input {
-                                        r#type: "file",
-                                        accept: "image/*",
-                                        onchange: move |e: Event<FormData>| {
-                                            let Some(file) = e.files().first().cloned() else { return; };
-                                            let mime = file.content_type();
-                                            spawn(async move {
-                                                match file.read_bytes().await {
-                                                    Ok(bytes) => {
-                                                        *SCREEN_ERROR.write() = String::new();
-                                                        if let Err(msg) = set_avatar(
-                                                            &mut PROFILE_EDIT.write(),
-                                                            mime,
-                                                            &bytes,
-                                                        ) {
-                                                            *SCREEN_ERROR.write() = msg;
-                                                        }
-                                                    }
-                                                    Err(err) => {
-                                                        *SCREEN_ERROR.write() =
-                                                            format!("Could not read image: {err}");
-                                                    }
-                                                }
-                                            });
-                                        },
-                                    }
-                                }
+                                {upload_control}
                                 if PROFILE_EDIT.read().has_avatar() {
                                     button {
                                         onclick: move |_| clear_avatar(&mut PROFILE_EDIT.write()),
@@ -315,6 +355,9 @@ fn SoftwareSection() -> Element {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::DbHandle;
+    use kal_storage::Database;
+    use std::sync::Arc;
 
     #[test]
     fn initials_and_display_name() {
@@ -347,5 +390,105 @@ mod tests {
             [0x89, b'P', b'N', b'G', 0x0d, 0x0a, 0x1a, 0x0a].repeat(MAX_AVATAR_BYTES / 8 + 1);
         big.push(0);
         assert!(set_avatar(&mut p, None, &big).is_err());
+    }
+
+    /// Android's native picker (`KalFilePicker`) often returns a file without a
+    /// usable MIME string. The path taken by the Android tap must still persist
+    /// the avatar — falling back to image/png rather than failing or storing a
+    /// broken row.
+    #[test]
+    fn set_avatar_accepts_missing_mime_from_android_picker() {
+        let mut p = UserProfile::default();
+        let heic_like_png = [0x89, b'P', b'N', b'G', 0x0d, 0x0a, 0x1a, 0x0a];
+        set_avatar(&mut p, None, &heic_like_png).unwrap();
+        assert_eq!(p.avatar_mime.as_deref(), Some("image/png"));
+        assert!(p.has_avatar());
+    }
+
+    /// Real gallery files come in JPEG/WEBP/GIF/PNG. All must be accepted (the
+    /// WebView `accept="image/*"` and the native picker both allow them), so an
+    /// upload from an Android gallery never fatals.
+    #[test]
+    fn set_avatar_accepts_common_gallery_formats() {
+        let formats: &[&[u8]] = &[
+            &[0xFF, 0xD8, 0xFF, 0xE0],             // JPEG
+            b"RIFF\x00\x00\x00\x00WEBPVP8",        // WEBP
+            b"GIF89a",                             // GIF
+            &[0x89, b'P', b'N', b'G', 0x0d, 0x0a], // PNG
+        ];
+        for (i, bytes) in formats.iter().enumerate() {
+            let mut p = UserProfile::default();
+            set_avatar(&mut p, None, bytes)
+                .unwrap_or_else(|e| panic!("gallery format #{i} must be accepted, got {e}"));
+            assert!(p.has_avatar(), "gallery format #{i} persists an avatar");
+        }
+    }
+
+    /// An empty/zero-byte file is not an image and must not set an avatar.
+    #[test]
+    fn set_avatar_rejects_empty_file() {
+        let mut p = UserProfile::default();
+        assert!(set_avatar(&mut p, Some("image/jpeg".into()), &[]).is_err());
+        assert!(!p.has_avatar());
+    }
+
+    /// Settings must round-trip through the same on-device settings table the
+    /// UI writes to (this is how the avatar survives restarts on Android).
+    #[test]
+    fn profile_persists_through_settings_table() {
+        let db: DbHandle = Arc::new(Database::open_in_memory().unwrap());
+        let mut p = UserProfile {
+            username: "Mihnea".into(),
+            ..Default::default()
+        };
+        let png = [0x89, b'P', b'N', b'G', 0x0d, 0x0a, 0x1a, 0x0a];
+        set_avatar(&mut p, Some("image/webp".into()), &png).unwrap();
+
+        save_profile(&db, &p);
+        let loaded = load_profile(&db);
+        assert_eq!(loaded.username, "Mihnea");
+        assert_eq!(loaded.avatar_mime.as_deref(), Some("image/webp"));
+        assert_eq!(loaded.avatar_b64, p.avatar_b64);
+        assert!(loaded.has_avatar());
+    }
+
+    /// `display_name` must trim surrounding whitespace and fall back to the
+    /// default when blank, so a stray-space username never renders as "".
+    #[test]
+    #[allow(clippy::field_reassign_with_default)]
+    fn display_name_trims_and_falls_back() {
+        let mut p = UserProfile::default();
+        p.username = "  Grace Hopper  ".into();
+        assert_eq!(p.display_name(), "Grace Hopper");
+        p.username = "   ".into();
+        assert_eq!(p.display_name(), DEFAULT_USERNAME);
+    }
+
+    /// `initials` handles single names, multi-word names, and empty-name edge.
+    #[test]
+    #[allow(clippy::field_reassign_with_default)]
+    fn initials_handles_name_shapes() {
+        let mut p = UserProfile::default();
+        p.username = "Cher".into();
+        assert_eq!(p.initials(), "C");
+        p.username = "Ada Lovelace".into();
+        assert_eq!(p.initials(), "AL");
+        p.username = "  ".into();
+        assert_eq!(p.initials(), "Y");
+    }
+
+    /// The user can clear their avatar from settings; after doing so the
+    /// profile no longer reports or renders one.
+    #[test]
+    fn clear_avatar_removes_rendering() {
+        let mut p = UserProfile::default();
+        let png = [0x89, b'P', b'N', b'G', 0x0d, 0x0a, 0x1a, 0x0a];
+        set_avatar(&mut p, Some("image/png".into()), &png).unwrap();
+        assert!(p.avatar_data_uri().is_some());
+        clear_avatar(&mut p);
+        assert_eq!(p.avatar_mime, None);
+        assert_eq!(p.avatar_b64, None);
+        assert!(!p.has_avatar());
+        assert!(p.avatar_data_uri().is_none());
     }
 }

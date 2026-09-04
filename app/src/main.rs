@@ -1,3 +1,5 @@
+#[cfg(target_os = "android")]
+mod android_picker;
 mod i18n;
 #[cfg(all(not(target_os = "android"), not(target_arch = "wasm32")))]
 mod mini_widget;
@@ -298,6 +300,25 @@ fn App() -> Element {
             updater::run_check();
         }
     });
+
+    // Eagerly start the live P2P transport on app launch so the DHT record is
+    // published early — without this, a peer that taps "Sync now" before we've
+    // been online long enough sees "no peers yet" because our DHT entry hasn't
+    // been discovered yet.  The transport is cheap to keep alive (a tokio
+    // runtime + one gossip subscription) and is keyed by chain fingerprint so it
+    // is recreated automatically if the user switches chains.
+    //
+    // live_transport builds any new transport on a dedicated thread (so the
+    // runtime's block_on inside IrohTransport::connect doesn't panic), which
+    // makes it safe to call directly from this effect.
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        use_effect(move || {
+            if let Some(identity) = sync_ui::load_identity() {
+                sync_live::live_transport(&identity);
+            }
+        });
+    }
 
     // Single shared item list; views read it via context and restart it after
     // mutations.

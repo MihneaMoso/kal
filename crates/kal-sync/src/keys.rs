@@ -32,6 +32,16 @@ pub struct ChainIdentity {
     cipher: XChaCha20Poly1305,
 }
 
+impl Clone for ChainIdentity {
+    fn clone(&self) -> Self {
+        Self {
+            mnemonic_words: self.mnemonic_words.clone(),
+            secret: self.secret.clone(),
+            cipher: self.cipher.clone(),
+        }
+    }
+}
+
 /// Derived material, safe to persist (the phrase itself should stay
 /// user-memorized / securely stored).
 pub struct SyncKeys {

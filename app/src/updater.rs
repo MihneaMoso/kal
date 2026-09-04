@@ -572,4 +572,50 @@ mod tests {
         assert!("kal-0.1.7-9f77d464-kal-windows.exe.tar.gz".contains(WINDOWS_TOKEN));
         assert!("kal-0.1.7-android.apk".contains(ANDROID_TOKEN));
     }
+
+    /// Android self-update behavior: an APK is only applied when it is strictly
+    /// newer than what is installed. Equal or older versions (downgrades) must
+    /// never be installed, even across minor/`v`-prefix differences.
+    #[test]
+    fn android_apk_updates_only_when_strictly_newer() {
+        assert!(is_newer("0.1.8", "0.1.7"), "patch bump is newer");
+        assert!(
+            is_newer("v0.2.0", "0.1.9"),
+            "v-prefix + minor bump is newer"
+        );
+        assert!(is_newer("0.10.0", "0.9.9"), "10.0 > 9.9 (component-wise)");
+        assert!(!is_newer("0.1.7", "0.1.7"), "no-op same version");
+        assert!(!is_newer("0.1.6", "0.1.7"), "downgrade rejected");
+        assert!(!is_newer("0.1.7", "0.1.8"), "older build rejected");
+    }
+
+    /// Android release asset naming uses a version-only `.apk` (no git-sha in
+    /// the name). Confirm that resolves cleanly and that a malformed asset
+    /// (no android token) is rejected rather than silently chosen.
+    #[test]
+    fn android_asset_without_git_sha_resolves() {
+        let body = r#"{
+            "tag_name": "v0.1.9",
+            "assets": [
+                {"name": "kal-0.1.9-android.apk",
+                 "browser_download_url": "https://example/ka.apk",
+                 "digest": "sha256:cafe"},
+                {"name": "kal-0.1.9-linux.tar.gz",
+                 "browser_download_url": "https://example/linux.tar.gz",
+                 "digest": "sha256:beef"}
+            ]
+        }"#;
+        let android = pick_asset(body, ANDROID_TOKEN).unwrap();
+        assert_eq!(android.version, "0.1.9");
+        assert_eq!(android.asset_url, "https://example/ka.apk");
+        assert_eq!(android.sha256.as_deref(), Some("cafe"));
+
+        let missing = r#"{"tag_name": "v0.1.9", "assets": [
+            {"name": "kal-0.1.9-linux.tar.gz", "browser_download_url": "u", "digest": "s"}
+        ]}"#;
+        assert!(
+            pick_asset(missing, ANDROID_TOKEN).is_err(),
+            "no .apk asset must not silently pick the wrong binary"
+        );
+    }
 }
