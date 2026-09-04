@@ -28,7 +28,7 @@ fn pick_image_sync() -> Option<PickedImage> {
 
     // Launch the picker (dispatches to UI thread inside Kotlin).
     env.call_static_method(
-        cls,
+        &cls,
         "pickImage",
         "(Landroid/app/Activity;)V",
         &[jni::objects::JValue::Object(&activity)],
@@ -38,7 +38,7 @@ fn pick_image_sync() -> Option<PickedImage> {
     // Block until the user picks or cancels (up to 30 s).
     let uri = env
         .call_static_method(
-            cls,
+            &cls,
             "waitForResult",
             "(J)Landroid/net/Uri;",
             &[jni::objects::JValue::Long(30_000)],
@@ -53,7 +53,7 @@ fn pick_image_sync() -> Option<PickedImage> {
 
     let mime = env
         .call_static_method(
-            cls,
+            &cls,
             "mimeType",
             "(Landroid/content/Context;Landroid/net/Uri;)Ljava/lang/String;",
             &[
@@ -72,10 +72,12 @@ fn pick_image_sync() -> Option<PickedImage> {
                 .map(|x| x.to_string_lossy().into_owned())
         });
 
-    // Read the bytes from the content:// URI.
-    let bytes = env
+    // Read the bytes from the content:// URI. `readBytes` returns a Java
+    // `byte[]`, surfaced here as a `JObject`; convert it to a `JByteArray`
+    // (jni 0.21's `JPrimitiveArray<sys::jbyte>`) before reading its region.
+    let bytes_obj = env
         .call_static_method(
-            cls,
+            &cls,
             "readBytes",
             "(Landroid/content/Context;Landroid/net/Uri;)[B",
             &[
@@ -87,10 +89,12 @@ fn pick_image_sync() -> Option<PickedImage> {
         .l()
         .ok()?;
 
-    let len = env.get_array_length(&bytes).ok()? as usize;
-    let mut buf = vec![0u8; len];
-    env.get_byte_array_region(&bytes, 0, &mut buf).ok()?;
-    Some(PickedImage { mime, bytes: buf })
+    let byte_arr: jni::objects::JByteArray = bytes_obj.into();
+    let len = env.get_array_length(&byte_arr).ok()? as usize;
+    let mut buf: Vec<i8> = vec![0i8; len];
+    env.get_byte_array_region(&byte_arr, 0, &mut buf).ok()?;
+    let bytes: Vec<u8> = buf.into_iter().map(|b| b as u8).collect();
+    Some(PickedImage { mime, bytes })
 }
 
 /// Spawn a blocking task that opens the native image picker and return a
