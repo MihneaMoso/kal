@@ -15,28 +15,39 @@ import java.util.concurrent.atomic.AtomicReference
  */
 object KalFilePicker {
     private const val PICK_IMAGE = 9998
+    private const val PICK_FILE = 9997
     private val resultUri = AtomicReference<Uri?>(null)
     private var latch: CountDownLatch? = null
 
     /** Launch the image picker on the UI thread. */
     @JvmStatic
     fun pickImage(activity: Activity) {
+        launch(activity, PICK_IMAGE, "image/*")
+    }
+
+    /** Launch a generic document picker for [mimeType] on the UI thread. */
+    @JvmStatic
+    fun pickFile(activity: Activity, mimeType: String) {
+        launch(activity, PICK_FILE, mimeType)
+    }
+
+    private fun launch(activity: Activity, requestCode: Int, mimeType: String) {
         resultUri.set(null)
         latch = CountDownLatch(1)
         activity.runOnUiThread {
             val intent = Intent(Intent.ACTION_GET_CONTENT).apply {
-                type = "image/*"
+                type = mimeType
                 addCategory(Intent.CATEGORY_OPENABLE)
             }
             @Suppress("DEPRECATION")
-            activity.startActivityForResult(intent, PICK_IMAGE)
+            activity.startActivityForResult(intent, requestCode)
         }
     }
 
     /** Called by [MainActivity.onActivityResult].  Returns `true` if handled. */
     @JvmStatic
     fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?): Boolean {
-        if (requestCode != PICK_IMAGE) return false
+        if (requestCode != PICK_IMAGE && requestCode != PICK_FILE) return false
         if (resultCode == Activity.RESULT_OK) {
             resultUri.set(data?.data)
         }

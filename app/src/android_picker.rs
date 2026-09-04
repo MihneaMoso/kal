@@ -43,7 +43,7 @@ fn try_pick_image<'local>(
     env: &mut jni::JNIEnv<'local>,
     activity: &jni::objects::JObject<'local>,
 ) -> jni::errors::Result<Option<PickedImage>> {
-    use jni::objects::{JString, JValue};
+    use jni::objects::JValue;
 
     let cls = find_kal_file_picker(env, activity)?;
 
@@ -55,10 +55,27 @@ fn try_pick_image<'local>(
         &[JValue::Object(activity)],
     )?;
 
+    let bytes = wait_and_read(env, activity, &cls)?;
+    let Some((uri, bytes)) = bytes else {
+        return Ok(None);
+    };
+    // The image flow also resolves the MIME type for the avatar pipeline.
+    let mime = mime_of(env, activity, &cls, &uri)?;
+    Ok(Some(PickedImage { mime, bytes }))
+}
+
+/// Block for the pick result, then read the picked content URI fully.
+/// Shared by the image and generic-file flows; `Ok(None)` = cancelled/timed out.
+#[allow(clippy::type_complexity)]
+fn wait_and_read<'local>(
+    env: &mut jni::JNIEnv<'local>,
+    activity: &jni::objects::JObject<'local>,
+    cls: &jni::objects::JClass<'local>,
+) -> jni::errors::Result<Option<(jni::objects::JObject<'local>, Vec<u8>)>> {
     // Block until the user picks or cancels (up to 30 s).
     let uri = env
         .call_static_method(
-            &cls,
+            cls,
             "waitForResult",
             "(J)Landroid/net/Uri;",
             &[jni::objects::JValue::Long(30_000)],
@@ -69,31 +86,12 @@ fn try_pick_image<'local>(
         return Ok(None);
     }
 
-    let mime = env
-        .call_static_method(
-            &cls,
-            "mimeType",
-            "(Landroid/content/Context;Landroid/net/Uri;)Ljava/lang/String;",
-            &[
-                jni::objects::JValue::Object(activity),
-                jni::objects::JValue::Object(&uri),
-            ],
-        )?
-        .l()?;
-    let mime = if mime.is_null() {
-        None
-    } else {
-        let jstr = JString::from(mime);
-        let text = env.get_string(&jstr)?.to_string_lossy().into_owned();
-        Some(text)
-    };
-
     // Read the bytes from the content:// URI. `readBytes` returns a Java
     // `byte[]`, surfaced here as a `JObject`; convert it to a `JByteArray`
     // (jni 0.21's `JPrimitiveArray<sys::jbyte>`) before reading its region.
     let bytes_obj = env
         .call_static_method(
-            &cls,
+            cls,
             "readBytes",
             "(Landroid/content/Context;Landroid/net/Uri;)[B",
             &[
@@ -107,8 +105,31 @@ fn try_pick_image<'local>(
     let len = env.get_array_length(&byte_arr)? as usize;
     let mut buf: Vec<i8> = vec![0i8; len];
     env.get_byte_array_region(&byte_arr, 0, &mut buf)?;
-    let bytes: Vec<u8> = buf.into_iter().map(|b| b as u8).collect();
-    Ok(Some(PickedImage { mime, bytes }))
+    Ok(Some((uri, buf.into_iter().map(|b| b as u8).collect())))
+}
+
+fn mime_of<'local>(
+    env: &mut jni::JNIEnv<'local>,
+    activity: &jni::objects::JObject<'local>,
+    cls: &jni::objects::JClass<'local>,
+    uri: &jni::objects::JObject<'local>,
+) -> jni::errors::Result<Option<String>> {
+    use jni::objects::{JString, JValue};
+
+    let mime = env
+        .call_static_method(
+            cls,
+            "mimeType",
+            "(Landroid/content/Context;Landroid/net/Uri;)Ljava/lang/String;",
+            &[JValue::Object(activity), JValue::Object(uri)],
+        )?
+        .l()?;
+    if mime.is_null() {
+        return Ok(None);
+    }
+    let jstr = JString::from(mime);
+    let text = env.get_string(&jstr)?.to_string_lossy().into_owned();
+    Ok(Some(text))
 }
 
 /// Resolve `com.kal.calendar.KalFilePicker` through the activity's class
@@ -163,6 +184,105 @@ pub fn pick_image_async() -> mpsc::Receiver<Option<PickedImage>> {
     rx
 }
 
+/// Open the system document picker for `mime` and block until a file is
+/// selected. Same threading constraints as [`pick_image_sync`].
+fn pick_file_sync(mime: &str) -> Option<Vec<u8>> {
+    let ctx = ndk_context::android_context();
+    let vm = unsafe { jni::JavaVM::from_raw(ctx.vm().cast()) }.ok()?;
+    let mut env = vm.attach_current_thread().ok()?;
+    let activity = unsafe { jni::objects::JObject::from_raw(ctx.context().cast()) };
+
+    match try_pick_file(&mut env, &activity, mime) {
+        Ok(picked) => picked,
+        Err(_) => {
+            let _ = env.exception_clear();
+            None
+        }
+    }
+}
+
+fn try_pick_file<'local>(
+    env: &mut jni::JNIEnv<'local>,
+    activity: &jni::objects::JObject<'local>,
+    mime: &str,
+) -> jni::errors::Result<Option<Vec<u8>>> {
+    use jni::objects::JValue;
+
+    let cls = find_kal_file_picker(env, activity)?;
+    let jmime = env.new_string(mime)?;
+    env.call_static_method(
+        &cls,
+        "pickFile",
+        "(Landroid/app/Activity;Ljava/lang/String;)V",
+        &[JValue::Object(activity), JValue::Object(&jmime.into())],
+    )?;
+
+    Ok(wait_and_read(env, activity, &cls)?.map(|(_, bytes)| bytes))
+}
+
+/// Spawn a blocking task that opens the native document picker and return a
+/// channel with the picked file's bytes (or `None` on cancel / error).
+/// `.ics` files are rarely registered under `text/calendar`, so callers
+/// should pass `"*/*"` and validate content themselves.
+pub fn pick_file_async(mime: &str) -> mpsc::Receiver<Option<Vec<u8>>> {
+    let mime = mime.to_string();
+    let (tx, rx) = mpsc::channel();
+    std::thread::spawn(move || {
+        let result = pick_file_sync(&mime);
+        let _ = tx.send(result);
+    });
+    rx
+}
+
+/// Fire the system share sheet for the last-exported `Kal-export.ics` (the
+/// caller writes it first; it is served over `KalFileProvider`). Safe on any
+/// thread; failures clear the JNI exception and no-op.
+pub fn share_ics_via_intent() {
+    let ctx = ndk_context::android_context();
+    let Ok(vm) = (unsafe { jni::JavaVM::from_raw(ctx.vm().cast()) }) else {
+        return;
+    };
+    let Ok(mut env) = vm.attach_current_thread() else {
+        return;
+    };
+    let activity = unsafe { jni::objects::JObject::from_raw(ctx.context().cast()) };
+    // Resolve KalShare through the app class loader (same reason as
+    // `find_kal_file_picker`: system-loader FindClass cannot see app classes).
+    let res: jni::errors::Result<()> = (|| {
+        use jni::objects::{JString, JValue};
+        let activity_cls: jni::objects::JObject = env.get_object_class(&activity)?.into();
+        let loader = env
+            .call_method(
+                &activity_cls,
+                "getClassLoader",
+                "()Ljava/lang/ClassLoader;",
+                &[],
+            )?
+            .l()?;
+        let name: JString = env.new_string("com/kal/calendar/KalShare")?;
+        let name_obj: jni::objects::JObject = name.into();
+        let cls_obj = env
+            .call_method(
+                loader,
+                "loadClass",
+                "(Ljava/lang/String;)Ljava/lang/Class;",
+                &[JValue::Object(&name_obj)],
+            )?
+            .l()?;
+        let cls: jni::objects::JClass = cls_obj.into();
+        env.call_static_method(
+            &cls,
+            "shareIcs",
+            "(Landroid/app/Activity;)V",
+            &[JValue::Object(&activity)],
+        )?;
+        Ok(())
+    })();
+    if res.is_err() {
+        let _ = env.exception_clear();
+    }
+}
+
 /// Stub for non-Android builds so the module compiles everywhere.
 #[cfg(not(target_os = "android"))]
 pub fn pick_image_async() -> mpsc::Receiver<Option<PickedImage>> {
@@ -170,3 +290,15 @@ pub fn pick_image_async() -> mpsc::Receiver<Option<PickedImage>> {
     let _ = tx.send(None);
     rx
 }
+
+/// Stub for non-Android builds so the module compiles everywhere.
+#[cfg(not(target_os = "android"))]
+pub fn pick_file_async(_mime: &str) -> mpsc::Receiver<Option<Vec<u8>>> {
+    let (tx, rx) = mpsc::channel();
+    let _ = tx.send(None);
+    rx
+}
+
+/// Stub for non-Android builds so the module compiles everywhere.
+#[cfg(not(target_os = "android"))]
+pub fn share_ics_via_intent() {}

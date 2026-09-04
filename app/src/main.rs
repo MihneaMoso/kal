@@ -699,11 +699,58 @@ fn desktop_sidebar_sections(
 
 #[cfg(target_os = "android")]
 fn desktop_sidebar_sections(
-    _db: &DbHandle,
+    db: &DbHandle,
     _cal_res: Resource<Vec<Calendar>>,
     _items_res: Resource<Vec<CalendarItem>>,
 ) -> Element {
-    rsx! {}
+    // Same Import/Export as desktop, but through the native document picker
+    // and the system share sheet: the WebView file input and rfd dialogs do
+    // not exist on Android. The picker blocks, so it runs off the UI thread;
+    // view refresh goes through the SYNC_DRIVER_DIRTY bridge (signals cannot
+    // be bumped from a plain OS thread).
+    let db_import = db.clone();
+    let db_export = db.clone();
+    rsx! {
+        h2 { "Import / Export" }
+        div { style: "display:flex; flex-direction:column; gap:6px;",
+            button {
+                onclick: move |_| {
+                    let db_import = db_import.clone();
+                    std::thread::spawn(move || {
+                        let rx = crate::android_picker::pick_file_async("*/*");
+                        let Ok(Some(bytes)) = rx.recv() else {
+                            return;
+                        };
+                        let Ok(text) = String::from_utf8(bytes) else {
+                            return;
+                        };
+                        import_ics_file(&db_import, &text);
+                        crate::sync_ui::SYNC_DRIVER_DIRTY
+                            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                    });
+                },
+                "Import .ics…"
+            }
+            button {
+                onclick: move |_| {
+                    let cals = db_export.list_calendars().unwrap_or_default();
+                    let items = db_export.list_items(false).unwrap_or_default();
+                    let ics = kal_import::export_all(&cals, &items);
+                    // Served over KalFileProvider as content://…/ics.
+                    let path = crate::default_db_path()
+                        .and_then(|p| {
+                            p.parent().map(|dir| dir.join("Kal-export.ics"))
+                        });
+                    if let Some(path) = path {
+                        if std::fs::write(&path, ics).is_ok() {
+                            crate::android_picker::share_ics_via_intent();
+                        }
+                    }
+                },
+                "Export all (.ics)"
+            }
+        }
+    }
 }
 
 // Web has no desktop mini-window policy nor a native filesystem for the .ics
@@ -887,7 +934,7 @@ fn ViewNav() -> Element {
     }
 }
 
-#[cfg(all(not(target_os = "android"), not(target_arch = "wasm32")))]
+#[cfg(not(target_arch = "wasm32"))]
 fn import_ics_file(db: &DbHandle, text: &str) {
     match kal_import::import_ics(text, "Imported") {
         Ok(result) => {

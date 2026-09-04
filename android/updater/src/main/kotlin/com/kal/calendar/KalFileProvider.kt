@@ -22,26 +22,35 @@ class KalFileProvider : ContentProvider() {
     companion object {
         const val AUTHORITY = "com.kal.calendar.updates"
         private const val APK = 1
+        private const val ICS = 2
     }
 
     private val matcher: UriMatcher =
-        UriMatcher(UriMatcher.NO_MATCH).apply { addURI(AUTHORITY, "apk", APK) }
+        UriMatcher(UriMatcher.NO_MATCH).apply {
+            addURI(AUTHORITY, "apk", APK)
+            addURI(AUTHORITY, "ics", ICS)
+        }
 
     override fun onCreate(): Boolean = true
 
-    override fun getType(uri: Uri): String? =
-        if (matcher.match(uri) == APK) "application/vnd.android.package-archive" else null
+    override fun getType(uri: Uri): String? = when (matcher.match(uri)) {
+        APK -> "application/vnd.android.package-archive"
+        ICS -> "text/calendar"
+        else -> null
+    }
 
     override fun openFile(uri: Uri, mode: String): ParcelFileDescriptor? {
-        if (matcher.match(uri) != APK) {
-            return null
-        }
         val dir = context?.filesDir ?: return null
-        val apk = File(dir, "kal/updates/kal-update.apk")
-        if (!apk.exists()) {
+        val file = when (matcher.match(uri)) {
+            APK -> File(dir, "kal/updates/kal-update.apk")
+            // Written by the Rust side on every "Export all (.ics)" tap.
+            ICS -> File(dir, "kal/Kal-export.ics")
+            else -> return null
+        }
+        if (!file.exists()) {
             return null
         }
-        return ParcelFileDescriptor.open(apk, ParcelFileDescriptor.MODE_READ_ONLY)
+        return ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY)
     }
 
     override fun query(
