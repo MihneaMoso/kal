@@ -24,16 +24,36 @@ fn pick_image_sync() -> Option<PickedImage> {
     let mut env = vm.attach_current_thread().ok()?;
     let activity = unsafe { jni::objects::JObject::from_raw(ctx.context().cast()) };
 
-    let cls = env.find_class("com/kal/calendar/KalFilePicker").ok()?;
+    match try_pick_image(&mut env, &activity) {
+        Ok(picked) => picked,
+        Err(_) => {
+            // A failed JNI call leaves a pending Java exception on this
+            // thread.  If it survives until the thread detaches, ART reports
+            // it as an uncaught exception and kills the whole app — so a
+            // cancelled/failed pick must clear it before returning.
+            let _ = env.exception_clear();
+            None
+        }
+    }
+}
+
+/// Run the actual pick flow, surfacing JNI errors so the caller can clean up
+/// the pending Java exception (see [`pick_image_sync`]).
+fn try_pick_image<'local>(
+    env: &mut jni::JNIEnv<'local>,
+    activity: &jni::objects::JObject<'local>,
+) -> jni::errors::Result<Option<PickedImage>> {
+    use jni::objects::{JString, JValue};
+
+    let cls = find_kal_file_picker(env, activity)?;
 
     // Launch the picker (dispatches to UI thread inside Kotlin).
     env.call_static_method(
         &cls,
         "pickImage",
         "(Landroid/app/Activity;)V",
-        &[jni::objects::JValue::Object(&activity)],
-    )
-    .ok()?;
+        &[JValue::Object(activity)],
+    )?;
 
     // Block until the user picks or cancels (up to 30 s).
     let uri = env
@@ -42,13 +62,11 @@ fn pick_image_sync() -> Option<PickedImage> {
             "waitForResult",
             "(J)Landroid/net/Uri;",
             &[jni::objects::JValue::Long(30_000)],
-        )
-        .ok()?
-        .l()
-        .ok()?;
+        )?
+        .l()?;
 
     if uri.is_null() {
-        return None;
+        return Ok(None);
     }
 
     let mime = env
@@ -57,20 +75,18 @@ fn pick_image_sync() -> Option<PickedImage> {
             "mimeType",
             "(Landroid/content/Context;Landroid/net/Uri;)Ljava/lang/String;",
             &[
-                jni::objects::JValue::Object(&activity),
+                jni::objects::JValue::Object(activity),
                 jni::objects::JValue::Object(&uri),
             ],
-        )
-        .ok()?
-        .l()
-        .ok()
-        .filter(|s| !s.is_null())
-        .and_then(|s| {
-            let jstr = jni::objects::JString::from(s);
-            env.get_string(&jstr)
-                .ok()
-                .map(|x| x.to_string_lossy().into_owned())
-        });
+        )?
+        .l()?;
+    let mime = if mime.is_null() {
+        None
+    } else {
+        let jstr = JString::from(mime);
+        let text = env.get_string(&jstr)?.to_string_lossy().into_owned();
+        Some(text)
+    };
 
     // Read the bytes from the content:// URI. `readBytes` returns a Java
     // `byte[]`, surfaced here as a `JObject`; convert it to a `JByteArray`
@@ -81,20 +97,59 @@ fn pick_image_sync() -> Option<PickedImage> {
             "readBytes",
             "(Landroid/content/Context;Landroid/net/Uri;)[B",
             &[
-                jni::objects::JValue::Object(&activity),
+                jni::objects::JValue::Object(activity),
                 jni::objects::JValue::Object(&uri),
             ],
-        )
-        .ok()?
-        .l()
-        .ok()?;
+        )?
+        .l()?;
 
     let byte_arr: jni::objects::JByteArray = bytes_obj.into();
-    let len = env.get_array_length(&byte_arr).ok()? as usize;
+    let len = env.get_array_length(&byte_arr)? as usize;
     let mut buf: Vec<i8> = vec![0i8; len];
-    env.get_byte_array_region(&byte_arr, 0, &mut buf).ok()?;
+    env.get_byte_array_region(&byte_arr, 0, &mut buf)?;
     let bytes: Vec<u8> = buf.into_iter().map(|b| b as u8).collect();
-    Some(PickedImage { mime, bytes })
+    Ok(Some(PickedImage { mime, bytes }))
+}
+
+/// Resolve `com.kal.calendar.KalFilePicker` through the activity's class
+/// loader.
+///
+/// `JNIEnv::find_class` on a thread attached from native code (via
+/// `AttachCurrentThread`) looks the class up with the *system* class loader,
+/// which only knows framework classes — application classes like
+/// `KalFilePicker` throw `ClassNotFoundException`, and the pending exception
+/// crashes the app when the thread detaches.  Going through
+/// `Class.getClassLoader().loadClass(...)` uses the app's real class loader
+/// and works from any attached thread (all the classes/methods involved are
+/// framework classes, so no `FindClass` of an app class is ever needed).
+fn find_kal_file_picker<'local>(
+    env: &mut jni::JNIEnv<'local>,
+    activity: &jni::objects::JObject<'local>,
+) -> jni::errors::Result<jni::objects::JClass<'local>> {
+    use jni::objects::{JString, JValue};
+
+    let activity_cls: jni::objects::JObject = env.get_object_class(activity)?.into();
+    let loader = env
+        .call_method(
+            &activity_cls,
+            "getClassLoader",
+            "()Ljava/lang/ClassLoader;",
+            &[],
+        )?
+        .l()?;
+
+    let name: JString = env.new_string("com/kal/calendar/KalFilePicker")?;
+    let name_obj: jni::objects::JObject = name.into();
+    let cls = env
+        .call_method(
+            loader,
+            "loadClass",
+            "(Ljava/lang/String;)Ljava/lang/Class;",
+            &[JValue::Object(&name_obj)],
+        )?
+        .l()?;
+
+    Ok(cls.into())
 }
 
 /// Spawn a blocking task that opens the native image picker and return a
