@@ -173,6 +173,7 @@ fn ensure_default_calendars(db: &Database) -> Vec<Calendar> {
             color: Color("#3366cc".into()),
             source: kal_core::models::CalendarSource::Local,
             visible: true,
+            deleted: false,
             updated_at: now,
         })
         .ok();
@@ -184,6 +185,7 @@ fn ensure_default_calendars(db: &Database) -> Vec<Calendar> {
             color: Color("#e91e63".into()),
             source: kal_core::models::CalendarSource::Birthdays,
             visible: true,
+            deleted: false,
             updated_at: now,
         })
         .ok();
@@ -776,9 +778,7 @@ fn Sidebar() -> Element {
     // Invisible calendars (e.g. duplicates retired by sync) stay out of the
     // main list instead of rendering as unchecked clutter, but remain
     // one click away so they can be re-enabled.
-    let visible_cals: Vec<Calendar> = calendars.iter().filter(|c| c.visible).cloned().collect();
-    let hidden_cals: Vec<Calendar> = calendars.iter().filter(|c| !c.visible).cloned().collect();
-    let mut show_hidden = use_signal(|| false);
+    let visible_cals: Vec<Calendar> = calendars.iter().filter(|c| c.visible && !c.deleted).cloned().collect();
 
     let db_event = db.clone();
     let db_task = db.clone();
@@ -810,24 +810,6 @@ fn Sidebar() -> Element {
             ul {
                 for cal in visible_cals.iter().cloned() {
                     CalendarRow { key: "{cal.id}", calendar: cal }
-                }
-            }
-            if !hidden_cals.is_empty() {
-                button {
-                    style: "background:none;border:none;color:var(--fg-muted);font-size:12px;cursor:pointer;padding:2px 0;",
-                    onclick: move |_| show_hidden.toggle(),
-                    if *show_hidden.read() {
-                        "Hidden ({hidden_cals.len()}) ▾"
-                    } else {
-                        "Hidden ({hidden_cals.len()}) ▸"
-                    }
-                }
-                if *show_hidden.read() {
-                    ul {
-                        for cal in hidden_cals.iter().cloned() {
-                            CalendarRow { key: "{cal.id}", calendar: cal }
-                        }
-                    }
                 }
             }
             {sync_panel()}

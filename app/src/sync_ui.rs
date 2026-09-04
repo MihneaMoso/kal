@@ -135,10 +135,12 @@ pub static SYNC_DRIVER_DIRTY: AtomicUsize = AtomicUsize::new(0);
 /// pair shows duplicate rows: its own (empty, well-known-id) placeholders
 /// plus the chain's pair. The placeholders can never hold data the chain
 /// lacks — they were minted minutes ago by seeding — so once a merge lands,
-/// hide the ones shadowed by a same-named visible calendar. Narrowly scoped:
-/// only well-known placeholder IDs, only when they hold zero items (live or
-/// tombstoned), only when a same-named visible alternative exists. Runs on
-/// every persisted merge; idempotent.
+/// delete the ones shadowed by a same-named visible live calendar. True
+/// deletes (tombstones), not hides: union-merge would resurrect hidden-but-
+/// live rows from any peer, while tombstones win LWW ties and converge
+/// everywhere. Narrowly scoped: only well-known placeholder IDs, only when
+/// they hold zero items (live or tombstoned), only when a same-named visible
+/// live alternative exists. Runs on every persisted merge; idempotent.
 pub(crate) fn retire_shadowed_placeholders(db: &crate::DbHandle) {
     use std::collections::HashSet;
     let cals = db.list_calendars().unwrap_or_default();
@@ -159,17 +161,18 @@ pub(crate) fn retire_shadowed_placeholders(db: &crate::DbHandle) {
         let Some(cal) = cals.iter().find(|c| c.id == id) else {
             continue;
         };
-        if !cal.visible || used.contains(&id) {
+        if cal.deleted || used.contains(&id) {
             continue;
         }
-        let shadowed = cals
-            .iter()
-            .any(|o| o.visible && o.id != id && o.name == cal.name);
+        let shadowed = cals.iter().any(|o| {
+            o.visible && !o.deleted && o.id != id && o.name == cal.name
+        });
         if !shadowed {
             continue;
         }
         let mut retired = cal.clone();
         retired.visible = false;
+        retired.deleted = true;
         retired.updated_at = now;
         if db.upsert_calendar(&retired).is_ok() {
             tracing::info!(calendar = %cal.name, "retired shadowed placeholder calendar");

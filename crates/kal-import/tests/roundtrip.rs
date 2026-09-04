@@ -20,6 +20,7 @@ fn cal(id: Ulid) -> Calendar {
         color: Color("#3366cc".into()),
         source: CalendarSource::Local,
         visible: true,
+        deleted: false,
         updated_at: datetime_from_parts(2026, 1, 1, 0, 0, 0).unwrap(),
     }
 }

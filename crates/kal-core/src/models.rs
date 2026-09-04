@@ -118,6 +118,12 @@ pub struct Calendar {
     pub color: Color,
     pub source: CalendarSource,
     pub visible: bool,
+    /// Soft-delete tombstone (CRDT sync keeps the row so deletion propagates;
+    /// union-merge would resurrect a physically removed row from any peer
+    /// that still has it). `#[serde(default)]` reads pre-tombstone envelopes
+    /// as live. UI layers must filter these out everywhere.
+    #[serde(default)]
+    pub deleted: bool,
     /// LWW timestamp for CRDT merge (sync phase).
     pub updated_at: DateTimeTz,
 }
@@ -130,6 +136,7 @@ impl Calendar {
             color,
             source: CalendarSource::Local,
             visible: true,
+            deleted: false,
             updated_at: Utc::now().fixed_offset(),
         }
     }

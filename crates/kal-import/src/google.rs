@@ -153,6 +153,7 @@ pub fn map_calendars(list: &[GoogleCalendar]) -> Vec<Calendar> {
             ),
             source: CalendarSource::GoogleImport,
             visible: true,
+            deleted: false,
             updated_at: Utc::now().fixed_offset(),
         })
         .collect()

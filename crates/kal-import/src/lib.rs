@@ -89,7 +89,7 @@ pub fn export_all(calendars: &[Calendar], items: &[CalendarItem]) -> String {
     out.name("Kal");
     let visible: Vec<_> = calendars
         .iter()
-        .filter(|c| c.visible)
+        .filter(|c| c.visible && !c.deleted)
         .map(|c| c.id)
         .collect();
     for item in items
@@ -214,6 +214,7 @@ pub fn import_ics(ics: &str, calendar_name: &str) -> Result<ImportedCalendar> {
         color: Color("#7a6ff0".into()),
         source: CalendarSource::IcsImport,
         visible: true,
+        deleted: false,
         updated_at: Utc::now().fixed_offset(),
     };
 

@@ -129,7 +129,7 @@ pub fn use_visible_items() -> Vec<CalendarItem> {
     let items = items_res.value().read().clone().unwrap_or_default();
     let cals = cals_res.value().read().clone().unwrap_or_default();
     let hidden: std::collections::HashSet<Ulid> =
-        cals.iter().filter(|c| !c.visible).map(|c| c.id).collect();
+        cals.iter().filter(|c| !c.visible || c.deleted).map(|c| c.id).collect();
     items
         .into_iter()
         .filter(|i| !hidden.contains(&i.calendar_id))
@@ -729,17 +729,19 @@ impl EditorState {
     }
 
     fn build(db: &DbHandle, kind: ItemKind, date: NaiveDate) -> Self {
-        // First visible calendar, else any calendar, else a fresh one —
-        // never Ulid::nil(), which would fail the FK constraint on save.
+        // First visible live calendar, else any live one, else a fresh one —
+        // never Ulid::nil(), which would fail the FK constraint on save, and
+        // never a tombstoned calendar.
         let calendar_id = db
             .list_calendars()
             .unwrap_or_default()
             .into_iter()
+            .filter(|c| !c.deleted)
             .find(|c| c.visible)
             .or_else(|| {
                 db.list_calendars()
                     .ok()
-                    .and_then(|cals| cals.into_iter().next())
+                    .and_then(|cals| cals.into_iter().find(|c| !c.deleted))
             })
             .map(|c| c.id)
             .unwrap_or_else(|| {
@@ -888,7 +890,12 @@ pub fn EditorModal(state: EditorState) -> Element {
     let db = use_context::<DbHandle>();
     let mut items_res = use_context::<Resource<Vec<CalendarItem>>>();
 
-    let calendars = db.list_calendars().unwrap_or_default();
+    let calendars: Vec<kal_core::models::Calendar> = db
+        .list_calendars()
+        .unwrap_or_default()
+        .into_iter()
+        .filter(|c| !c.deleted)
+        .collect();
     let db_save = db.clone();
     let db_delete = db.clone();
 

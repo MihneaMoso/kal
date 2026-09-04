@@ -44,12 +44,15 @@ impl SyncState {
     pub fn merge(&mut self, remote: &SyncState) {
         for (id, cal) in &remote.calendars {
             let winner = match self.calendars.get(id) {
+                // A deleted calendar outranks a live one at equal timestamps
+                // so deletions propagate; a merely hidden one keeps its
+                // historical behavior (hide wins ties, then syncs visibility).
                 Some(mine) => pick_winner(
                     mine.updated_at,
-                    !mine.visible,
+                    mine.deleted || !mine.visible,
                     &mine.name,
                     cal.updated_at,
-                    !cal.visible,
+                    cal.deleted || !cal.visible,
                     &cal.name,
                 ),
                 None => Winner::Remote,

@@ -109,6 +109,13 @@ WHERE calendar_id IN (
 DELETE FROM calendars
 WHERE id NOT IN (SELECT MIN(id) FROM calendars GROUP BY name);
 "#,
+    // v5: calendar soft-delete tombstone so deletions propagate over sync
+    // (union-merge resurrects physically removed rows from any peer that
+    // still has them). Follows the v2 precedent: column added by migration,
+    // not by editing v1.
+    r#"
+ALTER TABLE calendars ADD COLUMN deleted INTEGER NOT NULL DEFAULT 0;
+"#,
 ];
 
 impl Database {
@@ -153,14 +160,16 @@ impl Database {
     pub fn upsert_calendar(&self, cal: &Calendar) -> Result<()> {
         let conn = self.conn.lock().unwrap();
         conn.execute(
-            "INSERT INTO calendars (id, name, color, source, visible, updated_epoch, updated_rfc3339)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
+            "INSERT INTO calendars (id, name, color, source, visible, deleted, updated_epoch, updated_rfc3339)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
              ON CONFLICT(id) DO UPDATE SET
                 name=excluded.name, color=excluded.color,
                 source=excluded.source, visible=excluded.visible,
+                deleted=excluded.deleted,
                 updated_epoch=excluded.updated_epoch, updated_rfc3339=excluded.updated_rfc3339",
             params![cal.id.to_string(), cal.name, cal.color.as_str(),
                     serde_json::to_string(&cal.source).unwrap(), cal.visible as i64,
+                    cal.deleted as i64,
                     epoch(&cal.updated_at), cal.updated_at.to_rfc3339()],
         )?;
         Ok(())
@@ -170,7 +179,7 @@ impl Database {
         let conn = self.conn.lock().unwrap();
         conn
             .query_row(
-                "SELECT id, name, color, source, visible, updated_epoch, updated_rfc3339 FROM calendars WHERE id = ?1",
+                "SELECT id, name, color, source, visible, deleted, updated_epoch, updated_rfc3339 FROM calendars WHERE id = ?1",
                 params![id.to_string()],
                 row_to_calendar,
             )
@@ -183,7 +192,7 @@ impl Database {
     /// Skipped rows are reported on stderr for diagnosis.
     pub fn list_calendars(&self) -> Result<Vec<Calendar>> {
         let conn = self.conn.lock().unwrap();
-        let mut stmt = conn.prepare("SELECT id, name, color, source, visible, updated_epoch, updated_rfc3339 FROM calendars ORDER BY name")?;
+        let mut stmt = conn.prepare("SELECT id, name, color, source, visible, deleted, updated_epoch, updated_rfc3339 FROM calendars ORDER BY name")?;
         let mut rows = stmt.query([])?;
         let mut out = Vec::new();
         while let Some(row) = rows.next()? {
@@ -367,7 +376,7 @@ fn row_to_calendar(row: &rusqlite::Row<'_>) -> rusqlite::Result<Calendar> {
     // carry the migration DEFAULT '' here. Both must fall back to epoch 0
     // instead of failing the whole read ("premature end of input").
     let _upd_e: Option<i64> = row.get(5).ok();
-    let upd_s: Option<String> = row.get(6).ok();
+    let upd_s: Option<String> = row.get(7).ok();
     let updated_at = upd_s
         .as_deref()
         .filter(|r| !r.is_empty())
@@ -380,6 +389,7 @@ fn row_to_calendar(row: &rusqlite::Row<'_>) -> rusqlite::Result<Calendar> {
         source: serde_json::from_str(&row.get::<_, String>(3)?)
             .map_err(|e| StorageError::Corrupt(e.to_string()))?,
         visible: row.get::<_, i64>(4)? != 0,
+        deleted: row.get::<_, i64>(5)? != 0,
         updated_at,
     })
 }
