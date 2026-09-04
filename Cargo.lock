@@ -4318,6 +4318,8 @@ dependencies = [
  "sha2 0.10.9",
  "tar",
  "tokio",
+ "tracing",
+ "tracing-subscriber",
  "ulid",
  "ureq",
 ]
@@ -4409,6 +4411,8 @@ dependencies = [
  "tempfile",
  "thiserror 2.0.20",
  "tokio",
+ "tracing",
+ "tracing-subscriber",
  "ulid",
  "x25519-dalek",
 ]

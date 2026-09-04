@@ -112,6 +112,7 @@ pub fn live_transport(identity: &ChainIdentity) -> Option<Arc<IrohTransport>> {
     let cfg = NodeCfg::load_or_create()?;
     let device_id = cfg.device_id.parse().ok()?;
     let node_key = decode_hex(&cfg.node_key)?;
+    tracing::info!(%fingerprint, %device_id, "building live transport");
 
     // Clone the data we need into a 'static closure so the builder can run on
     // its own thread. The construction is synchronous and needs the ChainIdentity
@@ -122,6 +123,7 @@ pub fn live_transport(identity: &ChainIdentity) -> Option<Arc<IrohTransport>> {
         .spawn(move || IrohTransport::connect(&phrase, device_id, node_key))
         .ok()?;
     let transport = build.join().ok()?.ok()?;
+    tracing::info!(%fingerprint, endpoint = %transport.endpoint_id(), "live transport ready");
     *slot = Some((fingerprint, Arc::new(transport)));
     slot.as_ref().map(|(_, t)| t.clone())
 }
@@ -146,9 +148,10 @@ pub fn sync_round(identity: &ChainIdentity, db: &DbHandle) -> Result<usize, Stri
         std::thread::sleep(POLL);
     }
     if !sink.is_joined() {
+        tracing::warn!("live P2P: no gossip peers within {PEER_TIMEOUT:?}");
         return Err("live P2P: no peers yet — try again in a moment".into());
     }
-
+    tracing::info!("gossip joined — running live round");
     live_round_core(identity, db, sink)
 }
 
@@ -185,22 +188,60 @@ pub fn live_round_core(
     );
 
     let sealed = session.seal_state().map_err(|e| e.to_string())?;
+    tracing::info!(sealed_bytes = sealed.len(), "live: sealed local state");
     sink.set_state(sealed.clone());
     sink.broadcast(&sealed).map_err(|e| e.to_string())?;
 
     let self_id = sink.device_id().to_string();
     let mut merged = 0usize;
-    while let Some((sender, bytes)) = sink.recv() {
-        if sender == self_id {
-            continue;
+    // Gossip delivery is asynchronous: peer discovery, relay mappings and QUIC
+    // handshakes take seconds on real networks (and a 2-node mesh falls back to
+    // the DHT bubble-merge/overlap cadence, ~2-3 min). A single non-blocking
+    // drain measures milliseconds and nearly always misses the peer's snapshot,
+    // leaving both devices broadcasting at each other forever. Mirror the
+    // host-side `sync_probe`: keep draining for a bounded window.
+    const DRAIN_WINDOW: std::time::Duration = std::time::Duration::from_secs(12);
+    const POLL: std::time::Duration = std::time::Duration::from_millis(250);
+    // After a peer frame lands, allow stragglers right behind it a brief grace
+    // period, then return — the driver's next round picks up anything later.
+    const QUIESCE: std::time::Duration = std::time::Duration::from_secs(2);
+    // If absolutely nothing has arrived since broadcasting (not even our own
+    // gossip echo), the topic is effectively silent right now; don't burn the
+    // whole window — the next round retries.
+    const MAX_SILENT: std::time::Duration = std::time::Duration::from_secs(3);
+    let drain_deadline = std::time::Instant::now() + DRAIN_WINDOW;
+    let mut last_any_arrival = std::time::Instant::now();
+    loop {
+        // Drain everything currently sitting in the inbox...
+        while let Some((sender, bytes)) = sink.recv() {
+            last_any_arrival = std::time::Instant::now();
+            if sender == self_id {
+                continue;
+            }
+            if session.accept_blob(&bytes).is_ok() {
+                merged += 1;
+            }
         }
-        if session.accept_blob(&bytes).is_ok() {
-            merged += 1;
+        if std::time::Instant::now() >= drain_deadline {
+            break;
         }
+        if merged > 0 && last_any_arrival.elapsed() > QUIESCE {
+            // Consumed the burst of peer frames; anything sent later is caught
+            // by the next round.
+            break;
+        }
+        if merged == 0 && last_any_arrival.elapsed() > MAX_SILENT {
+            break;
+        }
+        // ...then wait a little for more to arrive (self-broadcast echoes,
+        // peer snapshots) until the window closes.
+        std::thread::sleep(POLL);
     }
     if merged == 0 {
+        tracing::info!("live: round done, nothing merged");
         return Ok(0);
     }
+    tracing::info!(merged, "live: round merged peer envelopes");
 
     for cal in session.state.calendars.values() {
         db.upsert_calendar(cal).map_err(|e| e.to_string())?;
@@ -234,6 +275,7 @@ mod tests {
     use kal_storage::Database;
     use std::collections::{HashMap, VecDeque};
     use std::sync::Mutex as StdMutex;
+    use std::time::Duration;
 
     const PHRASE: &str =
         "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
@@ -277,6 +319,11 @@ mod tests {
         joined: bool,
         mail: Mailboxes,
         state: StdMutex<Option<Vec<u8>>>,
+        /// When set, `broadcast` arms a thread that delivers `pending_peer`
+        /// (a peer's sealed state) into our own inbox after the delay —
+        /// simulating real gossip latency.
+        delayed: Option<Duration>,
+        pending_peer: Vec<u8>,
     }
 
     impl FakeSink {
@@ -286,6 +333,29 @@ mod tests {
                 joined: true, // fake sinks are considered joined to keep the test focused on merge logic
                 mail,
                 state: StdMutex::new(None),
+                delayed: None,
+                pending_peer: Vec::new(),
+            }
+        }
+        /// Fake sink whose broadcast schedules a peer snapshot to land in our
+        /// inbox a short while LATER — mirroring real gossip latency where the
+        /// peer's state doesn't arrive before our own broadcast returns. This
+        /// exercises the bounded drain window in `live_round_core` (a single
+        /// instant drain would return before the message lands and miss it).
+        #[allow(clippy::too_many_arguments)]
+        fn new_with_delayed_peer(
+            me: &str,
+            mail: Mailboxes,
+            deliver_after: Duration,
+            peer_blob: Vec<u8>,
+        ) -> Self {
+            Self {
+                me: me.to_string(),
+                joined: true,
+                mail,
+                state: StdMutex::new(None),
+                delayed: Some(deliver_after),
+                pending_peer: peer_blob,
             }
         }
         fn ulid() -> String {
@@ -308,6 +378,16 @@ mod tests {
                 if peer != self.me {
                     self.mail.push(&peer, self.me.clone(), blob.to_vec());
                 }
+            }
+            if let Some(delay) = self.delayed {
+                let me = self.me.clone();
+                let peer_id = FakeSink::ulid();
+                let blob = self.pending_peer.clone();
+                let mail = self.mail.clone();
+                std::thread::spawn(move || {
+                    std::thread::sleep(delay);
+                    mail.push(&me, peer_id, blob);
+                });
             }
             Ok(())
         }
@@ -375,6 +455,44 @@ mod tests {
         let merged = live_round_core(&identity, &db, &phone).unwrap();
 
         assert!(merged >= 1, "phone must merge the desktop's state");
+        let cals = db.list_calendars().unwrap();
+        let items = db.list_items(false).unwrap();
+        assert_eq!(cals.len(), 1);
+        assert_eq!(cals[0].name, "Work");
+        assert_eq!(items.len(), 1);
+        assert_eq!(items[0].title, "Standup");
+    }
+
+    /// A peer's state may only appear in our inbox AFTER we've already
+    /// broadcast and begun draining (real gossip latency) — the bounded drain
+    /// window must catch it. A pre-gossip single drain (the old behaviour)
+    /// returned before the message landed and both devices stayed unsynced
+    /// forever, which is exactly what the phone↔desktop trace showed.
+    #[test]
+    fn peer_state_arriving_during_drain_window_is_merged() {
+        let identity = ChainIdentity::from_phrase(PHRASE).unwrap();
+        let mail = Mailboxes::default();
+
+        // The peer has a calendar + event it will push to us, but it arrives in
+        // our inbox ~1s after our broadcast (well within the 12s drain window,
+        // after a single instant drain would already have returned).
+        let peer_blob = sealed_state_with(&identity, "Work", "Standup");
+
+        let phone_id = FakeSink::ulid();
+        let phone = FakeSink::new_with_delayed_peer(
+            &phone_id,
+            mail.clone(),
+            Duration::from_secs(1),
+            peer_blob,
+        );
+        let db = empty_db();
+
+        let merged = live_round_core(&identity, &db, &phone).unwrap();
+
+        assert!(
+            merged >= 1,
+            "peer state that arrives mid-round must be merged"
+        );
         let cals = db.list_calendars().unwrap();
         let items = db.list_items(false).unwrap();
         assert_eq!(cals.len(), 1);

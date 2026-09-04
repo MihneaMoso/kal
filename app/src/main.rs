@@ -7,6 +7,8 @@ mod profile;
 #[cfg(not(target_arch = "wasm32"))]
 mod sync_live;
 #[cfg(not(target_arch = "wasm32"))]
+mod sync_log;
+#[cfg(not(target_arch = "wasm32"))]
 mod sync_ui;
 mod ui;
 mod updater;
@@ -170,6 +172,9 @@ fn ensure_default_calendars(db: &Database) -> Vec<Calendar> {
 
 #[cfg(all(not(target_os = "android"), not(target_arch = "wasm32")))]
 fn main() {
+    // Capture the iroh/gossip bootstrap trace (see sync_log.rs) before any
+    // sync transport is built.
+    sync_log::init_trace_log();
     // Swap in a staged update (if any) before any window/DB work, so the new
     // binary relaunches cleanly. No-op when nothing is staged.
     updater::apply_staged_update();
@@ -240,6 +245,9 @@ fn write_if_changed(path: std::path::PathBuf, bytes: &[u8]) {
 
 #[cfg(target_os = "android")]
 fn main() {
+    // Same syncing trace as desktop; lands in <files>/kal/sync-trace.log
+    // (readable via `adb shell run-as com.kal.calendar cat files/kal/...`).
+    sync_log::init_trace_log();
     dioxus::launch(App);
 }
 
@@ -317,6 +325,10 @@ fn App() -> Element {
             if let Some(identity) = sync_ui::load_identity() {
                 sync_live::live_transport(&identity);
             }
+            // Background driver: periodically re-runs sync rounds so paired
+            // devices converge automatically once they are online together,
+            // instead of relying on a single manual "Sync now" press.
+            sync_ui::start_background_sync();
         });
     }
 
@@ -355,6 +367,23 @@ fn App() -> Element {
                 cal_res_sync.restart();
                 let _ = &db_dirty;
                 items_res.restart();
+            }
+        });
+
+        // Bridge the background driver's thread-safe counter into the Dioxus
+        // refresh signal. The driver runs on a plain OS thread (no runtime), so
+        // it can't bump the signal itself; this poller runs on the runtime and
+        // forwards any change.
+        let mut last_driver_dirty =
+            use_signal(|| sync_ui::SYNC_DRIVER_DIRTY.load(std::sync::atomic::Ordering::Relaxed));
+        use_future(move || async move {
+            loop {
+                tokio::time::sleep(std::time::Duration::from_millis(250)).await;
+                let now = sync_ui::SYNC_DRIVER_DIRTY.load(std::sync::atomic::Ordering::Relaxed);
+                if now != *last_driver_dirty.read() {
+                    *last_driver_dirty.write() = now;
+                    *sync_ui::RESOURCES_DIRTY.write() += 1;
+                }
             }
         });
     }

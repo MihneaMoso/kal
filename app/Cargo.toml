@@ -28,6 +28,11 @@ kal-sync = { path = "../crates/kal-sync" }
 tokio = { workspace = true }
 ureq = { version = "2", features = ["json"] }
 sha2 = "0.10"
+# Sync + updater diagnostics: iroh/distributed-topic-tracker emit detailed
+# bootstrap traces, but the app installs no subscriber, so they vanish. A
+# file logger (see sync_log.rs) captures them for on-device debugging.
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", default-features = false, features = ["fmt", "ansi"] }
 
 # Desktop-only deps (gated behind target_os check in source).
 [target.'cfg(all(not(target_os = "android"), not(target_arch = "wasm32")))'.dependencies]

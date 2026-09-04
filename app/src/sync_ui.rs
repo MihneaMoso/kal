@@ -4,6 +4,7 @@
 //! leaves the device unencrypted except on screen while pairing.
 
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 use dioxus::prelude::*;
 
@@ -32,6 +33,62 @@ pub fn load_identity() -> Option<ChainIdentity> {
     let text = std::fs::read_to_string(identity_path(&db_file())).ok()?;
     let stored: StoredIdentity = serde_json::from_str(&text).ok()?;
     ChainIdentity::from_phrase(&stored.phrase).ok()
+}
+
+/// Start a daemon thread that periodically runs sync rounds while this device
+/// is paired, so same-phrase devices converge automatically. Without it, sync
+/// was one-shot and racy: a single "Sync now" waited only ~15 s for a peer,
+/// so the phone synced nothing unless the desktop happened to be online (and
+/// discoverable) at that exact moment. The driver retries every few seconds
+/// until peers are found. Idempotent: only one driver runs per process.
+pub fn start_background_sync() {
+    use std::sync::OnceLock;
+    static STARTED: OnceLock<bool> = OnceLock::new();
+    let _ = STARTED.get_or_init(move || {
+        std::thread::Builder::new()
+            .name("kal-sync-driver".into())
+            .spawn(background_sync_loop)
+            .ok();
+        true
+    });
+}
+
+/// Body of the background sync driver: every few seconds, if this device has
+/// a chain identity, run a full round (live P2P, folder fallback) on a fresh
+/// DB connection and refresh the views when anything merged.
+fn background_sync_loop() {
+    const INTERVAL: std::time::Duration = std::time::Duration::from_secs(10);
+    loop {
+        std::thread::sleep(INTERVAL);
+        if load_identity().is_none() {
+            continue;
+        }
+        let db = crate::open_db();
+        let started = std::time::Instant::now();
+        match run_sync_once(&db) {
+            Ok(merged) if merged > 0 => {
+                tracing::info!(
+                    merged,
+                    elapsed_ms = started.elapsed().as_millis(),
+                    "background sync merged changes"
+                );
+                // The driver runs on a plain OS thread with no Dioxus runtime,
+                // so it cannot bump the `RESOURCES_DIRTY` signal directly (that
+                // panics). Instead it sets a thread-safe counter which an
+                // on-runtime poller in main.rs translates into the refresh.
+                SYNC_DRIVER_DIRTY.fetch_add(1, Ordering::Relaxed);
+            }
+            Ok(_) => {
+                tracing::debug!(
+                    elapsed_ms = started.elapsed().as_millis(),
+                    "background sync round: nothing merged"
+                );
+            }
+            Err(e) => {
+                tracing::debug!(error = %e, "background sync round failed");
+            }
+        }
+    }
 }
 
 fn persist(identity: &ChainIdentity) -> Result<(), String> {
@@ -67,6 +124,11 @@ fn leave_chain() {
 
 /// Bumped after a successful merge so App-level effects restart resources.
 pub static RESOURCES_DIRTY: GlobalSignal<u32> = Signal::global(|| 0);
+
+/// Thread-safe counter bumped by the background driver (an OS thread with no
+/// Dioxus runtime). An on-runtime poller turns increments into the
+/// `RESOURCES_DIRTY` refresh signal.
+pub static SYNC_DRIVER_DIRTY: AtomicUsize = AtomicUsize::new(0);
 
 /// One full gossip round: live P2P when the chain has peers, otherwise the
 /// shared outbox folder.
@@ -148,6 +210,11 @@ pub fn SyncPanel() -> Element {
         None => SyncUiState::NotPaired,
     });
     let mut join_phrase = use_signal(String::new);
+    // True while a "Sync now" round runs off-thread (live discovery can wait
+    // ~15 s for a peer; blocking the UI thread on that froze the whole app).
+    let mut syncing = use_signal(|| false);
+    // Human-readable outcome of the most recent round (shown in the panel).
+    let mut last_sync = use_signal(|| String::new());
 
     let start_chain = move |_| match kal_sync::ChainIdentity::generate() {
         Ok(id) => {
@@ -220,28 +287,68 @@ pub fn SyncPanel() -> Element {
                     small { class: "when", "Device fingerprint" }
                     code { style: "font-size:11px;", "{fingerprint}" }
                     button {
-                        title: "Exchange encrypted snapshots via the shared sync-outbox folder",
+                        title: "Reveal the 24-word phrase for setting up another device",
                         onclick: move |_| {
-                            let db = crate::open_db();
-                            match run_sync_once(&db) {
-                                Ok(merged) => {
-                                    if merged > 0 {
-                                        // Refresh views + reminder schedule after merge.
-                                        if let Ok(items) = db.list_items(false) {
-                                            let _ = items.len();
-                                        }
-                                        *RESOURCES_DIRTY.write() += 1;
-                                    }
-                                    state.set(SyncUiState::Paired {
-                                        fingerprint: load_identity()
-                                            .map(|i| i.fingerprint().fingerprint_hex)
-                                            .unwrap_or_default(),
-                                    });
-                                }
-                                Err(e) => state.set(SyncUiState::Error(e)),
+                            if let Some(id) = load_identity() {
+                                state.set(SyncUiState::ShowPhrase(id.phrase()));
                             }
                         },
-                        "Sync now"
+                        "Show recovery phrase"
+                    }
+                    button {
+                        disabled: *syncing.read(),
+                        title: "Exchange encrypted snapshots via the shared sync-outbox folder",
+                        onclick: move |_| {
+                            if *syncing.read() {
+                                return;
+                            }
+                            // Run the round off the UI thread (peer discovery
+                            // can wait ~15 s; doing it inline froze the app)
+                            // and post the result back through signals.
+                            *syncing.write() = true;
+                            let db = crate::open_db();
+                            let mut state = state;
+                            let mut last_sync = last_sync;
+                            spawn(async move {
+                                let started = std::time::Instant::now();
+                                let result =
+                                    match tokio::task::spawn_blocking(move || run_sync_once(&db))
+                                        .await
+                                    {
+                                        Ok(res) => res,
+                                        Err(e) => Err(format!("sync task failed: {e}")),
+                                    };
+                                *syncing.write() = false;
+                                match result {
+                                    Ok(merged) => {
+                                        tracing::info!(merged, elapsed_ms = started.elapsed().as_millis(), "manual sync round done");
+                                        if merged > 0 {
+                                            *RESOURCES_DIRTY.write() += 1;
+                                        }
+                                        last_sync.set(if merged > 0 {
+                                            format!("Synced {merged} change(s) \u{2014} {}", clock_str())
+                                        } else {
+                                            format!("No changes to sync \u{2014} {}", clock_str())
+                                        });
+                                        state.set(SyncUiState::Paired {
+                                            fingerprint: load_identity()
+                                                .map(|i| i.fingerprint().fingerprint_hex)
+                                                .unwrap_or_default(),
+                                        });
+                                    }
+                                    Err(e) => {
+                                        tracing::warn!(error = %e, "manual sync round failed");
+                                        // Transient (e.g. "no peers yet") — keep the paired
+                                        // panel visible, just report the outcome inline.
+                                        last_sync.set(format!("Sync failed: {e}"));
+                                    }
+                                }
+                            });
+                        },
+                        if *syncing.read() { "Syncing…" } else { "Sync now" }
+                    }
+                    if !last_sync.read().is_empty() {
+                        small { class: "when", style: "color:var(--fg-muted);", "{last_sync}" }
                     }
                     div { style: "margin-top:10px;border-top:1px solid var(--border,#2a2f3a);padding-top:10px;",
                         LeaveSyncControls { on_leave: move |_| {
@@ -260,6 +367,11 @@ pub fn SyncPanel() -> Element {
             }
         }
     }
+}
+
+/// Local time "HH:MM" for the last-sync status line.
+fn clock_str() -> String {
+    chrono::Local::now().format("%H:%M").to_string()
 }
 
 /// Two-step "Leave sync chain" control with inline confirmation.

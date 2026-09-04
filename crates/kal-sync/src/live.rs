@@ -34,6 +34,18 @@ fn topic_name(chain: &ChainIdentity) -> String {
     format!("kal-sync/{}", chain.fingerprint().fingerprint_hex)
 }
 
+/// Maximum gossip message size in bytes.
+///
+/// iroh-gossip defaults to 4 KiB and **silently drops anything larger**: the
+/// sender's `broadcast()` still returns `Ok`, but the per-connection send loop
+/// fails with `TooLarge` and tears the connection down, so the peer never
+/// receives the frame (observed as endless `NeighborUp/Down` flapping with
+/// zero merges). A real sealed calendar state is tens of KiB (37 KiB sealed →
+/// ~132 KiB JSON frame for 32 items), so the default can never carry it.
+/// 2 MiB leaves headroom for thousands of items; both sides must agree on the
+/// value because the receiver enforces the same limit on incoming frames.
+const MAX_GOSSIP_MESSAGE_SIZE: usize = 2 * 1024 * 1024;
+
 /// A frame broadcast on the gossip topic.
 ///
 /// Wrapping the (already encrypted) blob lets recipients distinguish who sent
@@ -98,7 +110,9 @@ impl IrohTransport {
                 .await
                 .map_err(|e| SyncError::Live(format!("bind endpoint: {e}")))?;
 
-            let gossip = Gossip::builder().spawn(endpoint.clone());
+            let gossip = Gossip::builder()
+                .max_message_size(MAX_GOSSIP_MESSAGE_SIZE)
+                .spawn(endpoint.clone());
             let router = Router::builder(endpoint.clone())
                 .accept(iroh_gossip::ALPN, gossip.clone())
                 .spawn();
@@ -131,28 +145,67 @@ impl IrohTransport {
             let latest_clone = latest.clone();
             let neighbors_clone = neighbors.clone();
             let sender_clone = sender.clone();
+            let device_str_task = device_str.clone();
             tokio::spawn(async move {
                 let mut last_sent = None::<Vec<u8>>;
                 loop {
                     match receiver.next().await {
                         Ok(iroh_gossip::api::Event::Received(message)) => {
+                            let wire_len = message.content.len();
                             if let Ok(frame) =
                                 serde_json::from_slice::<GossipFrame>(&message.content)
                             {
+                                tracing::info!(
+                                    from = %frame.from,
+                                    blob_bytes = frame.blob.len(),
+                                    wire_bytes = wire_len,
+                                    "live: received gossip frame"
+                                );
                                 let _ = tx.send((frame.from, frame.blob));
+                            } else {
+                                tracing::warn!(
+                                    wire_bytes = wire_len,
+                                    "live: dropped non-frame gossip payload"
+                                );
                             }
                         }
                         Ok(iroh_gossip::api::Event::NeighborUp(_)) => {
-                            neighbors_clone.fetch_add(1, Ordering::Relaxed);
+                            let n = neighbors_clone.fetch_add(1, Ordering::Relaxed) + 1;
                             let snapshot = latest_clone.lock().unwrap().clone();
                             if let Some(snapshot) = snapshot {
-                                // Push our latest state to the fresh peer without
-                                // spamming when nothing changed since last time.
-                                if last_sent.as_deref() != Some(snapshot.as_slice())
-                                    && sender_clone.broadcast(snapshot.clone()).await.is_ok()
-                                {
-                                    last_sent = Some(snapshot);
+                                // Push our latest state to the fresh peer, in the
+                                // same frame format the send path uses — the raw
+                                // sealed blob alone is not a valid `GossipFrame`
+                                // and would be dropped by receivers. Dedup so a
+                                // back-and-forth NeighborUp spam isn't amplified.
+                                if last_sent.as_deref() != Some(snapshot.as_slice()) {
+                                    let frame = GossipFrame {
+                                        from: device_str_task.clone(),
+                                        blob: snapshot.clone(),
+                                    };
+                                    if let Ok(bytes) = serde_json::to_vec(&frame) {
+                                        let wire_len = bytes.len();
+                                        if sender_clone.broadcast(bytes).await.is_ok() {
+                                            tracing::info!(
+                                                neighbors = n,
+                                                sealed_bytes = snapshot.len(),
+                                                wire_bytes = wire_len,
+                                                "live: pushed snapshot to new neighbor"
+                                            );
+                                            last_sent = Some(snapshot);
+                                        }
+                                    }
+                                } else {
+                                    tracing::debug!(
+                                        neighbors = n,
+                                        "live: neighbor up, snapshot already pushed"
+                                    );
                                 }
+                            } else {
+                                tracing::info!(
+                                    neighbors = n,
+                                    "live: neighbor up, no local state to push yet"
+                                );
                             }
                         }
                         Ok(iroh_gossip::api::Event::NeighborDown(_)) => {
@@ -221,6 +274,18 @@ impl Transport for IrohTransport {
         };
         let bytes = serde_json::to_vec(&frame)
             .map_err(|e| SyncError::Live(format!("encode frame: {e}")))?;
+        if bytes.len() >= MAX_GOSSIP_MESSAGE_SIZE {
+            tracing::warn!(
+                wire_bytes = bytes.len(),
+                limit = MAX_GOSSIP_MESSAGE_SIZE,
+                "live: frame exceeds gossip message limit and will be dropped"
+            );
+        }
+        tracing::info!(
+            sealed_bytes = blob.len(),
+            wire_bytes = bytes.len(),
+            "live: broadcasting state"
+        );
         self._runtime
             .block_on(self.sender.broadcast(bytes))
             .map_err(|e| SyncError::Live(format!("broadcast: {e}")))?;
