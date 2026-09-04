@@ -152,18 +152,39 @@ fn open_db() -> DbHandle {
     })
 }
 
+/// Well-known IDs for the seeded default calendars. Every fresh install mints
+/// the SAME rows so sync unions them instead of duplicating "Personal" /
+/// "Birthdays" once per device (each install used to generate fresh ULIDs,
+/// and every device's pair survived every merge because the CRDT unions by
+/// id). Existing installs are unaffected: seeding only runs on empty DBs.
+/// `pub(crate)` so the sync retirement below can recognize placeholders.
+pub(crate) const DEFAULT_PERSONAL_ID: &str = "01ARZ3NDEKTSV4RRFFQ69G5FAV";
+pub(crate) const DEFAULT_BIRTHDAYS_ID: &str = "01ARZ3NDEKTSV4RRFFQ69G5FBW";
+
 /// Ensure the default "Personal" and auto-created "Birthdays" calendars exist.
 fn ensure_default_calendars(db: &Database) -> Vec<Calendar> {
     if db.list_calendars().unwrap_or_default().is_empty() {
-        db.upsert_calendar(&Calendar::local("Personal", Color("#3366cc".into())))
-            .ok();
+        let now = Local::now().fixed_offset();
         db.upsert_calendar(&Calendar {
-            id: ulid::Ulid::new(),
+            id: DEFAULT_PERSONAL_ID
+                .parse()
+                .expect("well-known default calendar id"),
+            name: "Personal".into(),
+            color: Color("#3366cc".into()),
+            source: kal_core::models::CalendarSource::Local,
+            visible: true,
+            updated_at: now,
+        })
+        .ok();
+        db.upsert_calendar(&Calendar {
+            id: DEFAULT_BIRTHDAYS_ID
+                .parse()
+                .expect("well-known default calendar id"),
             name: "Birthdays".into(),
             color: Color("#e91e63".into()),
             source: kal_core::models::CalendarSource::Birthdays,
             visible: true,
-            updated_at: Local::now().fixed_offset(),
+            updated_at: now,
         })
         .ok();
     }
@@ -705,6 +726,12 @@ fn Sidebar() -> Element {
 
     let cal_res = use_context::<Resource<Vec<Calendar>>>();
     let calendars = cal_res.value().read().clone().unwrap_or_default();
+    // Invisible calendars (e.g. duplicates retired by sync) stay out of the
+    // main list instead of rendering as unchecked clutter, but remain
+    // one click away so they can be re-enabled.
+    let visible_cals: Vec<Calendar> = calendars.iter().filter(|c| c.visible).cloned().collect();
+    let hidden_cals: Vec<Calendar> = calendars.iter().filter(|c| !c.visible).cloned().collect();
+    let mut show_hidden = use_signal(|| false);
 
     let db_event = db.clone();
     let db_task = db.clone();
@@ -734,8 +761,26 @@ fn Sidebar() -> Element {
             }
             h2 { "Calendars" }
             ul {
-                for cal in calendars.iter().cloned() {
+                for cal in visible_cals.iter().cloned() {
                     CalendarRow { key: "{cal.id}", calendar: cal }
+                }
+            }
+            if !hidden_cals.is_empty() {
+                button {
+                    style: "background:none;border:none;color:var(--fg-muted);font-size:12px;cursor:pointer;padding:2px 0;",
+                    onclick: move |_| show_hidden.toggle(),
+                    if *show_hidden.read() {
+                        "Hidden ({hidden_cals.len()}) ▾"
+                    } else {
+                        "Hidden ({hidden_cals.len()}) ▸"
+                    }
+                }
+                if *show_hidden.read() {
+                    ul {
+                        for cal in hidden_cals.iter().cloned() {
+                            CalendarRow { key: "{cal.id}", calendar: cal }
+                        }
+                    }
                 }
             }
             {sync_panel()}
@@ -888,5 +933,37 @@ fn CalendarRow(calendar: Calendar) -> Element {
             span { "{name}" }
             small { class: "when", "{src}" }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Fresh installs everywhere must seed byte-identical default calendars:
+    /// sync unions by id, so per-install random ULIDs duplicated
+    /// "Personal"/"Birthdays" once per device on every merge.
+    #[test]
+    fn default_calendars_are_deterministic_across_installs() {
+        // The well-known IDs are valid ULIDs.
+        let personal: ulid::Ulid = DEFAULT_PERSONAL_ID.parse().unwrap();
+        let birthdays: ulid::Ulid = DEFAULT_BIRTHDAYS_ID.parse().unwrap();
+        assert_ne!(personal, birthdays);
+
+        let first = Database::open_in_memory().unwrap();
+        let second = Database::open_in_memory().unwrap();
+        let a = ensure_default_calendars(&first);
+        let b = ensure_default_calendars(&second);
+        assert_eq!(a.len(), 2);
+        assert_eq!(
+            a.iter().map(|c| c.id).collect::<Vec<_>>(),
+            b.iter().map(|c| c.id).collect::<Vec<_>>()
+        );
+        assert!(a.iter().any(|c| c.id == personal && c.name == "Personal"));
+        assert!(a.iter().any(|c| c.id == birthdays && c.name == "Birthdays"));
+
+        // Seeding never touches a non-empty DB (existing installs keep theirs).
+        let before = ensure_default_calendars(&first);
+        assert_eq!(before.len(), 2);
     }
 }

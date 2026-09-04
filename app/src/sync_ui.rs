@@ -124,11 +124,58 @@ fn leave_chain() {
 
 /// Bumped after a successful merge so App-level effects restart resources.
 pub static RESOURCES_DIRTY: GlobalSignal<u32> = Signal::global(|| 0);
-
 /// Thread-safe counter bumped by the background driver (an OS thread with no
 /// Dioxus runtime). An on-runtime poller turns increments into the
 /// `RESOURCES_DIRTY` refresh signal.
 pub static SYNC_DRIVER_DIRTY: AtomicUsize = AtomicUsize::new(0);
+
+/// Retire fresh-install placeholder calendars shadowed by chain data.
+///
+/// A device that joins a chain with an already-visible `Personal`/`Birthdays`
+/// pair shows duplicate rows: its own (empty, well-known-id) placeholders
+/// plus the chain's pair. The placeholders can never hold data the chain
+/// lacks — they were minted minutes ago by seeding — so once a merge lands,
+/// hide the ones shadowed by a same-named visible calendar. Narrowly scoped:
+/// only well-known placeholder IDs, only when they hold zero items (live or
+/// tombstoned), only when a same-named visible alternative exists. Runs on
+/// every persisted merge; idempotent.
+pub(crate) fn retire_shadowed_placeholders(db: &crate::DbHandle) {
+    use std::collections::HashSet;
+    let cals = db.list_calendars().unwrap_or_default();
+    if cals.is_empty() {
+        return;
+    }
+    let used: HashSet<ulid::Ulid> = db
+        .list_items(true)
+        .unwrap_or_default()
+        .iter()
+        .map(|i| i.calendar_id)
+        .collect();
+    let now = chrono::Local::now().fixed_offset();
+    for id_str in [crate::DEFAULT_PERSONAL_ID, crate::DEFAULT_BIRTHDAYS_ID] {
+        let Ok(id) = id_str.parse::<ulid::Ulid>() else {
+            continue;
+        };
+        let Some(cal) = cals.iter().find(|c| c.id == id) else {
+            continue;
+        };
+        if !cal.visible || used.contains(&id) {
+            continue;
+        }
+        let shadowed = cals
+            .iter()
+            .any(|o| o.visible && o.id != id && o.name == cal.name);
+        if !shadowed {
+            continue;
+        }
+        let mut retired = cal.clone();
+        retired.visible = false;
+        retired.updated_at = now;
+        if db.upsert_calendar(&retired).is_ok() {
+            tracing::info!(calendar = %cal.name, "retired shadowed placeholder calendar");
+        }
+    }
+}
 
 /// One full gossip round: live P2P when the chain has peers, otherwise the
 /// shared outbox folder.
@@ -187,6 +234,7 @@ fn run_sync_once(db: &crate::DbHandle) -> Result<usize, String> {
     for item in session.state.items.values() {
         db.upsert_item(item).map_err(|e| e.to_string())?;
     }
+    retire_shadowed_placeholders(db);
     Ok(merged)
 }
 

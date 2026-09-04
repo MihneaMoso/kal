@@ -249,6 +249,7 @@ pub fn live_round_core(
     for item in session.state.items.values() {
         db.upsert_item(item).map_err(|e| e.to_string())?;
     }
+    crate::sync_ui::retire_shadowed_placeholders(db);
     Ok(merged)
 }
 
@@ -499,6 +500,55 @@ mod tests {
         assert_eq!(cals[0].name, "Work");
         assert_eq!(items.len(), 1);
         assert_eq!(items[0].title, "Standup");
+    }
+
+    /// A fresh device joining a chain that already has a visible pair must
+    /// retire its empty well-known placeholders (otherwise the sidebar shows
+    /// every calendar twice), while a standalone device keeps its own.
+    #[test]
+    fn shadowed_placeholders_retire_but_standalone_ones_stay() {
+        // Joined chain: legacy visible pair + empty fixed placeholders.
+        let db = empty_db();
+        let legacy = cal("Personal");
+        db.upsert_calendar(&legacy).unwrap();
+        let legacy_bday = cal("Birthdays");
+        db.upsert_calendar(&legacy_bday).unwrap();
+        for id_str in [crate::DEFAULT_PERSONAL_ID, crate::DEFAULT_BIRTHDAYS_ID] {
+            let id: ulid::Ulid = id_str.parse().unwrap();
+            let mut placeholder = cal(if id_str == crate::DEFAULT_PERSONAL_ID {
+                "Personal"
+            } else {
+                "Birthdays"
+            });
+            placeholder.id = id;
+            db.upsert_calendar(&placeholder).unwrap();
+        }
+        crate::sync_ui::retire_shadowed_placeholders(&db);
+        let after = db.list_calendars().unwrap();
+        let fixed_hidden = after
+            .iter()
+            .filter(|c| {
+                c.id.to_string() == crate::DEFAULT_PERSONAL_ID
+                    || c.id.to_string() == crate::DEFAULT_BIRTHDAYS_ID
+            })
+            .all(|c| !c.visible);
+        assert!(fixed_hidden, "shadowed placeholders must hide");
+        assert!(
+            after.iter().any(|c| c.id == legacy.id && c.visible),
+            "chain pair stays visible"
+        );
+
+        // Standalone device: only its own fixed pair, nothing shadows it.
+        let solo = empty_db();
+        let mut only = cal("Personal");
+        only.id = crate::DEFAULT_PERSONAL_ID.parse().unwrap();
+        solo.upsert_calendar(&only).unwrap();
+        crate::sync_ui::retire_shadowed_placeholders(&solo);
+        let solo_after = solo.list_calendars().unwrap();
+        assert!(
+            solo_after.iter().all(|c| c.visible),
+            "unshadowed placeholder stays visible"
+        );
     }
 
     /// Gossip broadcasts come back to the sender; a round must never count or

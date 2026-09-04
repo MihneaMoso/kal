@@ -788,6 +788,14 @@ impl EditorState {
         let start = Local::now().fixed_offset();
         let blank = || CalendarItem::new(ItemKind::Event, "", Ulid::nil(), start);
         let item = db.get_item(id).ok().flatten().unwrap_or_else(blank);
+        // Anchor the form on the CLICKED OCCURRENCE, not the series base.
+        // Saving "This event" EXDATEs `occurrence_start` out of the base and
+        // creates the edited copy at the form's date/time — so prefilling from
+        // the base start made the clicked occurrence vanish while its
+        // replacement landed back on the series start day, which reads as
+        // "my edit deleted the event". The end preserves the base duration.
+        let anchor = occ_start.unwrap_or(item.start);
+        let anchor_end = item.end.map(|e| anchor + (e - item.start));
         let reminder_minutes = item
             .reminders
             .iter()
@@ -803,10 +811,9 @@ impl EditorState {
             reminder_minutes,
             kind: item.kind,
             title: item.title,
-            date: item.start.date_naive().format("%Y-%m-%d").to_string(),
-            start_time: item.start.format("%H:%M").to_string(),
-            end_time: item
-                .end
+            date: anchor.date_naive().format("%Y-%m-%d").to_string(),
+            start_time: anchor.format("%H:%M").to_string(),
+            end_time: anchor_end
                 .map(|e| e.format("%H:%M").to_string())
                 .unwrap_or_default(),
             all_day: item.all_day,
@@ -1251,5 +1258,89 @@ fn weekday_headers(monday_first: bool) -> [&'static str; 7] {
         ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
     } else {
         ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use kal_core::models::{Calendar, Color};
+    use kal_storage::Database;
+    use std::sync::Arc;
+
+    fn test_db() -> crate::DbHandle {
+        Arc::new(Database::open_in_memory().unwrap())
+    }
+
+    /// Clicking the Nth occurrence of a weekly series must prefill the editor
+    /// with THAT occurrence's date/time (Google Calendar behavior). It used to
+    /// prefill from the series base start, so "This event" EXDATEd the clicked
+    /// occurrence while its edited copy landed back on the base day — read by
+    /// users as "my edit deleted the event".
+    #[test]
+    fn edit_existing_anchors_form_on_clicked_occurrence() {
+        let db = test_db();
+        let cal = Calendar::local("Work", Color("#3366cc".into()));
+        db.upsert_calendar(&cal).unwrap();
+
+        let base_start = kal_core::models::datetime_from_parts(2026, 8, 3, 9, 0, 3).unwrap();
+        let mut item = CalendarItem::new(ItemKind::Event, "Standup", cal.id, base_start);
+        item.end = Some(base_start + chrono::Duration::hours(1));
+        item.rrule = Some("FREQ=WEEKLY".into());
+        db.upsert_item(&item).unwrap();
+
+        // Third occurrence, two weeks after the base start.
+        let occ = base_start + chrono::Duration::days(14);
+        let state = EditorState::edit_existing(&db, item.id, Some(occ));
+
+        assert_eq!(state.occurrence_start, Some(occ));
+        assert_eq!(state.date, occ.date_naive().format("%Y-%m-%d").to_string());
+        assert_eq!(state.start_time, occ.format("%H:%M").to_string());
+        assert_eq!(
+            state.end_time,
+            (occ + chrono::Duration::hours(1))
+                .format("%H:%M")
+                .to_string()
+        );
+        // The series rule is preserved so "All events" keeps recurring.
+        assert_eq!(state.rrule_preset, RrulePreset::Weekly);
+    }
+
+    /// A scoped "This event" split must keep the edited copy: EXDATE the base
+    /// at the occurrence and create exactly one single (rrule-free) item with
+    /// the edited title at the occurrence's date.
+    #[test]
+    fn this_event_split_keeps_edited_copy_at_occurrence() {
+        let db = test_db();
+        let cal = Calendar::local("Work", Color("#3366cc".into()));
+        db.upsert_calendar(&cal).unwrap();
+
+        let base_start = kal_core::models::datetime_from_parts(2026, 8, 3, 9, 0, 3).unwrap();
+        let mut base = CalendarItem::new(ItemKind::Event, "Standup", cal.id, base_start);
+        base.end = Some(base_start + chrono::Duration::hours(1));
+        base.rrule = Some("FREQ=WEEKLY".into());
+        db.upsert_item(&base).unwrap();
+
+        let occ = base_start + chrono::Duration::days(7);
+        let mut edited = base.clone();
+        edited.title = "Standup (delayed)".into();
+        edited.start = occ;
+        edited.end = Some(occ + chrono::Duration::hours(1));
+        assert!(db_apply_scoped_edit(&db, base.id, &edited, occ, false));
+
+        // Base carries the EXDATE…
+        let base_after = db.get_item(base.id).ok().flatten().unwrap();
+        assert!(base_after.exdates.contains(&occ));
+        // …and exactly one rrule-free copy with the edited title exists.
+        let copies: Vec<_> = db
+            .list_items(true)
+            .unwrap()
+            .into_iter()
+            .filter(|i| i.id != base.id)
+            .collect();
+        assert_eq!(copies.len(), 1);
+        assert_eq!(copies[0].title, "Standup (delayed)");
+        assert!(copies[0].rrule.is_none());
+        assert_eq!(copies[0].start, occ);
     }
 }
