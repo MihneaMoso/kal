@@ -1,3 +1,10 @@
+// Clippy 1.98 loosened `useless_format` to lint `format!` calls emitted by an
+// outer macro. `rsx!` turns every `"{expr}"` interpolation into such a call and
+// attaches our markup's span to it, so clippy suggests `.to_string()` inside
+// RSX literals — which is not valid RSX. The lint has no false positives in
+// this crate (all 28 hits are RSX attributes/text), so allow it here.
+#![allow(clippy::useless_format)]
+
 #[cfg(target_os = "android")]
 mod android_picker;
 mod i18n;

@@ -209,7 +209,7 @@ impl IrohTransport {
                             }
                         }
                         Ok(iroh_gossip::api::Event::NeighborDown(_)) => {
-                            let _ = neighbors_clone.fetch_update(
+                            let _ = neighbors_clone.try_update(
                                 Ordering::Relaxed,
                                 Ordering::Relaxed,
                                 |n| Some(n.saturating_sub(1)),
