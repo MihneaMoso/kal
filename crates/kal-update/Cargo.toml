@@ -1,0 +1,19 @@
+[package]
+name = "kal-update"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Release checking, download and verification shared by the desktop app and the Android bridge."
+
+[dependencies]
+serde_json = { workspace = true }
+sha2 = "0.10"
+
+# The release *semantics* (version arithmetic, asset resolution, verification)
+# are portable; only the HTTP transport is not. Keeping `ureq` behind this gate
+# lets the web build link the crate for `is_newer` without pulling ring/rustls.
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+ureq = { version = "2", features = ["json"] }
+
+[dev-dependencies]
+tempfile = "3"

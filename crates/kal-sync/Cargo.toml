@@ -21,6 +21,7 @@ tracing = "0.1"
 # Live P2P transport (iroh gossip). Native-only: iroh does not support wasm32,
 # and the app already gates kal-sync to non-wasm builds.
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+kal-storage = { path = "../kal-storage" }
 iroh = "1"
 iroh-gossip = "0.101"
 distributed-topic-tracker = "0.3"

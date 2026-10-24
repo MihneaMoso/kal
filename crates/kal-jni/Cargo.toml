@@ -1,0 +1,16 @@
+[package]
+name = "kal-jni"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Thin JNI bridge exposing Kal's versioned C ABI (kal-ffi) to the Kotlin Android app."
+
+[lib]
+name = "kal_jni"
+# cdylib = the library the Kotlin app loads (`System.loadLibrary("kal_jni")`);
+# rlib so the symbol-presence test can link the exports.
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+kal-ffi = { path = "../kal-ffi" }
+jni = "0.21"

@@ -13,6 +13,9 @@ path = "src/main.rs"
 kal-core = { path = "../crates/kal-core" }
 kal-storage = { path = "../crates/kal-storage" }
 kal-import = { path = "../crates/kal-import" }
+# Release semantics (version compare + asset pick); the HTTP transport inside it
+# is behind a non-wasm gate, so the web build pulls no TLS stack.
+kal-update = { path = "../crates/kal-update" }
 serde = { workspace = true }
 serde_json = { workspace = true }
 base64 = "0.22"
@@ -26,8 +29,6 @@ dirs-next = "2"
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 kal-sync = { path = "../crates/kal-sync" }
 tokio = { workspace = true }
-ureq = { version = "2", features = ["json"] }
-sha2 = "0.10"
 # Sync + updater diagnostics: iroh/distributed-topic-tracker emit detailed
 # bootstrap traces, but the app installs no subscriber, so they vanish. A
 # file logger (see sync_log.rs) captures them for on-device debugging.

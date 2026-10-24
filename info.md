@@ -1,14 +1,26 @@
 To build locally
-# One-time: install Rust Android targets + Android SDK/NDK
+# One-time: Rust Android target + Android SDK/NDK
 rustup target add aarch64-linux-android
-sdkmanager "platforms;android-34" "build-tools;34.0.0" "ndk;25.2.9519653" "cmake;3.22.1"
+sdkmanager "platforms;android-34" "build-tools;34.0.0" "ndk;25.2.9519653"
 
-# Build APK
-export NDK_HOME="$ANDROID_HOME/ndk/25.2.9519653"
-cd app && dx bundle --android --release --target aarch64-linux-android --package-types apk
+# Android app (Kotlin UI + libkal_jni.so; the Rust half is cross-built and staged)
+export ANDROID_HOME="$HOME/Android/Sdk"
+scripts/build-kotlin-android.sh --apk          # debug APK
+adb install -r android/app/build/outputs/apk/debug/app-debug.apk
+
+# Signed release APK (tag builds in CI use the same script + repository secrets)
+scripts/build-kotlin-android.sh --release --apk-release --version v0.2.0
+#   needs android/keystore.properties or KAL_KEYSTORE_FILE/KAL_KEYSTORE_PASSWORD/
+#   KAL_KEY_ALIAS/KAL_KEY_PASSWORD; see SIGNING.md
+
+# Desktop
+cargo build --release
+
 To get APK from CI
-Push to main (or open a PR) → Actions tab → android-build job → download kal-android.apk artifact.
-What's NOT yet wired up
-- Android notifications (uses NullNotifier — needs AlarmManager FFI)
-- Android file import/export (sidebar section hidden — needs Storage Access Framework)
-- Desktop features (mini-widget, rfd dialogs) are cleanly behind gates for when you add them back
+Push to main (or open a PR) → Actions tab → kotlin-build job → download
+kal-kotlin-debug.apk. Tag pushes publish kal-<version>-android.apk (signed with
+the release key) via the release workflow.
+
+What's NOT wired up yet
+- Widget taps open the app on its current view (no deep link to the tapped day).
+- Desktop extras (mini-widget, rfd dialogs) stay behind desktop-only gates.

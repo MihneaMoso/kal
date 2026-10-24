@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+      Minimal activity theme: Compose draws everything, so this only needs to be
+      an action-bar-free Material theme. Real design tokens (main.css) land with
+      the shell/theme phase.
+    -->
+    <style name="Theme.Kal" parent="@android:style/Theme.Material.Light.NoActionBar" />
+</resources>

@@ -1,0 +1,122 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!--
+      Only what the mechanisms strictly need (guide §9.7):
+
+      Reminders (Phase 4):
+      * POST_NOTIFICATIONS   — the Android 13+ runtime grant for showing one.
+      * USE_EXACT_ALARM      — Android 13+: install-granted exact alarms; the
+                               app's core function is an alarm/calendar, which
+                               is what the permission is reserved for.
+      * SCHEDULE_EXACT_ALARM — Android 12/12L only (13+ uses USE_EXACT_ALARM).
+                               Granted by default on those releases.
+      * RECEIVE_BOOT_COMPLETED — re-arm every alarm after a reboot.
+
+      Software & updates (Phase 6):
+      * INTERNET                 — the native release check and APK download.
+      * REQUEST_INSTALL_PACKAGES — without it Android 8+ silently drops the
+                                   PackageInstaller intent; the user still has
+                                   to allow "install unknown apps" for Kal.
+
+      When exact alarms are somehow not allowed the scheduler degrades to
+      inexact alarms instead of dropping the reminder (ReminderAlarms).
+    -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
+    <uses-permission
+        android:name="android.permission.SCHEDULE_EXACT_ALARM"
+        android:maxSdkVersion="32" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+
+    <application
+        android:allowBackup="true"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        android:fullBackupContent="@xml/backup_rules"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.Kal">
+
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:label="@string/app_name">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <!-- Fired by AlarmManager for one reminder; shows the notification. -->
+        <receiver
+            android:name=".notify.ReminderReceiver"
+            android:exported="false" />
+
+        <!--
+          AlarmManager forgets everything on reboot, so re-arm from the database.
+          Not exported: BOOT_COMPLETED is a protected broadcast, which the system
+          still delivers to non-exported receivers.
+        -->
+        <receiver
+            android:name=".notify.BootReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+            </intent-filter>
+        </receiver>
+
+        <!--
+          Hands the exported .ics and the staged update APK to the share sheet /
+          package installer as a content:// URI, which needs no storage
+          permission and avoids FileUriExposedException. Not exported; each
+          intent grants only the read it needs.
+        -->
+        <provider
+            android:name=".KalFileProvider"
+            android:authorities="com.kal.calendar.updates"
+            android:exported="false"
+            android:grantUriPermissions="true" />
+
+        <!--
+          Home-screen widgets (ported from the Dioxus build): both providers
+          read the same database through libkal_jni.so in the app process.
+          Exported because the launcher/system sends APPWIDGET_UPDATE; the boot
+          receiver just refreshes them after a reboot.
+        -->
+        <receiver
+            android:name=".widgets.ScheduleWidgetProvider"
+            android:exported="true"
+            android:label="@string/kal_widget_schedule_desc">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/kal_schedule_widget_info" />
+        </receiver>
+
+        <receiver
+            android:name=".widgets.MonthWidgetProvider"
+            android:exported="true"
+            android:label="@string/kal_widget_month_desc">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/kal_month_widget_info" />
+        </receiver>
+
+        <receiver
+            android:name=".widgets.BootReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+            </intent-filter>
+        </receiver>
+    </application>
+
+</manifest>

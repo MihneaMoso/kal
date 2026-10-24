@@ -47,7 +47,7 @@ pub fn compute_firings(
         if item.kind == ItemKind::Task && item.completed.is_some() {
             continue;
         }
-        for occ in occurrences_window(item, from.date_naive(), to_date) {
+        for occ in firing_occurrences(item, from.date_naive(), to_date) {
             for reminder in &item.reminders {
                 let fire_at = reminder.offset.resolve(occ.start);
                 if fire_at < from {
@@ -67,6 +67,30 @@ pub fn compute_firings(
         a.item_id == b.item_id && a.reminder_id == b.reminder_id && a.fire_at == b.fire_at
     });
     out
+}
+
+/// The occurrences a reminder fires from.
+///
+/// A non-recurring item fires once, from its own start. The grid expansion
+/// ([`expand_occurrences`]) repeats a multi-day — or midnight-crossing — event
+/// on every day it covers, which is right for the calendar views but wrong
+/// here: it armed the same reminder once per covered day, so a 23:00–01:00
+/// event rang twice and a week-long event rang seven times. Recurring series
+/// keep the per-occurrence expansion (a rule never covers a day twice).
+fn firing_occurrences(item: &CalendarItem, from: NaiveDate, to: NaiveDate) -> Vec<Occurrence> {
+    if item.rrule.is_some() {
+        return occurrences_window(item, from, to);
+    }
+    // Reminders resolve from the item's own instant; the horizon still bounds
+    // what is armed (`from` is applied to the resolved fire time above).
+    if item.start.date_naive() > to {
+        return Vec::new();
+    }
+    vec![Occurrence {
+        item_id: item.id,
+        start: item.start,
+        end: item.end,
+    }]
 }
 
 fn occurrences_window(item: &CalendarItem, from: NaiveDate, to: NaiveDate) -> Vec<Occurrence> {
@@ -146,6 +170,30 @@ mod tests {
         assert_eq!(firings.len(), 5);
         assert_eq!(firings[0].fire_at, ts(2026, 9, 1, 8));
         assert_eq!(firings[4].fire_at, ts(2026, 9, 5, 8));
+    }
+
+    #[test]
+    fn a_non_recurring_item_fires_once_per_reminder() {
+        // Midnight-crossing: the grid expansion covered two days, which armed
+        // the same reminder twice.
+        let mut crossing = event(ts(2026, 8, 24, 23), &[60]);
+        crossing.end = Some(crossing.start + chrono::Duration::hours(2));
+        let firings = compute_firings(&[crossing], ts(2026, 8, 24, 0), 7);
+        assert_eq!(firings.len(), 1, "{firings:?}");
+        assert_eq!(firings[0].fire_at, ts(2026, 8, 24, 22));
+
+        // Multi-day: one firing, not one per covered day.
+        let mut week = event(ts(2026, 8, 24, 9), &[1440]);
+        week.end = Some(week.start + chrono::Duration::days(6));
+        let firings = compute_firings(&[week], ts(2026, 8, 1, 0), 40);
+        assert_eq!(firings.len(), 1, "{firings:?}");
+        assert_eq!(firings[0].fire_at, ts(2026, 8, 23, 9));
+    }
+
+    #[test]
+    fn a_non_recurring_item_past_the_horizon_is_not_armed() {
+        let it = event(ts(2026, 9, 1, 9), &[60]);
+        assert!(compute_firings(&[it], ts(2026, 8, 1, 0), 7).is_empty());
     }
 
     #[test]

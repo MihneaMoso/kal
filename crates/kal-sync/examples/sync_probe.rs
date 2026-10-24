@@ -86,11 +86,9 @@ fn main() -> ExitCode {
 
     let start = Instant::now();
     let deadline = start + Duration::from_secs(180);
-    let mut aj = false;
-    let mut bj = false;
     loop {
-        aj = a.is_joined();
-        bj = b.is_joined();
+        let aj = a.is_joined();
+        let bj = b.is_joined();
         println!(
             "[t={:>4}s] A joined={aj:<5} B joined={bj}",
             start.elapsed().as_secs()

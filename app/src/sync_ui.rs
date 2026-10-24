@@ -8,31 +8,21 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 
 use dioxus::prelude::*;
 
-use serde::{Deserialize, Serialize};
-
+use kal_sync::identity_file::{clear_identity_at, load_identity_at, outbox_path, save_identity_at};
 use kal_sync::{ChainIdentity, FileTransport, SyncSession, SyncState, Transport as _};
-
-#[derive(Serialize, Deserialize)]
-struct StoredIdentity {
-    phrase: String,
-}
-
-pub fn identity_path(db_path: &std::path::Path) -> PathBuf {
-    db_path
-        .parent()
-        .unwrap_or_else(|| std::path::Path::new("."))
-        .join("sync-identity.json")
-}
 
 fn db_file() -> PathBuf {
     crate::default_db_path().unwrap_or_else(|| PathBuf::from("kal.db"))
 }
 
 /// Load or create nothing — returns `None` when this device has no chain yet.
+///
+/// This is the whole onboarding contract (Step 0 Q3): a fresh install has **no**
+/// chain identity, and merely reading must never mint one — no silent
+/// random-chain join. `sync-identity.json` appears only after the user starts a
+/// chain or joins one by phrase (`start_chain` / `join_chain` in this file).
 pub fn load_identity() -> Option<ChainIdentity> {
-    let text = std::fs::read_to_string(identity_path(&db_file())).ok()?;
-    let stored: StoredIdentity = serde_json::from_str(&text).ok()?;
-    ChainIdentity::from_phrase(&stored.phrase).ok()
+    load_identity_at(&db_file())
 }
 
 /// Start a daemon thread that periodically runs sync rounds while this device
@@ -92,22 +82,7 @@ fn background_sync_loop() {
 }
 
 fn persist(identity: &ChainIdentity) -> Result<(), String> {
-    let path = identity_path(&db_file());
-    if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
-    }
-    let json = serde_json::to_string(&StoredIdentity {
-        phrase: identity.phrase(),
-    })
-    .map_err(|e| e.to_string())?;
-    // Restrict to owner-only where supported.
-    std::fs::write(&path, json).map_err(|e| e.to_string())?;
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        let _ = std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600));
-    }
-    Ok(())
+    save_identity_at(&db_file(), identity)
 }
 
 /// Remove this device from the sync chain: deletes the local identity file and
@@ -115,11 +90,8 @@ fn persist(identity: &ChainIdentity) -> Result<(), String> {
 /// chain has no central membership to revoke — so other devices simply stop
 /// receiving snapshots from this one.
 fn leave_chain() {
-    let path = identity_path(&db_file());
-    let _ = std::fs::remove_file(&path);
-    if let Some(outbox) = path.parent().map(|p| p.join("sync-outbox")) {
-        let _ = std::fs::remove_dir_all(&outbox);
-    }
+    let _ = clear_identity_at(&db_file());
+    crate::sync_live::reset_transport();
 }
 
 /// Bumped after a successful merge so App-level effects restart resources.
@@ -129,57 +101,6 @@ pub static RESOURCES_DIRTY: GlobalSignal<u32> = Signal::global(|| 0);
 /// `RESOURCES_DIRTY` refresh signal.
 pub static SYNC_DRIVER_DIRTY: AtomicUsize = AtomicUsize::new(0);
 
-/// Retire fresh-install placeholder calendars shadowed by chain data.
-///
-/// A device that joins a chain with an already-visible `Personal`/`Birthdays`
-/// pair shows duplicate rows: its own (empty, well-known-id) placeholders
-/// plus the chain's pair. The placeholders can never hold data the chain
-/// lacks — they were minted minutes ago by seeding — so once a merge lands,
-/// delete the ones shadowed by a same-named visible live calendar. True
-/// deletes (tombstones), not hides: union-merge would resurrect hidden-but-
-/// live rows from any peer, while tombstones win LWW ties and converge
-/// everywhere. Narrowly scoped: only well-known placeholder IDs, only when
-/// they hold zero items (live or tombstoned), only when a same-named visible
-/// live alternative exists. Runs on every persisted merge; idempotent.
-pub(crate) fn retire_shadowed_placeholders(db: &crate::DbHandle) {
-    use std::collections::HashSet;
-    let cals = db.list_calendars().unwrap_or_default();
-    if cals.is_empty() {
-        return;
-    }
-    let used: HashSet<ulid::Ulid> = db
-        .list_items(true)
-        .unwrap_or_default()
-        .iter()
-        .map(|i| i.calendar_id)
-        .collect();
-    let now = chrono::Local::now().fixed_offset();
-    for id_str in [crate::DEFAULT_PERSONAL_ID, crate::DEFAULT_BIRTHDAYS_ID] {
-        let Ok(id) = id_str.parse::<ulid::Ulid>() else {
-            continue;
-        };
-        let Some(cal) = cals.iter().find(|c| c.id == id) else {
-            continue;
-        };
-        if cal.deleted || used.contains(&id) {
-            continue;
-        }
-        let shadowed = cals.iter().any(|o| {
-            o.visible && !o.deleted && o.id != id && o.name == cal.name
-        });
-        if !shadowed {
-            continue;
-        }
-        let mut retired = cal.clone();
-        retired.visible = false;
-        retired.deleted = true;
-        retired.updated_at = now;
-        if db.upsert_calendar(&retired).is_ok() {
-            tracing::info!(calendar = %cal.name, "retired shadowed placeholder calendar");
-        }
-    }
-}
-
 /// One full gossip round: live P2P when the chain has peers, otherwise the
 /// shared outbox folder.
 fn run_sync_once(db: &crate::DbHandle) -> Result<usize, String> {
@@ -188,15 +109,12 @@ fn run_sync_once(db: &crate::DbHandle) -> Result<usize, String> {
 
     // Live P2P first: when the gossip topic has peers, sync over the network
     // (mobile joiners reach the desktop without any shared folder).
-    if let Ok(merged) = crate::sync_live::sync_round(&identity, db) {
+    if let Ok(merged) = crate::sync_live::sync_round(&identity, &db_file(), db) {
         return Ok(merged);
     }
     // Not joined yet / unavailable — fall back to the shared folder.
 
-    let outbox = identity_path(&db_file())
-        .parent()
-        .unwrap_or_else(|| std::path::Path::new("."))
-        .join("sync-outbox");
+    let outbox = outbox_path(&db_file());
     let transport = FileTransport::new(&outbox).map_err(|e| e.to_string())?;
 
     let calendars = db.list_calendars().map_err(|e| e.to_string())?;
@@ -237,7 +155,7 @@ fn run_sync_once(db: &crate::DbHandle) -> Result<usize, String> {
     for item in session.state.items.values() {
         db.upsert_item(item).map_err(|e| e.to_string())?;
     }
-    retire_shadowed_placeholders(db);
+    kal_sync::client::retire_shadowed_placeholders(db);
     Ok(merged)
 }
 
@@ -265,7 +183,7 @@ pub fn SyncPanel() -> Element {
     // ~15 s for a peer; blocking the UI thread on that froze the whole app).
     let mut syncing = use_signal(|| false);
     // Human-readable outcome of the most recent round (shown in the panel).
-    let mut last_sync = use_signal(|| String::new());
+    let last_sync = use_signal(String::new);
 
     let start_chain = move |_| match kal_sync::ChainIdentity::generate() {
         Ok(id) => {
@@ -446,19 +364,19 @@ fn LeaveSyncControls(on_leave: EventHandler<()>) -> Element {
     }
 }
 
-/// Sync-chain identity header: avatar + username, tappable to open settings.
+/// Sync-chain identity header: avatar + username. It used to open the Settings
+/// screen; the editable profile now lives in the sidebar right below, so this
+/// is a plain summary.
 #[component]
 fn ProfileHeader() -> Element {
-    let db = use_context::<crate::DbHandle>();
     let profile = crate::profile::PROFILE_VIEW.read().clone();
 
     let initials = profile.initials();
     let avatar = profile.avatar_data_uri();
 
     rsx! {
-        button {
+        div {
             class: "profile-header",
-            onclick: move |_| crate::profile::open_settings_screen(&db),
             if let Some(uri) = &avatar {
                 img { class: "profile-avatar", src: "{uri}", alt: "", width: "40", height: "40" }
             } else {

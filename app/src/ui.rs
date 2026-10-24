@@ -12,13 +12,12 @@ use crate::DbHandle;
 ///
 /// ONE struct in ONE signal on purpose: Dioxus contexts are keyed by type,
 /// so separate Signal<bool> contexts silently collapse into each other
-/// (hamburger toggling also engaged resize + prefs drawer).
+/// (hamburger toggling also engaged resize).
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct UiLayout {
     pub sidebar_open: bool,
     pub sidebar_width: u32,
     pub sidebar_resizing: bool,
-    pub prefs_drawer_open: bool,
     /// "light" | "dark". Lives here because this signal is the one
     /// empirically proven to drive visual updates (sidebar resize uses it).
     pub theme: String,
@@ -118,18 +117,17 @@ impl ViewMode {
     }
 }
 
-pub fn today_line() -> String {
-    Local::now().format("%A, %B %d %Y").to_string()
-}
-
 /// Items filtered down to visible calendars — shared by all views.
 pub fn use_visible_items() -> Vec<CalendarItem> {
     let items_res = use_context::<Resource<Vec<CalendarItem>>>();
     let cals_res = use_context::<Resource<Vec<kal_core::models::Calendar>>>();
     let items = items_res.value().read().clone().unwrap_or_default();
     let cals = cals_res.value().read().clone().unwrap_or_default();
-    let hidden: std::collections::HashSet<Ulid> =
-        cals.iter().filter(|c| !c.visible || c.deleted).map(|c| c.id).collect();
+    let hidden: std::collections::HashSet<Ulid> = cals
+        .iter()
+        .filter(|c| !c.visible || c.deleted)
+        .map(|c| c.id)
+        .collect();
     items
         .into_iter()
         .filter(|i| !hidden.contains(&i.calendar_id))
@@ -790,6 +788,15 @@ impl EditorState {
         let start = Local::now().fixed_offset();
         let blank = || CalendarItem::new(ItemKind::Event, "", Ulid::nil(), start);
         let item = db.get_item(id).ok().flatten().unwrap_or_else(blank);
+        // A "This event" occurrence is still part of its series: show the
+        // series' rule, so the dialog offers the scope choice again and does
+        // not claim the item stopped repeating.
+        let series_rule = item
+            .metadata
+            .series_id
+            .and_then(|series_id| db.get_item(series_id).ok().flatten())
+            .filter(|series| !series.deleted)
+            .and_then(|series| series.rrule);
         // Anchor the form on the CLICKED OCCURRENCE, not the series base.
         // Saving "This event" EXDATEs `occurrence_start` out of the base and
         // creates the edited copy at the form's date/time — so prefilling from
@@ -809,7 +816,7 @@ impl EditorState {
         Self {
             id: Some(item.id),
             occurrence_start: occ_start,
-            rrule_preset: rrule_to_preset(item.rrule.as_deref()),
+            rrule_preset: rrule_to_preset(series_rule.as_deref().or(item.rrule.as_deref())),
             reminder_minutes,
             kind: item.kind,
             title: item.title,
@@ -841,7 +848,9 @@ pub enum Scope {
 /// - `ThisAndFollowing`: truncate the base series with an UNTIL just before
 ///   `occ_start` and create a new series starting at the edited occurrence.
 ///
-/// Returns true on success (all writes applied).
+/// Returns true on success (all writes applied). The recurrence surgery itself
+/// lives in `kal-storage` so the JNI bridge applies the exact same logic —
+/// one implementation, no drift.
 fn db_apply_scoped_edit(
     db: &DbHandle,
     base_id: Ulid,
@@ -849,40 +858,8 @@ fn db_apply_scoped_edit(
     occ_start: DateTimeTz,
     and_following: bool,
 ) -> bool {
-    let now = Local::now().fixed_offset();
-    let Some(mut base) = db.get_item(base_id).ok().flatten() else {
-        return false;
-    };
-
-    if and_following {
-        // Truncate base series right before the edited occurrence.
-        if !base.rrule.as_deref().unwrap_or("").contains("COUNT=")
-            && !base.rrule.as_deref().unwrap_or("").contains("UNTIL=")
-        {
-            let until_utc = (occ_start - chrono::Duration::minutes(1)).with_timezone(&chrono::Utc);
-            let until = until_utc.format("%Y%m%dT%H%M%SZ").to_string();
-            let rule = base.rrule.take().unwrap_or_default();
-            base.rrule = Some(format!("{rule};UNTIL={until}"));
-        }
-    } else {
-        // Exclude just this occurrence from the base series.
-        base.exdates.push(occ_start);
-    }
-    base.updated_at = now;
-    if db.upsert_item(&base).is_err() {
-        return false;
-    }
-
-    // New item/series carries the edited values.
-    let mut new_item = edited.clone();
-    new_item.id = Ulid::new();
-    new_item.created_at = now;
-    new_item.updated_at = now;
-    if !and_following {
-        new_item.rrule = None;
-        new_item.exdates.clear();
-    }
-    db.upsert_item(&new_item).is_ok()
+    db.apply_scoped_edit(base_id, edited, occ_start, and_following)
+        .unwrap_or(false)
 }
 
 #[component]
@@ -925,12 +902,20 @@ pub fn EditorModal(state: EditorState) -> Element {
     let init_color = state.color.clone();
     let mut color = use_signal(move || init_color);
 
-    // Editing a recurring series instance? Then saving needs a scope choice.
-    let is_recurring_edit = state
-        .id
-        .and_then(|id| db.get_item(id).ok().flatten())
-        .and_then(|i| i.rrule)
-        .is_some();
+    // Editing a recurring series instance — or one of its detached occurrences
+    // ("This event") — needs a scope choice: an exception still belongs to its
+    // series even though its own `rrule` is empty.
+    let open_item = state.id.and_then(|id| db.get_item(id).ok().flatten());
+    let is_recurring_edit = open_item
+        .as_ref()
+        .map(|i| i.rrule.is_some() || i.metadata.series_id.is_some())
+        .unwrap_or(false);
+    // A detached occurrence is the row itself: "This event" edits it in place
+    // and splitting from it is not supported (see the save arms below).
+    let is_exception = open_item
+        .as_ref()
+        .map(|i| i.metadata.series_id.is_some())
+        .unwrap_or(false);
 
     // Signal captures are Copy in Dioxus, so we build one handler per scope.
     // Signal captures are Copy in Dioxus; each scope gets its own handler
@@ -950,7 +935,6 @@ pub fn EditorModal(state: EditorState) -> Element {
                 }),
                 None => CalendarItem::new(state.kind, "", *calendar_id.read(), start),
             };
-
             item.kind = state.kind;
             item.title = title.read().clone();
             item.location = {
@@ -993,8 +977,30 @@ pub fn EditorModal(state: EditorState) -> Element {
 
             let and_following = scope == Scope::ThisAndFollowing;
             match (scope, state.id, state.occurrence_start) {
+                // "This event" on an occurrence that is already detached from
+                // its series: the row *is* the occurrence, so update it in place
+                // (running the EXDATE-and-copy path would detach it again).
+                (Scope::ThisOnly, Some(_), _) if item.metadata.series_id.is_some() => {
+                    if !db_save.save_exception(&item).unwrap_or(false) {
+                        return;
+                    }
+                }
+                // Splitting from a modified occurrence is not supported; the
+                // dialog hides the scope for it.
+                (Scope::ThisAndFollowing, _, _) if item.metadata.series_id.is_some() => return,
                 (Scope::ThisOnly | Scope::ThisAndFollowing, Some(base_id), Some(occ_start)) => {
                     if !db_apply_scoped_edit(&db_save, base_id, &item, occ_start, and_following) {
+                        return;
+                    }
+                }
+                // "All events" rewrites the series row — keeping its own anchor
+                // date, since the form is anchored on the clicked occurrence —
+                // and carries the shared fields to the series' detached
+                // occurrences.
+                (Scope::All, Some(_), _) => {
+                    if !db_save.apply_all_edit(&item).unwrap_or(false)
+                        && db_save.upsert_item(&item).is_err()
+                    {
                         return;
                     }
                 }
@@ -1015,7 +1021,9 @@ pub fn EditorModal(state: EditorState) -> Element {
 
     let delete = move |_| {
         if let Some(id) = state.id {
-            let _ = db_delete.soft_delete_item(id);
+            // Deleting a series also tombstones its detached occurrences, so a
+            // series delete cannot leave "This event" copies behind.
+            let _ = db_delete.delete_with_exceptions(id);
             items_res.restart();
             *EDITOR_OPEN.write() = None;
         }
@@ -1204,7 +1212,11 @@ pub fn EditorModal(state: EditorState) -> Element {
                         button { onclick: move |_| *EDITOR_OPEN.write() = None, "Cancel" }
                         if is_recurring_edit {
                             button { class: "primary", onclick: save_all, "All events" }
-                            button { onclick: save_following, "…and following" }
+                            // A detached occurrence is the row itself; there is
+                            // no later part of the series to split from it.
+                            if !is_exception {
+                                button { onclick: save_following, "…and following" }
+                            }
                             button { class: "primary", onclick: save_this_only, "This event" }
                         } else {
                             button { class: "primary", onclick: save_all, "Save" }

@@ -7,3 +7,18 @@
 # scripts/build-web.sh (pages.yml + release.yml), so it is never committed.
 /web/app/
 /_deploy/
+# Signing material — never commit. See SIGNING.md; the release keystore lives in
+# CI secrets plus an offline backup, never in the repository.
+*.jks
+*.jks.b64
+*.keystore
+# Owned Kotlin/Gradle app: build outputs, machine-local config, and the native
+# libraries staged into jniLibs by scripts/build-kotlin-android.sh (built from
+# crates/kal-jni, never committed).
+/android/.gradle/
+/android/.kotlin/
+/android/build/
+/android/app/build/
+/android/local.properties
+/android/keystore.properties
+/android/app/src/main/jniLibs/

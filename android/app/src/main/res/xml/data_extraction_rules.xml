@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Backup/transfer exclusions for API 31+ (cloud backup and device-to-device
+  transfer). Same rationale as backup_rules.xml: the sync chain identity and
+  node record must not travel between devices.
+-->
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude
+            domain="file"
+            path="kal/sync-identity.json" />
+        <exclude
+            domain="file"
+            path="kal/sync-node.json" />
+    </cloud-backup>
+    <device-transfer>
+        <exclude
+            domain="file"
+            path="kal/sync-identity.json" />
+        <exclude
+            domain="file"
+            path="kal/sync-node.json" />
+    </device-transfer>
+</data-extraction-rules>

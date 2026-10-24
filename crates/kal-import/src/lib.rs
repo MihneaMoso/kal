@@ -4,6 +4,7 @@
 //! application can read — data portability is a hard requirement.
 //! Google Calendar REST import lives in the `google` module (phase 5c).
 
+use std::collections::{HashMap, HashSet};
 use std::str::FromStr;
 
 use chrono::{NaiveDate, NaiveDateTime, NaiveTime, TimeZone, Utc};
@@ -74,11 +75,15 @@ pub fn export_calendar(calendar: &Calendar, items: &[CalendarItem]) -> String {
     let mut out = IcsCalendar::new();
     out.name(&calendar.name);
 
-    for item in items
+    let shown: Vec<&CalendarItem> = items
         .iter()
         .filter(|i| i.calendar_id == calendar.id && !i.deleted)
-    {
-        push_item(&mut out, item);
+        .collect();
+    // A linked occurrence can only be an override if its series is in the same
+    // export; otherwise its RECURRENCE-ID would dangle for every other client.
+    let exported: HashSet<ulid::Ulid> = shown.iter().map(|i| i.id).collect();
+    for item in shown {
+        push_item(&mut out, item, &exported);
     }
     out.to_string()
 }
@@ -92,21 +97,23 @@ pub fn export_all(calendars: &[Calendar], items: &[CalendarItem]) -> String {
         .filter(|c| c.visible && !c.deleted)
         .map(|c| c.id)
         .collect();
-    for item in items
+    let shown: Vec<&CalendarItem> = items
         .iter()
         .filter(|i| !i.deleted && visible.contains(&i.calendar_id))
-    {
-        push_item(&mut out, item);
+        .collect();
+    let exported: HashSet<ulid::Ulid> = shown.iter().map(|i| i.id).collect();
+    for item in shown {
+        push_item(&mut out, item, &exported);
     }
     out.to_string()
 }
 
-fn push_item(out: &mut IcsCalendar, item: &CalendarItem) {
+fn push_item(out: &mut IcsCalendar, item: &CalendarItem, exported: &HashSet<ulid::Ulid>) {
     match item.kind {
         ItemKind::Task => {
             let mut todo = IcsTodo::new();
             todo.summary(&item.title);
-            apply_common(&mut todo, item);
+            apply_common(&mut todo, item, &item.id.to_string());
             todo.add_property(
                 "STATUS",
                 if item.completed.is_some() {
@@ -121,6 +128,23 @@ fn push_item(out: &mut IcsCalendar, item: &CalendarItem) {
             out.push(todo);
         }
         ItemKind::Event | ItemKind::Birthday => {
+            // A linked occurrence is an *override* of its series under RFC 5545:
+            // same UID as the series plus a RECURRENCE-ID naming the series
+            // instant it replaced. That keeps the exception linked when the
+            // file is imported anywhere (and when Kal re-imports its own
+            // export); a standalone event at the new time would silently lose
+            // the link. The series' EXDATE stays as well, so a client that
+            // ignores overrides still shows one event, not two.
+            let override_of = item
+                .metadata
+                .series_id
+                .filter(|series| exported.contains(series))
+                .zip(item.metadata.recurrence_id.as_ref());
+            let uid = match override_of {
+                Some((series, _)) => series.to_string(),
+                None => item.id.to_string(),
+            };
+
             let mut event = IcsEvent::new();
             event.summary(&item.title);
             if item.all_day {
@@ -144,7 +168,25 @@ fn push_item(out: &mut IcsCalendar, item: &CalendarItem) {
                     event.ends(end.with_timezone(&Utc));
                 }
             }
-            apply_common(&mut event, item);
+            if let Some((_, recurrence_id)) = override_of {
+                // RECURRENCE-ID has the same value type as the series' DTSTART:
+                // DATE for an all-day series, UTC otherwise.
+                if item.all_day {
+                    event.append_property(
+                        icalendar::Property::new(
+                            "RECURRENCE-ID",
+                            fmt_date(&recurrence_id.date_naive()),
+                        )
+                        .add_parameter("VALUE", "DATE"),
+                    );
+                } else {
+                    event.append_property(icalendar::Property::new(
+                        "RECURRENCE-ID",
+                        fmt_utc(recurrence_id),
+                    ));
+                }
+            }
+            apply_common(&mut event, item, &uid);
             for reminder in &item.reminders {
                 if let ReminderOffset::MinutesBefore { minutes } = reminder.offset {
                     let mut alarm =
@@ -163,8 +205,8 @@ fn push_item(out: &mut IcsCalendar, item: &CalendarItem) {
     }
 }
 
-fn apply_common<C: Component>(comp: &mut C, item: &CalendarItem) {
-    comp.append_property(icalendar::Property::new("UID", item.id.to_string()));
+fn apply_common<C: Component>(comp: &mut C, item: &CalendarItem, uid: &str) {
+    comp.append_property(icalendar::Property::new("UID", uid));
     if let Some(notes) = &item.notes {
         comp.add_property("DESCRIPTION", notes.clone());
     }
@@ -220,38 +262,67 @@ pub fn import_ics(ics: &str, calendar_name: &str) -> Result<ImportedCalendar> {
 
     let mut items = Vec::new();
 
-    for event in parsed.events() {
-        let mut item = base_item(&calendar, event);
-        if item.kind != ItemKind::Birthday {
-            item.kind = ItemKind::Event;
+    // Two passes: masters first, then overrides. A `RECURRENCE-ID` component
+    // names its series only by UID, so the series has to be imported before
+    // the exception can be linked to it.
+    let events: Vec<&IcsEvent> = parsed.events().collect();
+    let mut series_ids: HashMap<String, ulid::Ulid> = HashMap::new();
+    for event in events
+        .iter()
+        .copied()
+        .filter(|event| event.get_recurrence_id().is_none())
+    {
+        let Some(item) = event_item(&calendar, event) else {
+            continue;
+        };
+        if let Some(uid) = event.property_value("UID") {
+            series_ids.insert(uid.to_string(), item.id);
         }
-        let tz = chrono::Local::now().fixed_offset();
+        items.push(item);
+    }
 
-        match event.get_start() {
-            Some(DatePerhapsTime::Date(d)) => {
-                item.all_day = true;
-                item.start = midnight(d, tz);
-            }
-            Some(DatePerhapsTime::DateTime(dt)) => {
-                if let Some(utc) = dt.try_into_utc() {
-                    item.start = utc.fixed_offset();
+    for event in events
+        .iter()
+        .copied()
+        .filter(|event| event.get_recurrence_id().is_some())
+    {
+        let Some(mut item) = event_item(&calendar, event) else {
+            continue;
+        };
+        // The UID belongs to the series, so the override gets its own id (a
+        // shared id would make the two items overwrite each other on upsert).
+        item.id = ulid::Ulid::new();
+        // An override never carries the series' rule.
+        item.rrule = None;
+        let series = event
+            .property_value("UID")
+            .and_then(|uid| series_ids.get(uid))
+            .copied();
+        let recurrence_id = event.get_recurrence_id().and_then(recurrence_instant);
+        if let (Some(series_id), Some(recurrence_id)) = (series, recurrence_id) {
+            // Same shape as "This event" in the editor: the occurrence keeps
+            // the series' id + the instant it replaced, and the series hides
+            // that instant with an EXDATE so it is not generated twice.
+            item.metadata.series_id = Some(series_id);
+            item.metadata.recurrence_id = Some(recurrence_id);
+            if let Some(master) = items.iter_mut().find(|master| master.id == series_id) {
+                // All-day EXDATEs are instants at local midnight, but they are
+                // written as UTC, so compare whole dates for those (a plain
+                // instant compare would add a second EXDATE on every
+                // round-trip). Timed items compare exactly.
+                let already = if item.all_day {
+                    master.exdates.iter().any(|exdate| {
+                        exdate.with_timezone(&chrono::Local).date_naive()
+                            == recurrence_id.date_naive()
+                    })
                 } else {
-                    continue;
+                    master.exdates.contains(&recurrence_id)
+                };
+                if !already {
+                    master.exdates.push(recurrence_id);
                 }
             }
-            None => continue,
         }
-
-        item.end = match event.get_end() {
-            Some(DatePerhapsTime::Date(d)) => {
-                // Exclusive DATE end → last covered instant.
-                Some(midnight(d - chrono::Duration::days(1), tz))
-            }
-            Some(DatePerhapsTime::DateTime(dt)) => dt.try_into_utc().map(|u| u.fixed_offset()),
-            None => None,
-        };
-
-        read_exdates_and_reminders(&mut item, event);
         items.push(item);
     }
 
@@ -270,6 +341,49 @@ pub fn import_ics(ics: &str, calendar_name: &str) -> Result<ImportedCalendar> {
     }
 
     Ok(ImportedCalendar { calendar, items })
+}
+
+/// One VEVENT → the Kal item it describes (kind, time, EXDATEs, alarms).
+/// `None` when the component has no usable start.
+fn event_item(calendar: &Calendar, event: &IcsEvent) -> Option<CalendarItem> {
+    let mut item = base_item(calendar, event);
+    if item.kind != ItemKind::Birthday {
+        item.kind = ItemKind::Event;
+    }
+    let tz = chrono::Local::now().fixed_offset();
+
+    match event.get_start() {
+        Some(DatePerhapsTime::Date(d)) => {
+            item.all_day = true;
+            item.start = midnight(d, tz);
+        }
+        Some(DatePerhapsTime::DateTime(dt)) => {
+            item.start = dt.try_into_utc()?.fixed_offset();
+        }
+        None => return None,
+    }
+
+    item.end = match event.get_end() {
+        Some(DatePerhapsTime::Date(d)) => {
+            // Exclusive DATE end → last covered instant.
+            Some(midnight(d - chrono::Duration::days(1), tz))
+        }
+        Some(DatePerhapsTime::DateTime(dt)) => dt.try_into_utc().map(|u| u.fixed_offset()),
+        None => None,
+    };
+
+    read_exdates_and_reminders(&mut item, event);
+    Some(item)
+}
+
+/// `RECURRENCE-ID` names the series instant an override replaced. DATE keeps
+/// the all-day convention (midnight local, as the master's DTSTART was read),
+/// DATE-TIME is an absolute instant.
+fn recurrence_instant(value: DatePerhapsTime) -> Option<DateTimeTz> {
+    match value {
+        DatePerhapsTime::Date(d) => Some(midnight(d, chrono::Local::now().fixed_offset())),
+        DatePerhapsTime::DateTime(dt) => dt.try_into_utc().map(|utc| utc.fixed_offset()),
+    }
 }
 
 fn midnight(d: NaiveDate, tz: DateTimeTz) -> DateTimeTz {

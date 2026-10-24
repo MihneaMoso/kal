@@ -19,7 +19,7 @@ use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
 use chrono::Utc;
-use kal_core::models::{Calendar, CalendarItem};
+use kal_core::models::{Calendar, CalendarItem, DateTimeTz};
 use serde::{Deserialize, Serialize};
 use ulid::Ulid;
 use wasm_bindgen::prelude::*;
@@ -259,6 +259,34 @@ impl Database {
         Ok(found)
     }
 
+    /// Apply a scoped edit to a recurring series (Google Calendar semantics):
+    /// the same recurrence surgery the native backend performs, from the shared
+    /// algorithm in [`crate::scoped`].
+    pub fn apply_scoped_edit(
+        &self,
+        base_id: Ulid,
+        edited: &CalendarItem,
+        occ_start: DateTimeTz,
+        and_following: bool,
+    ) -> Result<bool> {
+        crate::scoped::apply_scoped_edit(self, base_id, edited, occ_start, and_following)
+    }
+
+    /// "All events": rewrite the series row and its detached occurrences.
+    pub fn apply_all_edit(&self, edited: &CalendarItem) -> Result<bool> {
+        crate::scoped::apply_all_edit(self, edited)
+    }
+
+    /// "This event" on an occurrence already detached from its series.
+    pub fn save_exception(&self, edited: &CalendarItem) -> Result<bool> {
+        crate::scoped::save_exception(self, edited)
+    }
+
+    /// Tombstone an item; a series also tombstones its detached occurrences.
+    pub fn delete_with_exceptions(&self, id: Ulid) -> Result<bool> {
+        crate::scoped::delete_with_exceptions(self, id)
+    }
+
     pub fn get_item(&self, id: Ulid) -> Result<Option<CalendarItem>> {
         Ok(self
             .state
@@ -334,5 +362,23 @@ impl Database {
         } else {
             items.iter().filter(|i| !i.deleted).cloned().collect()
         })
+    }
+}
+
+impl crate::scoped::ScopedStore for Database {
+    fn scoped_get_item(&self, id: Ulid) -> Result<Option<CalendarItem>> {
+        self.get_item(id)
+    }
+
+    fn scoped_upsert_item(&self, item: &CalendarItem) -> Result<()> {
+        self.upsert_item(item)
+    }
+
+    fn scoped_list_items(&self) -> Result<Vec<CalendarItem>> {
+        self.list_items(false)
+    }
+
+    fn scoped_soft_delete_item(&self, id: Ulid) -> Result<bool> {
+        self.soft_delete_item(id)
     }
 }

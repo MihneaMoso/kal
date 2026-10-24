@@ -6,7 +6,9 @@ members = [
     "crates/kal-sync",
     "crates/kal-notify",
     "crates/kal-import",
+    "crates/kal-update",
     "crates/kal-ffi",
+    "crates/kal-jni",
     "app",
 ]
 

@@ -277,9 +277,12 @@ bite you again if ignored, plus the exact state to resume from.
   themed from CSS.
 - FINAL window preference: `.with_decorations(false)` (no GTK bar) AND no
   custom titlebar component either. Hamburger lives in TopBar beside the app
-  title; gear opens prefs drawer <900px. Stylesheet is a single coherent
-  sheet in app/assets/main.css — keep brace balance sane (a broken rule
-  kills everything downstream).
+  title, followed by the period label and the Month/Week/Day/Agenda tabs;
+  ‹/Today/› are gone (swiping the body steps the period). Preferences, the
+  sync-chain profile and Software & updates live in the sidebar's bottom
+  sections (no gear). Stylesheet is a single coherent sheet in
+  app/assets/main.css — keep brace balance sane (a broken rule kills
+  everything downstream).
 
 ## Former frameless-window notes (superseded)
 
@@ -376,31 +379,21 @@ bite you again if ignored, plus the exact state to resume from.
   so sidebar is collapsed by default; on mobile the `.app.mobile .sidebar` is
   `position:fixed` and slides in via translateX above a `.drawer-scrim`,
   Google-Calendar style, instead of pushing content. Desktop keeps push+resize.
-- **Icons**: dx hardcodes its template launcher res/ (`ic_launcher.webp` +
-  vectors) and REGENERATES them on every `dx bundle`, with no config override.
-  So: `dx bundle` → `scripts/apply-icons.sh` (stages branded PNGs + adaptive
-   icon into res/ and deletes the template webp/xml) →
-   `scripts/stage-widgets.sh` (stages home-screen widgets: Kotlin under
-   `android/widget/` into `src/main/kotlin/`, widget res/ into `src/main/res/`
-   — merging `values/strings|styles.xml`, patching AndroidManifest.xml with the
-   two `<receiver>`s + `BOOT_COMPLETED`) →
-   `scripts/stage-updater.sh` (stages `android/updater/`: `KalUpdater.kt` +
-   `KalFileProvider.kt` and a `<provider>` manifest entry for APK self-update;
-   idempotent, marker-commented) → rebuild APK with
-  `./gradlew :app:assembleDebug` DIRECTLY (never re-run dx, or it regenerates
-  the template and you get duplicate-resource errors). The debug APK carries
-  the branded PNG icons; the `release-unsigned` APK is resource-shrunk and
-  strips mipmaps (pre-existing dx quirk). APK lives under
-  `target/dx/kal/release/android/app/app/build/outputs/apk/{debug,release}/`
-  — the old CI glob `**/bundle/android/**` matches nothing.
+- **Icons**: the Android app is the owned `android/` project (Phase 1+), so the
+  launcher/adaptive mipmaps are checked in there; the dx-generated project and
+  its icon staging are gone with the Dioxus Android target. `apply-icons.sh`
+  now only regenerates the desktop PNG/ICO/ICNS assets from `logo.jpeg`.
 - **Home-screen widgets**: two Google-Calendar-style widgets (a schedule list
-  and a month grid) are classic `AppWidgetProvider` + `RemoteViews`, staged by
-  `scripts/stage-widgets.sh` into the dx-generated project. Data comes from
-  JNI bridges in `app/src/widget_ffi.rs` (`Java_com_kal_calendar_widgets_…`)
-  that reuse `kal-ffi` — the widgets load the app's own `libmain.so`. Refresh
-  is `updatePeriodMillis` + a `BOOT_COMPLETED` receiver (no real-time push).
-  Taps launch `MainActivity` with a `kal_widget_open` extra (deep-linking to a
-  specific day/item is a documented follow-up).
+  and a month grid) are classic `AppWidgetProvider` + `RemoteViews`, part of
+  the `:app` module since Phase 8 (`com.kal.calendar.widgets`, sources + res +
+  manifest receivers in `android/app/`). Data comes from JNI bridges in
+  `crates/kal-jni` (`Java_com_kal_calendar_widgets_…`) that reuse the frozen
+  `kal-ffi` widget payloads (`kal_upcoming_json`/`kal_month_grid_json`); the
+  widgets open the same `files/kal/calendar.db` in the app process through
+  `libkal_jni.so`. Refresh is `updatePeriodMillis` + a `BOOT_COMPLETED`
+  receiver (no real-time push). Taps launch `com.kal.calendar.MainActivity`
+  with a `kal_widget_open` extra (deep-linking to a specific day/item is a
+  documented follow-up).
 - `apply-icons.sh` generates desktop PNG/ICO/ICNS + Android density PNGs +
   adaptive fg/bg + iOS AppIcon.appiconset from `logo.jpeg` (content bbox
   x475-932/y123-597, center 703,360 → `-crop 600x600+403+60`). ICNS needs a

@@ -4311,17 +4311,16 @@ dependencies = [
  "kal-notify",
  "kal-storage",
  "kal-sync",
+ "kal-update",
  "ndk-context",
  "rfd 0.15.4",
  "serde",
  "serde_json",
- "sha2 0.10.9",
  "tar",
  "tokio",
  "tracing",
  "tracing-subscriber",
  "ulid",
- "ureq",
 ]
 
 [[package]]
@@ -4342,7 +4341,11 @@ version = "0.1.0"
 dependencies = [
  "chrono",
  "kal-core",
+ "kal-import",
  "kal-storage",
+ "kal-sync",
+ "kal-update",
+ "serde",
  "serde_json",
  "tempfile",
  "ulid",
@@ -4360,6 +4363,14 @@ dependencies = [
  "thiserror 2.0.20",
  "ulid",
  "ureq",
+]
+
+[[package]]
+name = "kal-jni"
+version = "0.1.0"
+dependencies = [
+ "jni 0.21.1",
+ "kal-ffi",
 ]
 
 [[package]]
@@ -4404,6 +4415,7 @@ dependencies = [
  "iroh",
  "iroh-gossip",
  "kal-core",
+ "kal-storage",
  "rand 0.8.7",
  "serde",
  "serde_json",
@@ -4415,6 +4427,16 @@ dependencies = [
  "tracing-subscriber",
  "ulid",
  "x25519-dalek",
+]
+
+[[package]]
+name = "kal-update"
+version = "0.1.0"
+dependencies = [
+ "serde_json",
+ "sha2 0.10.9",
+ "tempfile",
+ "ureq",
 ]
 
 [[package]]

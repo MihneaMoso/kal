@@ -149,26 +149,10 @@ input[type="checkbox"] { accent-color: var(--accent); cursor: pointer; }
 }
 .topbar h1 { font-size: 17px; font-weight: 600; margin: 0; }
 .topbar .spacer { flex: 1; }
-.subtitle { color: var(--fg-muted); font-size: 12px; }
-.tb-controls { display: flex; gap: 8px; align-items: center; }
-.prefs-toggle { display: none; font-size: 16px; }
-
-.prefs-drawer {
-    position: fixed;
-    top: 56px;
-    right: 10px;
-    z-index: 60;
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-    padding: 12px;
-    min-width: 220px;
-    background: var(--bg-alt);
-    border: 1px solid var(--border);
-    border-radius: 12px;
-    box-shadow: 0 8px 28px rgba(0, 0, 0, 0.22);
-}
-.prefs-drawer select, .prefs-drawer button { width: 100%; }
+.nav-label { color: var(--fg); font-size: 16px; white-space: nowrap; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.nav-label-short { display: none; }
+.view-tabs { display: flex; gap: 4px; align-items: center; }
+.view-tabs button { padding: 4px 10px; }
 
 .body { display: flex; flex: 1; min-height: 0; }
 
@@ -179,6 +163,7 @@ input[type="checkbox"] { accent-color: var(--accent); cursor: pointer; }
     border-right: 1px solid var(--border);
     background: var(--bg-alt);
     overflow-x: hidden;
+    overflow-y: auto;
     white-space: nowrap;
     transition: width 0.15s ease;
 }
@@ -199,6 +184,8 @@ input[type="checkbox"] { accent-color: var(--accent); cursor: pointer; }
 }
 .dot { width: 10px; height: 10px; border-radius: 50%; flex: none; }
 .sidebar button { width: 100%; text-align: left; }
+.sidebar-settings { display: flex; flex-direction: column; gap: 6px; white-space: normal; }
+.sidebar-settings select { width: 100%; }
 
 .sidebar .resize-handle {
     position: absolute;
@@ -209,17 +196,31 @@ input[type="checkbox"] { accent-color: var(--accent); cursor: pointer; }
 }
 .sidebar .resize-handle:hover { background: var(--accent); opacity: 0.45; }
 
-.content { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+.content { flex: 1; display: flex; flex-direction: column; min-width: 0; overflow: hidden; }
 
-/* ---- navigation strip ---- */
+/* ---- view body (swipe target) ---- */
 
-.month-nav {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    padding: 10px 14px;
+.view-body { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+.view-body.nav-next-a { animation: view-in-next-a 0.22s ease-out; }
+.view-body.nav-next-b { animation: view-in-next-b 0.22s ease-out; }
+.view-body.nav-prev-a { animation: view-in-prev-a 0.22s ease-out; }
+.view-body.nav-prev-b { animation: view-in-prev-b 0.22s ease-out; }
+@keyframes view-in-next-a {
+    from { transform: translateX(64px); opacity: 0.35; }
+    to { transform: translateX(0); opacity: 1; }
 }
-.month-nav h2 { font-size: 16px; margin: 0 10px 0 6px; }
+@keyframes view-in-next-b {
+    from { transform: translateX(64px); opacity: 0.35; }
+    to { transform: translateX(0); opacity: 1; }
+}
+@keyframes view-in-prev-a {
+    from { transform: translateX(-64px); opacity: 0.35; }
+    to { transform: translateX(0); opacity: 1; }
+}
+@keyframes view-in-prev-b {
+    from { transform: translateX(-64px); opacity: 0.35; }
+    to { transform: translateX(0); opacity: 1; }
+}
 
 /* ---- month grid ---- */
 
@@ -300,17 +301,13 @@ img.profile-avatar, .profile-avatar-initials {
     font-weight: 600;
     font-size: 15px;
 }
-button.profile-header {
+.profile-header {
     display: flex;
     align-items: center;
     gap: 8px;
     padding: 6px 8px;
-    border: none;
-    background: transparent;
-    cursor: pointer;
     font-size: 13px;
 }
-button.profile-header:hover { background: var(--accent-soft); border-radius: 8px; }
 .profile-name { font-weight: 600; color: var(--fg); }
 button.file-upload {
     position: relative;
@@ -375,9 +372,12 @@ button.file-upload input[type="file"] {
 /* ---- responsive ---- */
 
 @media (max-width: 900px) {
-    .tb-controls { display: none; }
-    .prefs-toggle { display: inline-block; }
-    .subtitle { display: none; }
+    .topbar { gap: 6px; padding: 6px 10px; }
+    .nav-label { font-size: 14px; }
+    .nav-label-full { display: none; }
+    .nav-label-short { display: inline; }
+    .view-tabs { gap: 3px; }
+    .view-tabs button { padding: 4px 7px; font-size: 12px; }
     .sidebar { min-width: 200px; }
 }
 

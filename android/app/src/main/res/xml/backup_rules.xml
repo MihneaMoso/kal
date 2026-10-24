@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Auto Backup exclusions (API ≤ 30 — see data_extraction_rules.xml for 31+).
+
+  The sync chain identity and node record are device credentials: restoring them
+  onto a different device would make two devices claim the same chain identity.
+  They are deliberately excluded (Step 0 decision), while the calendar database
+  keeps being backed up.
+-->
+<full-backup-content>
+    <exclude
+        domain="file"
+        path="kal/sync-identity.json" />
+    <exclude
+        domain="file"
+        path="kal/sync-node.json" />
+</full-backup-content>

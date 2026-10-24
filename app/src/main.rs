@@ -12,8 +12,6 @@ mod sync_log;
 mod sync_ui;
 mod ui;
 mod updater;
-#[cfg(target_os = "android")]
-mod widget_ffi;
 
 use chrono::{Datelike, Local, Months, NaiveDate};
 use dioxus::prelude::*;
@@ -152,14 +150,10 @@ fn open_db() -> DbHandle {
     })
 }
 
-/// Well-known IDs for the seeded default calendars. Every fresh install mints
-/// the SAME rows so sync unions them instead of duplicating "Personal" /
-/// "Birthdays" once per device (each install used to generate fresh ULIDs,
-/// and every device's pair survived every merge because the CRDT unions by
-/// id). Existing installs are unaffected: seeding only runs on empty DBs.
-/// `pub(crate)` so the sync retirement below can recognize placeholders.
-pub(crate) const DEFAULT_PERSONAL_ID: &str = "01ARZ3NDEKTSV4RRFFQ69G5FAV";
-pub(crate) const DEFAULT_BIRTHDAYS_ID: &str = "01ARZ3NDEKTSV4RRFFQ69G5FBW";
+/// Well-known IDs for the seeded default calendars (defined in `kal-core` so
+/// the Kotlin sync bridge recognizes the same rows). Existing installs are
+/// unaffected: seeding only runs on empty DBs.
+pub(crate) use kal_core::{DEFAULT_BIRTHDAYS_ID, DEFAULT_PERSONAL_ID};
 
 /// Ensure the default "Personal" and auto-created "Birthdays" calendars exist.
 fn ensure_default_calendars(db: &Database) -> Vec<Calendar> {
@@ -299,7 +293,9 @@ fn App() -> Element {
     use_context_provider(|| calendars_res);
 
     let prefs = ui::Settings::load(&db);
-    *profile::PROFILE_VIEW.write() = profile::load_profile(&db);
+    let saved_profile = profile::load_profile(&db);
+    *profile::PROFILE_VIEW.write() = saved_profile.clone();
+    *profile::PROFILE_EDIT.write() = saved_profile;
 
     // Layout + theme in ONE signal: the resize path proves this signal
     // drives visual updates reliably; theme rides along on that proven path.
@@ -324,7 +320,7 @@ fn App() -> Element {
     use_context_provider(|| settings);
 
     // Background auto-update check on startup, if enabled. Runs once on mount;
-    // the result lands in the settings screen's update section.
+    // the result lands in the sidebar's Software & updates section.
     let auto_check = settings.read().auto_check_updates;
     use_effect(move || {
         if auto_check {
@@ -345,8 +341,10 @@ fn App() -> Element {
     #[cfg(not(target_arch = "wasm32"))]
     {
         use_effect(move || {
-            if let Some(identity) = sync_ui::load_identity() {
-                sync_live::live_transport(&identity);
+            if let (Some(identity), Some(db_path)) =
+                (sync_ui::load_identity(), crate::default_db_path())
+            {
+                sync_live::live_transport(&identity, &db_path);
             }
             // Background driver: periodically re-runs sync rounds so paired
             // devices converge automatically once they are online together,
@@ -514,10 +512,6 @@ fn App() -> Element {
                 Some(state) => rsx! { ui::EditorModal { state } },
                 None => rsx! {},
             }
-
-            if *profile::SETTINGS_SCREEN_OPEN.read() {
-                profile::SettingsScreen {}
-            }
         }
     }
 }
@@ -525,6 +519,44 @@ fn App() -> Element {
 #[component]
 fn TopBar() -> Element {
     let mut layout = use_context::<Signal<ui::UiLayout>>();
+    let mut view = use_context::<Signal<ui::ViewMode>>();
+    let cursor = use_context::<Signal<NaiveDate>>();
+
+    let c = *cursor.read();
+    let mode = *view.read();
+    let monday = c - chrono::Duration::days(c.weekday().num_days_from_monday() as i64);
+    let sunday = monday + chrono::Duration::days(6);
+    let (full_label, short_label) = match mode {
+        ui::ViewMode::Month => (c.format("%B %Y").to_string(), c.format("%b %Y").to_string()),
+        ui::ViewMode::Week => (
+            format!(
+                "{} \u{2013} {}",
+                monday.format("%b %d"),
+                sunday.format("%b %d, %Y")
+            ),
+            if monday.month() == sunday.month() {
+                format!(
+                    "{} \u{2013} {}",
+                    monday.format("%b %d"),
+                    sunday.format("%d")
+                )
+            } else {
+                format!(
+                    "{} \u{2013} {}",
+                    monday.format("%b %d"),
+                    sunday.format("%b %d")
+                )
+            },
+        ),
+        ui::ViewMode::Day => (
+            c.format("%A, %B %d %Y").to_string(),
+            c.format("%a, %b %d").to_string(),
+        ),
+        ui::ViewMode::Agenda => (
+            "Agenda \u{2014} next 30 days".to_string(),
+            "Agenda".to_string(),
+        ),
+    };
 
     rsx! {
         header { class: "topbar",
@@ -539,36 +571,27 @@ fn TopBar() -> Element {
                 "\u{2630}"
             }
             h1 { "{i18n::tr(\"app-title\")}" }
-            span { class: "subtitle", "{subtitle_label()}" }
+            span { class: "nav-label",
+                span { class: "nav-label-full", "{full_label}" }
+                span { class: "nav-label-short", "{short_label}" }
+            }
             div { class: "spacer" }
-            nav { class: "tb-controls", "aria-label": "Preferences",
-                PreferencesControls {}
-            }
-            button {
-                class: "icon-btn prefs-toggle",
-                "aria-label": "Preferences menu",
-                "aria-expanded": "{layout.read().prefs_drawer_open}",
-                onclick: move |_| {
-                    let cur = layout.read().prefs_drawer_open;
-                    layout.write().prefs_drawer_open = !cur;
-                },
-                "\u{2699}"
-            }
-        }
-        if layout.read().prefs_drawer_open {
-            div { class: "prefs-drawer", role: "menu", "aria-label": "Preferences",
-                PreferencesControls {}
+            div { class: "view-tabs",
+                for m in ui::ViewMode::ALL {
+                    button {
+                        key: "{m:?}",
+                        class: if mode == m { "primary" } else { "" },
+                        onclick: move |_| view.set(m),
+                        "{m.label()}"
+                    }
+                }
             }
         }
     }
 }
 
-fn subtitle_label() -> String {
-    format!("{} \u{2014} {}", i18n::tr("app-subtitle"), ui::today_line())
-}
-
-/// The preference selects + theme toggle, rendered either inline in the
-/// top bar (wide screens) or inside the drawer (narrow screens).
+/// The preference selects + theme toggle, rendered in the sidebar's
+/// Preferences section.
 #[component]
 fn PreferencesControls() -> Element {
     let db = use_context::<DbHandle>();
@@ -614,13 +637,6 @@ fn PreferencesControls() -> Element {
                 let _ = db_theme.set_setting("theme", next);
             },
             {if dark { crate::i18n::tr("theme-toggle-dark") } else { crate::i18n::tr("theme-toggle-light") }}
-        }
-        button {
-            class: "icon-btn",
-            "aria-label": "Settings",
-            title: "Settings",
-            onclick: move |_| profile::open_settings_screen(&db),
-            "\u{2699}"
         }
     }
 }
@@ -778,7 +794,11 @@ fn Sidebar() -> Element {
     // Invisible calendars (e.g. duplicates retired by sync) stay out of the
     // main list instead of rendering as unchecked clutter, but remain
     // one click away so they can be re-enabled.
-    let visible_cals: Vec<Calendar> = calendars.iter().filter(|c| c.visible && !c.deleted).cloned().collect();
+    let visible_cals: Vec<Calendar> = calendars
+        .iter()
+        .filter(|c| c.visible && !c.deleted)
+        .cloned()
+        .collect();
 
     let db_event = db.clone();
     let db_task = db.clone();
@@ -830,86 +850,91 @@ fn Sidebar() -> Element {
                     "+ Birthday"
                 }
             }
+            h2 { "Preferences" }
+            div { class: "sidebar-settings",
+                PreferencesControls {}
+            }
+            h2 { "Sync-chain profile" }
+            div { class: "sidebar-settings",
+                profile::ProfileSection {}
+            }
+            h2 { "Software & updates" }
+            div { class: "sidebar-settings",
+                profile::SoftwareSection {}
+            }
         }
     }
 }
+
+/// Pixels a horizontal pointer drag must travel to count as a period swipe.
+const SWIPE_MIN_PX: f64 = 70.0;
 
 #[component]
 fn Content() -> Element {
     let view = use_context::<Signal<ui::ViewMode>>();
-    rsx! {
-        main { class: "content",
-            ViewNav {}
-            match *view.read() {
-                ui::ViewMode::Month => rsx! { ui::MonthView {} },
-                ui::ViewMode::Week => rsx! { ui::WeekView {} },
-                ui::ViewMode::Day => rsx! { ui::DayView {} },
-                ui::ViewMode::Agenda => rsx! { ui::AgendaView {} },
-            }
-        }
-    }
-}
-
-#[component]
-fn ViewNav() -> Element {
     let mut cursor = use_context::<Signal<NaiveDate>>();
-    let mut view = use_context::<Signal<ui::ViewMode>>();
+    let mut start_x = use_signal(|| None::<f64>);
+    let mut slide = use_signal(|| 0i8);
+    let mut nav_serial = use_signal(|| 0u64);
 
-    let c = *cursor.read();
-    let label = match *view.read() {
-        ui::ViewMode::Month => c.format("%B %Y").to_string(),
-        ui::ViewMode::Week => {
-            let ws = c - chrono::Duration::days(c.weekday().num_days_from_monday() as i64);
-            format!(
-                "{} – {}",
-                ws.format("%b %d"),
-                (ws + chrono::Duration::days(6)).format("%b %d, %Y")
-            )
+    let on_pointer_down = move |e: Event<PointerData>| {
+        start_x.set(Some(e.client_coordinates().x));
+    };
+    let on_pointer_up = move |e: Event<PointerData>| {
+        let Some(start) = start_x() else { return };
+        start_x.set(None);
+        let dx = e.client_coordinates().x - start;
+        let mode = *view.read();
+        if mode == ui::ViewMode::Agenda || dx.abs() < SWIPE_MIN_PX {
+            return;
         }
-        ui::ViewMode::Day => c.format("%A, %B %d %Y").to_string(),
-        ui::ViewMode::Agenda => "Agenda — next 30 days".to_string(),
+        let forward = dx < 0.0;
+        let next = match mode {
+            ui::ViewMode::Day => {
+                *cursor.read() + chrono::Duration::days(if forward { 1 } else { -1 })
+            }
+            ui::ViewMode::Week => {
+                *cursor.read() + chrono::Duration::days(if forward { 7 } else { -7 })
+            }
+            _ => {
+                let c = *cursor.read();
+                if forward {
+                    c.checked_add_months(Months::new(1)).unwrap_or(c)
+                } else {
+                    c.checked_sub_months(Months::new(1)).unwrap_or(c)
+                }
+            }
+        };
+        cursor.set(next);
+        slide.set(if forward { 1 } else { -1 });
+        nav_serial.with_mut(|n| *n += 1);
     };
 
-    let step_back = move |_| {
-        let v = view.read();
-        cursor.set(match *v {
-            ui::ViewMode::Day => *cursor.read() - chrono::Duration::days(1),
-            ui::ViewMode::Week => *cursor.read() - chrono::Duration::days(7),
-            _ => cursor
-                .read()
-                .checked_sub_months(Months::new(1))
-                .unwrap_or(*cursor.read()),
-        });
-    };
-    let step_fwd = move |_| {
-        let v = view.read();
-        cursor.set(match *v {
-            ui::ViewMode::Day => *cursor.read() + chrono::Duration::days(1),
-            ui::ViewMode::Week => *cursor.read() + chrono::Duration::days(7),
-            _ => cursor
-                .read()
-                .checked_add_months(Months::new(1))
-                .unwrap_or(*cursor.read()),
-        });
+    // The suffix alternates so consecutive swipes always change the render
+    // class (and therefore restart the CSS entry animation).
+    let serial = nav_serial();
+    let slide_class = match (slide(), serial % 2) {
+        (1, 0) => "view-body nav-next-a",
+        (1, _) => "view-body nav-next-b",
+        (-1, 0) => "view-body nav-prev-a",
+        (-1, _) => "view-body nav-prev-b",
+        _ => "view-body",
     };
 
     rsx! {
-        div { class: "month-nav",
-            button { "aria-label": "Previous period", onclick: step_back, "‹" }
-            button {
-                "aria-label": "Jump to today",
-                onclick: move |_| cursor.set(Local::now().date_naive()),
-                {crate::i18n::tr("nav-today")}
-            }
-            button { "aria-label": "Next period", onclick: step_fwd, "›" }
-            h2 { "{label}" }
-            div { class: "spacer" }
-            for m in ui::ViewMode::ALL {
-                button {
-                    key: "{m:?}",
-                    class: if *view.read() == m { "primary" } else { "" },
-                    onclick: move |_| view.set(m),
-                    "{m.label()}"
+        main {
+            class: "content",
+            onpointerdown: on_pointer_down,
+            onpointerup: on_pointer_up,
+            onpointercancel: move |_| start_x.set(None),
+            onpointerleave: move |_| start_x.set(None),
+            div {
+                class: "{slide_class}",
+                match *view.read() {
+                    ui::ViewMode::Month => rsx! { ui::MonthView {} },
+                    ui::ViewMode::Week => rsx! { ui::WeekView {} },
+                    ui::ViewMode::Day => rsx! { ui::DayView {} },
+                    ui::ViewMode::Agenda => rsx! { ui::AgendaView {} },
                 }
             }
         }

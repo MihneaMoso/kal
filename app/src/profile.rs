@@ -120,23 +120,21 @@ fn base64_encode(bytes: &[u8]) -> String {
 }
 
 // ---------------------------------------------------------------------------
-// Settings screen
+// Sidebar settings sections
 // ---------------------------------------------------------------------------
 
-/// Whether the profile settings screen modal is open.
-pub static SETTINGS_SCREEN_OPEN: GlobalSignal<bool> = Signal::global(|| false);
-/// The in-progress profile being edited by the settings screen.
+/// The in-progress profile being edited in the sidebar section.
 pub static PROFILE_EDIT: GlobalSignal<UserProfile> = Signal::global(UserProfile::default);
 /// Latest saved profile, read by the sync section so it re-renders on change.
 pub static PROFILE_VIEW: GlobalSignal<UserProfile> = Signal::global(UserProfile::default);
-/// Error message shown inside the settings screen.
+/// Error message shown in the sidebar's sync-chain profile section.
 pub static SCREEN_ERROR: GlobalSignal<String> = Signal::global(String::new);
 
-/// Open the profile settings screen, seeded from the stored profile.
-pub fn open_settings_screen(db: &crate::DbHandle) {
-    *PROFILE_EDIT.write() = load_profile(db);
+/// Discard the profile edits, restoring the latest saved profile.
+fn reset_profile() {
+    let saved = PROFILE_VIEW.read().clone();
+    *PROFILE_EDIT.write() = saved;
     *SCREEN_ERROR.write() = String::new();
-    *SETTINGS_SCREEN_OPEN.write() = true;
 }
 
 /// Android: launch the native image picker (via JNI) instead of the WebView's
@@ -165,15 +163,15 @@ fn upload_native() {
 #[cfg(not(target_os = "android"))]
 fn upload_native() {}
 
-/// Modal screen for editing the username + profile picture (avatar).
+/// The sidebar's sync-chain profile: user name, picture and Save/Cancel.
 #[component]
-pub fn SettingsScreen() -> Element {
+pub fn ProfileSection() -> Element {
     let db = use_context::<crate::DbHandle>();
 
     let save = move |_| {
         save_profile(&db, &PROFILE_EDIT.read().clone());
         *PROFILE_VIEW.write() = PROFILE_EDIT.read().clone();
-        *SETTINGS_SCREEN_OPEN.write() = false;
+        *SCREEN_ERROR.write() = String::new();
     };
 
     // The profile-picture control differs by platform: Android routes the tap
@@ -226,53 +224,37 @@ pub fn SettingsScreen() -> Element {
     };
 
     rsx! {
-        div { class: "modal-backdrop",
-            onclick: move |_| *SETTINGS_SCREEN_OPEN.write() = false,
-            div {
-                class: "modal",
-                role: "dialog",
-                "aria-modal": true,
-                "aria-label": "Settings",
-                onclick: move |e| e.stop_propagation(),
-                h2 { "Settings" }
-                label { "Sync-chain profile"
-                    div { style: "display:flex;gap:10px;align-items:center;",
-                        AvatarPreview { }
-                        div { style: "display:flex;flex-direction:column;gap:6px;",
-                            label { "User name"
-                                input {
-                                    r#type: "text",
-                                    placeholder: "Your name",
-                                    value: "{PROFILE_EDIT.read().username}",
-                                    oninput: move |e| {
-                                        PROFILE_EDIT.write().username = e.value();
-                                    },
-                                }
-                            }
-                            div { style: "display:flex;gap:6px;flex-wrap:wrap;",
-                                {upload_control}
-                                if PROFILE_EDIT.read().has_avatar() {
-                                    button {
-                                        onclick: move |_| clear_avatar(&mut PROFILE_EDIT.write()),
-                                        "Remove"
-                                    }
-                                }
-                            }
+        div { style: "display:flex;gap:10px;align-items:flex-start;",
+            AvatarPreview { }
+            div { style: "display:flex;flex-direction:column;gap:6px;flex:1;min-width:0;",
+                label { style: "display:block;font-size:12px;color:var(--fg-muted);", "User name"
+                    input {
+                        style: "width:100%;",
+                        r#type: "text",
+                        placeholder: "Your name",
+                        value: "{PROFILE_EDIT.read().username}",
+                        oninput: move |e| {
+                            PROFILE_EDIT.write().username = e.value();
+                        },
+                    }
+                }
+                div { style: "display:flex;gap:6px;flex-wrap:wrap;",
+                    {upload_control}
+                    if PROFILE_EDIT.read().has_avatar() {
+                        button {
+                            onclick: move |_| clear_avatar(&mut PROFILE_EDIT.write()),
+                            "Remove"
                         }
                     }
                 }
-                if !SCREEN_ERROR.read().is_empty() {
-                    span { style: "color:#c0392b;font-size:12px;", "{SCREEN_ERROR.read()}" }
-                }
-                SoftwareSection { }
-                div { class: "modal-actions",
-                    span {}
-                    div { style: "display:flex;gap:8px;flex-wrap:wrap;",
-                        button { onclick: move |_| *SETTINGS_SCREEN_OPEN.write() = false, "Cancel" }
-                        button { class: "primary", onclick: save, "Save" }
-                    }
-                }
             }
+        }
+        if !SCREEN_ERROR.read().is_empty() {
+            span { style: "color:#c0392b;font-size:12px;", "{SCREEN_ERROR.read()}" }
+        }
+        div { style: "display:flex;gap:8px;",
+            button { onclick: move |_| reset_profile(), "Cancel" }
+            button { class: "primary", onclick: save, "Save" }
         }
     }
 }
@@ -300,11 +282,12 @@ fn AvatarPreview() -> Element {
     }
 }
 
-/// Software version + update checking controls. Shows the current release,
-/// lets the user check for newer builds (or toggle the startup check) and
-/// apply a downloaded update (desktop: restart; Android: package installer).
+/// Software version + update checking controls, rendered in the sidebar. Shows
+/// the current release, lets the user check for newer builds (or toggle the
+/// startup check) and apply a downloaded update (desktop: restart; Android:
+/// package installer).
 #[component]
-fn SoftwareSection() -> Element {
+pub fn SoftwareSection() -> Element {
     let db = use_context::<crate::DbHandle>();
     let mut settings = use_context::<Signal<crate::ui::Settings>>();
     let db_auto = db.clone();
@@ -314,35 +297,30 @@ fn SoftwareSection() -> Element {
     let auto = settings.read().auto_check_updates;
 
     rsx! {
-        hr {}
-        h3 { style: "font-size:14px;margin:12px 0 6px;", "Software & updates" }
-        div { style: "display:flex;gap:10px;flex-wrap:wrap;align-items:center;",
-            span { style: "font-size:13px;", "Kal v{crate::updater::CURRENT_VERSION}" }
-            button {
-                onclick: move |_| crate::updater::run_check(),
-                "Check for updates"
+        span { style: "font-size:13px;", "Kal v{crate::updater::CURRENT_VERSION}" }
+        button {
+            onclick: move |_| crate::updater::run_check(),
+            "Check for updates"
+        }
+        label { style: "display:flex;align-items:center;gap:4px;font-size:12px;",
+            input {
+                r#type: "checkbox",
+                checked: auto,
+                onchange: move |e| {
+                    let mut p = settings.read().clone();
+                    p.auto_check_updates = e.checked();
+                    p.save(&db_auto);
+                    settings.set(p);
+                },
             }
-            label { style: "display:flex;align-items:center;gap:4px;font-size:12px;",
-                input {
-                    r#type: "checkbox",
-                    checked: auto,
-                    onchange: move |e| {
-                        let mut p = settings.read().clone();
-                        p.auto_check_updates = e.checked();
-                        p.save(&db_auto);
-                        settings.set(p);
-                    },
-                }
-                "Check at startup"
-            }
+            "Check at startup"
         }
         if let Some(status) = status {
-            span { style: "display:block;font-size:12px;color:var(--fg-muted);margin-top:6px;", "{status}" }
+            span { style: "display:block;font-size:12px;color:var(--fg-muted);", "{status}" }
         }
         if ready {
             button {
                 class: "primary",
-                style: "margin-top:6px;",
                 onclick: move |_| {
                     crate::updater::apply_now();
                 },

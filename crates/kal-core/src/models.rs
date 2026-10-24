@@ -142,12 +142,23 @@ impl Calendar {
     }
 }
 
-/// Extra metadata attached to items. Currently only birthday linkage (§4);
-/// kept in one struct to avoid schema churn when more metadata arrives.
+/// Extra metadata attached to items: birthday linkage (§4) and the link that
+/// keeps a "This event" occurrence attached to its series. Kept in one struct
+/// to avoid schema churn when more metadata arrives.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ItemMetadata {
     /// Set when `kind == Birthday`: free-form contact identifier from vCard import.
     pub birthday_of: Option<String>,
+    /// Set when the item is one occurrence detached from a recurring series by
+    /// "This event": the series row it replaces. The occurrence stays a single
+    /// item (its own `rrule` is empty) but still belongs to the series, so the
+    /// editor offers the scope choice again and "All events" reaches it.
+    #[serde(default)]
+    pub series_id: Option<Ulid>,
+    /// The series' instant this occurrence replaced — the base series' EXDATE.
+    /// Kept even if the occurrence is later moved, so the link survives edits.
+    #[serde(default)]
+    pub recurrence_id: Option<DateTimeTz>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

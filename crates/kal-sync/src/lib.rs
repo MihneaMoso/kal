@@ -1,6 +1,10 @@
 //! Account-free peer-to-peer sync for Kal (spec §5.4).
 
+#[cfg(not(target_arch = "wasm32"))]
+pub mod client;
 pub mod crdt;
+#[cfg(not(target_arch = "wasm32"))]
+pub mod identity_file;
 pub mod keys;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod live;
