@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Month widget uses the Kal app palette in the system dark theme. -->
+    <color name="kal_widget_month_bg">#16191D</color>
+    <color name="kal_widget_month_fg">#E6E8EB</color>
+    <color name="kal_widget_month_muted">#9AA4AE</color>
+    <color name="kal_widget_month_outside">#8C9AA4AE</color>
+    <color name="kal_widget_month_accent">#6C99F0</color>
+    <color name="kal_widget_month_on_accent">#16191D</color>
+    <color name="kal_widget_month_border">#33393F</color>
+    <color name="kal_widget_chip_blue">#6C99F0</color>
+    <color name="kal_widget_chip_red">#F28B82</color>
+    <color name="kal_widget_chip_green">#81C995</color>
+    <color name="kal_widget_chip_orange">#FDD663</color>
+    <color name="kal_widget_chip_purple">#C58AF9</color>
+    <color name="kal_widget_chip_teal">#78D9EC</color>
+    <color name="kal_widget_chip_pink">#FF8BCB</color>
+    <color name="kal_widget_chip_gray">#BDC1C6</color>
+    <color name="kal_widget_month_pressed">#336C99F0</color>
+</resources>

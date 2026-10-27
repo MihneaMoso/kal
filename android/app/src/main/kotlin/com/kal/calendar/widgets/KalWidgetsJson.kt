@@ -45,7 +45,7 @@ data class MonthDay(
     val items: List<DayItem>,
 )
 
-data class DayItem(val title: String, val color: String)
+data class DayItem(val title: String, val time: String, val color: String)
 
 /**
  * Parses the native month grid JSON. The native side returns a bare array of
@@ -64,6 +64,7 @@ fun parseMonth(body: String?): List<List<MonthDay>> {
                     val it = itemsArr.getJSONObject(i)
                     DayItem(
                         title = it.optString("title", ""),
+                        time = it.optString("time", ""),
                         color = it.optString("color", "#3366cc"),
                     )
                 }

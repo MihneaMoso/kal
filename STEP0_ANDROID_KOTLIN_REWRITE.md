@@ -209,12 +209,12 @@ biggest Phase-0 hazard does not apply).
 - Must-keep-working-when-backgrounded today: nothing on Android beyond what
   the OS allows a plain activity (no foreground service, no alarms, no media
   session). The 10 s sync driver and reminder threads die with the process.
-- Home-screen widgets (2) are Out-of-process-from-UI Kotlin already:
-  `ScheduleWidgetProvider` (95 LOC), `MonthWidgetProvider` (168),
-  `BootReceiver` (25), shared loader `KalWidgets.kt` (loads `libmain.so`) and
-  JSON mapper `KalWidgetsJson.kt`, layouts `android/widget/src/main/res/layout/*`.
-  Tap → `MainActivity` with `kal_widget_open` extra (**extra not consumed**,
-  D53: documented follow-up).
+- Home-screen widgets (2) are Out-of-process-from-UI Kotlin:
+  `ScheduleWidgetProvider` (95 LOC), `MonthWidgetProvider` (~490),
+  `BootReceiver` (25), shared loader `KalWidgets.kt` (loads `libkal_jni.so`) and
+  JSON mapper `KalWidgetsJson.kt`, layouts `android/app/src/main/res/layout/*`.
+  Tap → `MainActivity` with the widget date extra; the Kotlin app consumes
+  `kal_widget_add_date` to open the add editor on the tapped day (§8.9, D53).
 
 ## 0.13 Platform-specific code (everything gated on Android)
 
@@ -775,10 +775,10 @@ which phase they land in — no behaviour is faked.
   device's* 12/24-hour preference) and the day view's layout fractions.
 - **Shared display entry** every view parses:
   `{id, calendarId, title, start, end, allDay, kind, completed, color, overrideColor, age}`.
-  `color` is the effective colour (item override, else calendar) used by dots and
-  day blocks; `overrideColor` is the item's own, which is *all* the month/week
-  chips ever used — the two rules really did differ in the Rust UI, so both
-  cross.
+  `color` is the effective colour (item override, else calendar) used by widget
+  chips and day blocks; `overrideColor` is the item's own, which is *all* the
+  month/week chips ever used — the two rules really did differ in the Rust UI,
+  so both cross.
 - `kal_month_grid_json` was refactored onto two shared helpers
   (`first_weekday`, `month_occurrences`) so the widget and app payloads cannot
   drift; its output is unchanged (proven by the frozen tests).
@@ -2330,3 +2330,50 @@ Gates: fmt/clippy clean, Rust **211** tests (FFI bridge 60), JVM **128** tests,
 release APKs build. The locally built release APK is debug-signed (no stable
 keystore on this machine) — `release.yml` still refuses to publish that; the
 signed release comes from CI with `KAL_KEYSTORE_BASE64`.
+
+### 8.9 Google-style month widget (owner request)
+
+Request: make the month widget feel like Google Calendar's — month + year on
+the left, `<` / `>` month arrows and a `+` on the right, and a Google-style
+grid whose days are clickable. Clicking a day must open the app's add-event
+menu for that date; the `+` targets today. Keep it fast and smooth.
+
+Kotlin:
+
+- `MonthWidgetProvider` is now per-widget: each instance stores a month offset
+  in `kal_month_widget` SharedPreferences, so the arrows navigate independently
+  and `onDeleted` cleans the entry up. The header is a 56 dp row with a 20 sp
+  month/year title and 40 dp add/previous/next buttons. The body is a full-width
+  1 dp bordered grid: a Monday-first one-letter weekday row, 42 generated day
+  cells, vertical column dividers and horizontal week separators, centered day
+  numbers, and a filled 20 dp today circle. Up to two single-line, ellipsised
+  event names sit under each day (title, or `time title` for timed items). The
+  item colour is mapped to one of eight rounded chip drawables in the light/dark
+  palette. The sixth row is hidden when a month only needs five.
+- `MonthWidgetModel` holds the pure navigation/grid rules (`monthFor`,
+  `showsWeek`, `title`, `requestCode`, spoken date label) and the chip label so
+  they are covered by JVM tests. `WidgetIntents.EXTRA_ADD_DATE` is the shared
+  date extra.
+- Header arrows are broadcast `PendingIntent`s that update only that widget;
+  day cells are activity `PendingIntent`s with the tapped date, and the `+`
+  asks the app for today at click time. `MainActivity` is `singleTop`, handles
+  both `onCreate` and `onNewIntent`, and passes the one-shot date to `KalApp`,
+  which calls the new `ShellState.openNewEvent(date)` (cursor moves, sidebar
+  closes, add-event editor opens) and then clears the extra.
+- `WidgetRefresher` updates both widgets off the main thread after item saves,
+  deletes, task toggles, .ics imports and sync merges (a new
+  `ShellState.dataVersion` signal), so a just-added event does not wait for the
+  30-minute widget period. The schedule widget keeps its existing layout.
+- New `values`/`values-night` month-widget colours (including the chip palette)
+  and shape/vector drawables; the widget follows the system light/dark surface.
+  The default is a 4×6 widget so two event rows fit. No new dependency, no
+  Glance, no Compose in the widget process.
+- The old `kal_widget_open` month tap extra and `KalMonthHead` style are gone.
+
+Tests/gates: JVM **134** (`MonthWidgetModelTest` covers year-boundary offsets,
+five/six-week collapse, request-code uniqueness, the spoken date and chip
+labels), `:app:assembleDebug` and `:app:lintDebug` green,
+`scripts/check-android.sh` green. Rust is untouched. Device verification
+(place/resize the widget, arrows, `+`, day taps, grid/event rendering in
+light/dark, the new-event round trip) remains owner-only; the new APK was built
+but not launched or installed here.

@@ -2,8 +2,20 @@
 <resources>
     <string name="app_name">Kal</string>
     <string name="kal_widget_schedule_desc">Upcoming events and tasks at a glance</string>
-    <string name="kal_widget_month_desc">Month calendar overview</string>
+    <string name="kal_widget_month_desc">Month calendar with event names and quick add</string>
     <string name="kal_widget_schedule_header">Upcoming</string>
     <string name="kal_widget_empty">Nothing scheduled</string>
     <string name="kal_widget_open_hint">Tap to open calendar</string>
+    <string name="kal_widget_month_placeholder">Month</string>
+    <string name="kal_widget_month_prev">Previous month</string>
+    <string name="kal_widget_month_next">Next month</string>
+    <string name="kal_widget_month_add">Add event</string>
+    <string name="kal_widget_add_event_on">Add event on %1$s</string>
+    <string name="kal_widget_weekday_mon">M</string>
+    <string name="kal_widget_weekday_tue">T</string>
+    <string name="kal_widget_weekday_wed">W</string>
+    <string name="kal_widget_weekday_thu">T</string>
+    <string name="kal_widget_weekday_fri">F</string>
+    <string name="kal_widget_weekday_sat">S</string>
+    <string name="kal_widget_weekday_sun">S</string>
 </resources>

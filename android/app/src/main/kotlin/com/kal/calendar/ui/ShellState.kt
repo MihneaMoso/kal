@@ -1,6 +1,7 @@
 package com.kal.calendar.ui
 
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.kal.calendar.bridge.AgendaRow
@@ -45,6 +46,13 @@ class ShellState(private val session: KalSession) {
 
     /** The view cursor: the highlighted day, month/week/day/agenda all derive from it. */
     var cursor by mutableStateOf(LocalDate.now())
+        private set
+
+    /**
+     * Bumped after an item mutation so the shell can push a fresh snapshot to
+     * the home-screen widgets without waiting for their 30-minute period.
+     */
+    var dataVersion by mutableIntStateOf(0)
         private set
 
     var view by mutableStateOf(ViewMode.MONTH)
@@ -223,6 +231,20 @@ class ShellState(private val session: KalSession) {
         editor = EditorFields.forNew(kind, date, defaultCalendarId())
     }
 
+    /**
+     * Open the add-event editor for a date delivered by the home-screen month
+     * widget. Moving the cursor first makes the month/week/day views sit on the
+     * tapped date behind the dialog; the widget header's + button passes today.
+     */
+    fun openNewEvent(date: LocalDate) {
+        sidebarOpen = false
+        if (cursor != date) {
+            cursor = date
+            reload()
+        }
+        newItem(ItemKind.EVENT, date)
+    }
+
     /** Open the editor for an existing item, anchored on the clicked occurrence. */
     fun editItem(id: String, occurrenceStart: OffsetDateTime?) {
         val item = session.item(id)
@@ -260,6 +282,7 @@ class ShellState(private val session: KalSession) {
         if (session.saveItem(fields.toForm(scope))) {
             closeEditor()
             reload()
+            noteDataChanged()
         } else {
             editorError = session.lastError() ?: "the item was not saved"
         }
@@ -277,6 +300,7 @@ class ShellState(private val session: KalSession) {
         if (session.deleteItem(form)) {
             closeEditor()
             reload()
+            noteDataChanged()
         } else {
             editorError = session.lastError() ?: "the item was not deleted"
         }
@@ -284,7 +308,12 @@ class ShellState(private val session: KalSession) {
 
     /** The row checkbox: flip a task's completion and re-read the views. */
     fun toggleTask(entry: DisplayEntry) {
-        if (session.toggleItemCompleted(entry.id)) reload() else reportFailure()
+        if (session.toggleItemCompleted(entry.id)) {
+            reload()
+            noteDataChanged()
+        } else {
+            reportFailure()
+        }
     }
 
     /**
@@ -297,6 +326,7 @@ class ShellState(private val session: KalSession) {
         sidebarError = null
         if (session.importIcs(text)) {
             reload()
+            noteDataChanged()
         } else {
             sidebarError = importFailure(session.lastError())
         }
@@ -400,7 +430,10 @@ class ShellState(private val session: KalSession) {
             } else {
                 "No changes to sync \u2014 ${clock()}"
             }
-            if (round.merged > 0) reload()
+            if (round.merged > 0) {
+                reload()
+                noteDataChanged()
+            }
         } else {
             // Transient (e.g. "no peers yet") — keep the paired panel visible.
             lastSync = "Sync failed: ${failure ?: "unknown error"}"
@@ -417,7 +450,10 @@ class ShellState(private val session: KalSession) {
         syncing = true
         val merged = withContext(Dispatchers.IO) { session.syncRound()?.merged }
         syncing = false
-        if (merged != null && merged > 0) reload()
+        if (merged != null && merged > 0) {
+            reload()
+            noteDataChanged()
+        }
     }
 
     /** The panel state the stored identity implies (paired + fingerprint, or not). */
@@ -547,6 +583,10 @@ class ShellState(private val session: KalSession) {
         } else {
             reportFailure()
         }
+    }
+
+    private fun noteDataChanged() {
+        dataVersion++
     }
 
     private fun reportFailure() {

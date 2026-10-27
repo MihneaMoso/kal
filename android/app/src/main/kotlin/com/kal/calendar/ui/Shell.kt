@@ -64,6 +64,8 @@ import com.kal.calendar.data.ICS_PICKER_MIME
 import com.kal.calendar.data.findActivity
 import com.kal.calendar.data.readIcs
 import com.kal.calendar.notify.ReminderAlarms
+import com.kal.calendar.widgets.WidgetRefresher
+import java.time.LocalDate
 import kotlin.math.abs
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -81,8 +83,22 @@ import kotlinx.coroutines.withContext
  * width-based in the stylesheet, so it is reproduced with the same 900px rule.
  */
 @Composable
-fun KalApp(state: ShellState) {
+fun KalApp(
+    state: ShellState,
+    widgetAddDate: String? = null,
+    onWidgetAddDateConsumed: () -> Unit = {},
+) {
     val colors = LocalKalColors.current
+
+    // A day (or the + button) tapped on the month widget lands here as an ISO
+    // date. Open the add-event editor on it, then consume the one-shot extra so
+    // a normal relaunch or recomposition does not reopen the dialog.
+    LaunchedEffect(widgetAddDate) {
+        val iso = widgetAddDate ?: return@LaunchedEffect
+        val date = runCatching { LocalDate.parse(iso) }.getOrNull()
+        if (date != null) state.openNewEvent(date)
+        onWidgetAddDateConsumed()
+    }
 
     // Reminder reconcile: ShellState.reload() refreshes the firings after every
     // mutation, and the OS is re-armed whenever the app reaches the foreground
@@ -90,6 +106,13 @@ fun KalApp(state: ShellState) {
     val context = LocalContext.current
     val alarms = remember { ReminderAlarms(context.applicationContext) }
     LaunchedEffect(state.reminderFirings) { alarms.reconcile(state.reminderFirings) }
+    LaunchedEffect(state.dataVersion) {
+        if (state.dataVersion == 0) return@LaunchedEffect
+        // Best-effort: a widget host/JNI failure must not take down the shell.
+        withContext(Dispatchers.IO) {
+            runCatching { WidgetRefresher.refresh(context.applicationContext) }
+        }
+    }
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
         alarms.reconcile(state.reminderFirings)
     }

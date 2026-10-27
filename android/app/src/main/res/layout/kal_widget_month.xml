@@ -2,1123 +2,2472 @@
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:orientation="vertical"
-    android:background="@drawable/kal_widget_bg"
-    android:padding="8dp">
-
-    <TextView
-        android:id="@+id/kal_widget_month_title"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginBottom="4dp"
-        android:textColor="#E6E6E6"
-        android:textSize="14sp"
-        android:textStyle="bold"
-        android:text="Month" />
+    android:background="@drawable/kal_widget_month_bg"
+    android:clipToOutline="true"
+    android:orientation="vertical">
 
     <LinearLayout
+        android:id="@+id/kal_widget_month_header"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="horizontal">
+        android:layout_height="56dp"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingStart="16dp"
+        android:paddingEnd="8dp">
 
-        <TextView android:id="@+id/kal_widget_month_mon" style="@style/KalMonthHead" android:text="Mon" />
-        <TextView android:id="@+id/kal_widget_month_tue" style="@style/KalMonthHead" android:text="Tue" />
-        <TextView android:id="@+id/kal_widget_month_wed" style="@style/KalMonthHead" android:text="Wed" />
-        <TextView android:id="@+id/kal_widget_month_thu" style="@style/KalMonthHead" android:text="Thu" />
-        <TextView android:id="@+id/kal_widget_month_fri" style="@style/KalMonthHead" android:text="Fri" />
-        <TextView android:id="@+id/kal_widget_month_sat" style="@style/KalMonthHead" android:text="Sat" />
-        <TextView android:id="@+id/kal_widget_month_sun" style="@style/KalMonthHead" android:text="Sun" />
+        <TextView
+            android:id="@+id/kal_widget_month_title"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:ellipsize="end"
+            android:fontFamily="sans-serif-medium"
+            android:gravity="center_vertical"
+            android:maxLines="1"
+            android:paddingEnd="8dp"
+            android:text="@string/kal_widget_month_placeholder"
+            android:textColor="@color/kal_widget_month_fg"
+            android:textSize="20sp" />
+
+        <ImageButton
+            android:id="@+id/kal_widget_month_add"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:background="@drawable/kal_widget_icon_bg"
+            android:contentDescription="@string/kal_widget_month_add"
+            android:minWidth="0dp"
+            android:minHeight="0dp"
+            android:padding="8dp"
+            android:scaleType="fitCenter"
+            android:src="@drawable/ic_widget_plus" />
+
+        <ImageButton
+            android:id="@+id/kal_widget_month_prev"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:layout_marginStart="2dp"
+            android:background="@drawable/kal_widget_icon_bg"
+            android:contentDescription="@string/kal_widget_month_prev"
+            android:minWidth="0dp"
+            android:minHeight="0dp"
+            android:padding="8dp"
+            android:scaleType="fitCenter"
+            android:src="@drawable/ic_widget_chevron_left" />
+
+        <ImageButton
+            android:id="@+id/kal_widget_month_next"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:layout_marginStart="2dp"
+            android:background="@drawable/kal_widget_icon_bg"
+            android:contentDescription="@string/kal_widget_month_next"
+            android:minWidth="0dp"
+            android:minHeight="0dp"
+            android:padding="8dp"
+            android:scaleType="fitCenter"
+            android:src="@drawable/ic_widget_chevron_right" />
     </LinearLayout>
 
     <LinearLayout
-        android:id="@+id/kal_widget_month_row1"
+        android:id="@+id/kal_widget_month_weekdays"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="horizontal">
-
-    <FrameLayout
-        android:id="@+id/day1"
-        android:layout_width="0dp"
-        android:layout_height="wrap_content"
-        android:layout_weight="1"
-        android:layout_margin="1dp"
-        android:padding="2dp">
+        android:layout_height="22dp"
+        android:orientation="horizontal"
+        android:paddingTop="2dp"
+        android:paddingBottom="2dp">
 
         <TextView
-            android:id="@+id/day1t"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:gravity="center"
-            android:textColor="#E6E6E6"
-            android:textSize="13sp" />
-
-        <ImageView
-            android:id="@+id/dot1"
-            android:layout_width="5dp"
-            android:layout_height="5dp"
-            android:layout_gravity="center_horizontal|bottom"
-            android:layout_marginBottom="1dp"
-            android:importantForAccessibility="no"
-            android:src="@drawable/kal_dot" />
-    </FrameLayout>
-    <FrameLayout
-        android:id="@+id/day2"
-        android:layout_width="0dp"
-        android:layout_height="wrap_content"
-        android:layout_weight="1"
-        android:layout_margin="1dp"
-        android:padding="2dp">
-
+            android:id="@+id/kal_widget_month_mon"
+            style="@style/KalWidgetMonthWeekday"
+            android:text="@string/kal_widget_weekday_mon" />
         <TextView
-            android:id="@+id/day2t"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:gravity="center"
-            android:textColor="#E6E6E6"
-            android:textSize="13sp" />
-
-        <ImageView
-            android:id="@+id/dot2"
-            android:layout_width="5dp"
-            android:layout_height="5dp"
-            android:layout_gravity="center_horizontal|bottom"
-            android:layout_marginBottom="1dp"
-            android:importantForAccessibility="no"
-            android:src="@drawable/kal_dot" />
-    </FrameLayout>
-    <FrameLayout
-        android:id="@+id/day3"
-        android:layout_width="0dp"
-        android:layout_height="wrap_content"
-        android:layout_weight="1"
-        android:layout_margin="1dp"
-        android:padding="2dp">
-
+            android:layout_width="1dp"
+            android:layout_height="match_parent" />
         <TextView
-            android:id="@+id/day3t"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:gravity="center"
-            android:textColor="#E6E6E6"
-            android:textSize="13sp" />
-
-        <ImageView
-            android:id="@+id/dot3"
-            android:layout_width="5dp"
-            android:layout_height="5dp"
-            android:layout_gravity="center_horizontal|bottom"
-            android:layout_marginBottom="1dp"
-            android:importantForAccessibility="no"
-            android:src="@drawable/kal_dot" />
-    </FrameLayout>
-    <FrameLayout
-        android:id="@+id/day4"
-        android:layout_width="0dp"
-        android:layout_height="wrap_content"
-        android:layout_weight="1"
-        android:layout_margin="1dp"
-        android:padding="2dp">
-
+            android:id="@+id/kal_widget_month_tue"
+            style="@style/KalWidgetMonthWeekday"
+            android:text="@string/kal_widget_weekday_tue" />
         <TextView
-            android:id="@+id/day4t"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:gravity="center"
-            android:textColor="#E6E6E6"
-            android:textSize="13sp" />
-
-        <ImageView
-            android:id="@+id/dot4"
-            android:layout_width="5dp"
-            android:layout_height="5dp"
-            android:layout_gravity="center_horizontal|bottom"
-            android:layout_marginBottom="1dp"
-            android:importantForAccessibility="no"
-            android:src="@drawable/kal_dot" />
-    </FrameLayout>
-    <FrameLayout
-        android:id="@+id/day5"
-        android:layout_width="0dp"
-        android:layout_height="wrap_content"
-        android:layout_weight="1"
-        android:layout_margin="1dp"
-        android:padding="2dp">
-
+            android:layout_width="1dp"
+            android:layout_height="match_parent" />
         <TextView
-            android:id="@+id/day5t"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:gravity="center"
-            android:textColor="#E6E6E6"
-            android:textSize="13sp" />
-
-        <ImageView
-            android:id="@+id/dot5"
-            android:layout_width="5dp"
-            android:layout_height="5dp"
-            android:layout_gravity="center_horizontal|bottom"
-            android:layout_marginBottom="1dp"
-            android:importantForAccessibility="no"
-            android:src="@drawable/kal_dot" />
-    </FrameLayout>
-    <FrameLayout
-        android:id="@+id/day6"
-        android:layout_width="0dp"
-        android:layout_height="wrap_content"
-        android:layout_weight="1"
-        android:layout_margin="1dp"
-        android:padding="2dp">
-
+            android:id="@+id/kal_widget_month_wed"
+            style="@style/KalWidgetMonthWeekday"
+            android:text="@string/kal_widget_weekday_wed" />
         <TextView
-            android:id="@+id/day6t"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:gravity="center"
-            android:textColor="#E6E6E6"
-            android:textSize="13sp" />
-
-        <ImageView
-            android:id="@+id/dot6"
-            android:layout_width="5dp"
-            android:layout_height="5dp"
-            android:layout_gravity="center_horizontal|bottom"
-            android:layout_marginBottom="1dp"
-            android:importantForAccessibility="no"
-            android:src="@drawable/kal_dot" />
-    </FrameLayout>
-    <FrameLayout
-        android:id="@+id/day7"
-        android:layout_width="0dp"
-        android:layout_height="wrap_content"
-        android:layout_weight="1"
-        android:layout_margin="1dp"
-        android:padding="2dp">
-
+            android:layout_width="1dp"
+            android:layout_height="match_parent" />
         <TextView
-            android:id="@+id/day7t"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:gravity="center"
-            android:textColor="#E6E6E6"
-            android:textSize="13sp" />
-
-        <ImageView
-            android:id="@+id/dot7"
-            android:layout_width="5dp"
-            android:layout_height="5dp"
-            android:layout_gravity="center_horizontal|bottom"
-            android:layout_marginBottom="1dp"
-            android:importantForAccessibility="no"
-            android:src="@drawable/kal_dot" />
-    </FrameLayout>
+            android:id="@+id/kal_widget_month_thu"
+            style="@style/KalWidgetMonthWeekday"
+            android:text="@string/kal_widget_weekday_thu" />
+        <TextView
+            android:layout_width="1dp"
+            android:layout_height="match_parent" />
+        <TextView
+            android:id="@+id/kal_widget_month_fri"
+            style="@style/KalWidgetMonthWeekday"
+            android:text="@string/kal_widget_weekday_fri" />
+        <TextView
+            android:layout_width="1dp"
+            android:layout_height="match_parent" />
+        <TextView
+            android:id="@+id/kal_widget_month_sat"
+            style="@style/KalWidgetMonthWeekday"
+            android:text="@string/kal_widget_weekday_sat" />
+        <TextView
+            android:layout_width="1dp"
+            android:layout_height="match_parent" />
+        <TextView
+            android:id="@+id/kal_widget_month_sun"
+            style="@style/KalWidgetMonthWeekday"
+            android:text="@string/kal_widget_weekday_sun" />
     </LinearLayout>
+
     <LinearLayout
-        android:id="@+id/kal_widget_month_row2"
+        android:id="@+id/kal_widget_month_grid"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="horizontal">
-
-    <FrameLayout
-        android:id="@+id/day8"
-        android:layout_width="0dp"
-        android:layout_height="wrap_content"
+        android:layout_height="0dp"
         android:layout_weight="1"
-        android:layout_margin="1dp"
-        android:padding="2dp">
+        android:orientation="vertical">
 
         <TextView
-            android:id="@+id/day8t"
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:gravity="center"
-            android:textColor="#E6E6E6"
-            android:textSize="13sp" />
+            android:layout_height="1dp"
+            android:background="@color/kal_widget_month_border" />
 
-        <ImageView
-            android:id="@+id/dot8"
-            android:layout_width="5dp"
-            android:layout_height="5dp"
-            android:layout_gravity="center_horizontal|bottom"
-            android:layout_marginBottom="1dp"
-            android:importantForAccessibility="no"
-            android:src="@drawable/kal_dot" />
-    </FrameLayout>
-    <FrameLayout
-        android:id="@+id/day9"
-        android:layout_width="0dp"
-        android:layout_height="wrap_content"
-        android:layout_weight="1"
-        android:layout_margin="1dp"
-        android:padding="2dp">
+        <LinearLayout
+            android:id="@+id/kal_widget_month_row1"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:baselineAligned="false"
+            android:orientation="horizontal">
+
+            <LinearLayout
+                android:id="@+id/day1"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="1"
+                android:background="@drawable/kal_widget_day_bg"
+                android:clickable="true"
+                android:focusable="true"
+                android:gravity="center_horizontal"
+                android:orientation="vertical"
+                android:paddingStart="3dp"
+                android:paddingTop="1dp"
+                android:paddingEnd="3dp"
+                android:paddingBottom="1dp">
+
+                <FrameLayout
+                    android:layout_width="20dp"
+                    android:layout_height="20dp"
+                    android:importantForAccessibility="no">
+
+                    <ImageView
+                        android:id="@+id/day1bg"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:background="@drawable/kal_widget_today_bg"
+                        android:importantForAccessibility="no"
+                        android:visibility="gone" />
+
+                    <TextView
+                        android:id="@+id/day1t"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:fontFamily="sans-serif-medium"
+                        android:gravity="center"
+                        android:includeFontPadding="false"
+                        android:maxLines="1"
+                        android:textColor="@color/kal_widget_month_fg"
+                        android:textSize="12sp" />
+                </FrameLayout>
+
+                <TextView
+                    android:id="@+id/day1chip1"
+                    style="@style/KalWidgetMonthChip"
+                    android:visibility="gone" />
+
+                <TextView
+                    android:id="@+id/day1chip2"
+                    style="@style/KalWidgetMonthChip"
+                    android:visibility="gone" />
+            </LinearLayout>
+            <TextView
+                android:layout_width="1dp"
+                android:layout_height="match_parent"
+                android:background="@color/kal_widget_month_border" />
+            <LinearLayout
+                android:id="@+id/day2"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="1"
+                android:background="@drawable/kal_widget_day_bg"
+                android:clickable="true"
+                android:focusable="true"
+                android:gravity="center_horizontal"
+                android:orientation="vertical"
+                android:paddingStart="3dp"
+                android:paddingTop="1dp"
+                android:paddingEnd="3dp"
+                android:paddingBottom="1dp">
+
+                <FrameLayout
+                    android:layout_width="20dp"
+                    android:layout_height="20dp"
+                    android:importantForAccessibility="no">
+
+                    <ImageView
+                        android:id="@+id/day2bg"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:background="@drawable/kal_widget_today_bg"
+                        android:importantForAccessibility="no"
+                        android:visibility="gone" />
+
+                    <TextView
+                        android:id="@+id/day2t"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:fontFamily="sans-serif-medium"
+                        android:gravity="center"
+                        android:includeFontPadding="false"
+                        android:maxLines="1"
+                        android:textColor="@color/kal_widget_month_fg"
+                        android:textSize="12sp" />
+                </FrameLayout>
+
+                <TextView
+                    android:id="@+id/day2chip1"
+                    style="@style/KalWidgetMonthChip"
+                    android:visibility="gone" />
+
+                <TextView
+                    android:id="@+id/day2chip2"
+                    style="@style/KalWidgetMonthChip"
+                    android:visibility="gone" />
+            </LinearLayout>
+            <TextView
+                android:layout_width="1dp"
+                android:layout_height="match_parent"
+                android:background="@color/kal_widget_month_border" />
+            <LinearLayout
+                android:id="@+id/day3"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="1"
+                android:background="@drawable/kal_widget_day_bg"
+                android:clickable="true"
+                android:focusable="true"
+                android:gravity="center_horizontal"
+                android:orientation="vertical"
+                android:paddingStart="3dp"
+                android:paddingTop="1dp"
+                android:paddingEnd="3dp"
+                android:paddingBottom="1dp">
+
+                <FrameLayout
+                    android:layout_width="20dp"
+                    android:layout_height="20dp"
+                    android:importantForAccessibility="no">
+
+                    <ImageView
+                        android:id="@+id/day3bg"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:background="@drawable/kal_widget_today_bg"
+                        android:importantForAccessibility="no"
+                        android:visibility="gone" />
+
+                    <TextView
+                        android:id="@+id/day3t"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:fontFamily="sans-serif-medium"
+                        android:gravity="center"
+                        android:includeFontPadding="false"
+                        android:maxLines="1"
+                        android:textColor="@color/kal_widget_month_fg"
+                        android:textSize="12sp" />
+                </FrameLayout>
+
+                <TextView
+                    android:id="@+id/day3chip1"
+                    style="@style/KalWidgetMonthChip"
+                    android:visibility="gone" />
+
+                <TextView
+                    android:id="@+id/day3chip2"
+                    style="@style/KalWidgetMonthChip"
+                    android:visibility="gone" />
+            </LinearLayout>
+            <TextView
+                android:layout_width="1dp"
+                android:layout_height="match_parent"
+                android:background="@color/kal_widget_month_border" />
+            <LinearLayout
+                android:id="@+id/day4"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="1"
+                android:background="@drawable/kal_widget_day_bg"
+                android:clickable="true"
+                android:focusable="true"
+                android:gravity="center_horizontal"
+                android:orientation="vertical"
+                android:paddingStart="3dp"
+                android:paddingTop="1dp"
+                android:paddingEnd="3dp"
+                android:paddingBottom="1dp">
+
+                <FrameLayout
+                    android:layout_width="20dp"
+                    android:layout_height="20dp"
+                    android:importantForAccessibility="no">
+
+                    <ImageView
+                        android:id="@+id/day4bg"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:background="@drawable/kal_widget_today_bg"
+                        android:importantForAccessibility="no"
+                        android:visibility="gone" />
+
+                    <TextView
+                        android:id="@+id/day4t"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:fontFamily="sans-serif-medium"
+                        android:gravity="center"
+                        android:includeFontPadding="false"
+                        android:maxLines="1"
+                        android:textColor="@color/kal_widget_month_fg"
+                        android:textSize="12sp" />
+                </FrameLayout>
+
+                <TextView
+                    android:id="@+id/day4chip1"
+                    style="@style/KalWidgetMonthChip"
+                    android:visibility="gone" />
+
+                <TextView
+                    android:id="@+id/day4chip2"
+                    style="@style/KalWidgetMonthChip"
+                    android:visibility="gone" />
+            </LinearLayout>
+            <TextView
+                android:layout_width="1dp"
+                android:layout_height="match_parent"
+                android:background="@color/kal_widget_month_border" />
+            <LinearLayout
+                android:id="@+id/day5"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="1"
+                android:background="@drawable/kal_widget_day_bg"
+                android:clickable="true"
+                android:focusable="true"
+                android:gravity="center_horizontal"
+                android:orientation="vertical"
+                android:paddingStart="3dp"
+                android:paddingTop="1dp"
+                android:paddingEnd="3dp"
+                android:paddingBottom="1dp">
+
+                <FrameLayout
+                    android:layout_width="20dp"
+                    android:layout_height="20dp"
+                    android:importantForAccessibility="no">
+
+                    <ImageView
+                        android:id="@+id/day5bg"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:background="@drawable/kal_widget_today_bg"
+                        android:importantForAccessibility="no"
+                        android:visibility="gone" />
+
+                    <TextView
+                        android:id="@+id/day5t"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:fontFamily="sans-serif-medium"
+                        android:gravity="center"
+                        android:includeFontPadding="false"
+                        android:maxLines="1"
+                        android:textColor="@color/kal_widget_month_fg"
+                        android:textSize="12sp" />
+                </FrameLayout>
+
+                <TextView
+                    android:id="@+id/day5chip1"
+                    style="@style/KalWidgetMonthChip"
+                    android:visibility="gone" />
+
+                <TextView
+                    android:id="@+id/day5chip2"
+                    style="@style/KalWidgetMonthChip"
+                    android:visibility="gone" />
+            </LinearLayout>
+            <TextView
+                android:layout_width="1dp"
+                android:layout_height="match_parent"
+                android:background="@color/kal_widget_month_border" />
+            <LinearLayout
+                android:id="@+id/day6"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="1"
+                android:background="@drawable/kal_widget_day_bg"
+                android:clickable="true"
+                android:focusable="true"
+                android:gravity="center_horizontal"
+                android:orientation="vertical"
+                android:paddingStart="3dp"
+                android:paddingTop="1dp"
+                android:paddingEnd="3dp"
+                android:paddingBottom="1dp">
+
+                <FrameLayout
+                    android:layout_width="20dp"
+                    android:layout_height="20dp"
+                    android:importantForAccessibility="no">
+
+                    <ImageView
+                        android:id="@+id/day6bg"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:background="@drawable/kal_widget_today_bg"
+                        android:importantForAccessibility="no"
+                        android:visibility="gone" />
+
+                    <TextView
+                        android:id="@+id/day6t"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:fontFamily="sans-serif-medium"
+                        android:gravity="center"
+                        android:includeFontPadding="false"
+                        android:maxLines="1"
+                        android:textColor="@color/kal_widget_month_fg"
+                        android:textSize="12sp" />
+                </FrameLayout>
+
+                <TextView
+                    android:id="@+id/day6chip1"
+                    style="@style/KalWidgetMonthChip"
+                    android:visibility="gone" />
+
+                <TextView
+                    android:id="@+id/day6chip2"
+                    style="@style/KalWidgetMonthChip"
+                    android:visibility="gone" />
+            </LinearLayout>
+            <TextView
+                android:layout_width="1dp"
+                android:layout_height="match_parent"
+                android:background="@color/kal_widget_month_border" />
+            <LinearLayout
+                android:id="@+id/day7"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="1"
+                android:background="@drawable/kal_widget_day_bg"
+                android:clickable="true"
+                android:focusable="true"
+                android:gravity="center_horizontal"
+                android:orientation="vertical"
+                android:paddingStart="3dp"
+                android:paddingTop="1dp"
+                android:paddingEnd="3dp"
+                android:paddingBottom="1dp">
+
+                <FrameLayout
+                    android:layout_width="20dp"
+                    android:layout_height="20dp"
+                    android:importantForAccessibility="no">
+
+                    <ImageView
+                        android:id="@+id/day7bg"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:background="@drawable/kal_widget_today_bg"
+                        android:importantForAccessibility="no"
+                        android:visibility="gone" />
+
+                    <TextView
+                        android:id="@+id/day7t"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:fontFamily="sans-serif-medium"
+                        android:gravity="center"
+                        android:includeFontPadding="false"
+                        android:maxLines="1"
+                        android:textColor="@color/kal_widget_month_fg"
+                        android:textSize="12sp" />
+                </FrameLayout>
+
+                <TextView
+                    android:id="@+id/day7chip1"
+                    style="@style/KalWidgetMonthChip"
+                    android:visibility="gone" />
+
+                <TextView
+                    android:id="@+id/day7chip2"
+                    style="@style/KalWidgetMonthChip"
+                    android:visibility="gone" />
+            </LinearLayout>
+        </LinearLayout>
 
         <TextView
-            android:id="@+id/day9t"
+            android:id="@+id/kal_widget_month_sep2"
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:gravity="center"
-            android:textColor="#E6E6E6"
-            android:textSize="13sp" />
+            android:layout_height="1dp"
+            android:background="@color/kal_widget_month_border" />
 
-        <ImageView
-            android:id="@+id/dot9"
-            android:layout_width="5dp"
-            android:layout_height="5dp"
-            android:layout_gravity="center_horizontal|bottom"
-            android:layout_marginBottom="1dp"
-            android:importantForAccessibility="no"
-            android:src="@drawable/kal_dot" />
-    </FrameLayout>
-    <FrameLayout
-        android:id="@+id/day10"
-        android:layout_width="0dp"
-        android:layout_height="wrap_content"
-        android:layout_weight="1"
-        android:layout_margin="1dp"
-        android:padding="2dp">
+        <LinearLayout
+            android:id="@+id/kal_widget_month_row2"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:baselineAligned="false"
+            android:orientation="horizontal">
+
+            <LinearLayout
+                android:id="@+id/day8"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="1"
+                android:background="@drawable/kal_widget_day_bg"
+                android:clickable="true"
+                android:focusable="true"
+                android:gravity="center_horizontal"
+                android:orientation="vertical"
+                android:paddingStart="3dp"
+                android:paddingTop="1dp"
+                android:paddingEnd="3dp"
+                android:paddingBottom="1dp">
+
+                <FrameLayout
+                    android:layout_width="20dp"
+                    android:layout_height="20dp"
+                    android:importantForAccessibility="no">
+
+                    <ImageView
+                        android:id="@+id/day8bg"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:background="@drawable/kal_widget_today_bg"
+                        android:importantForAccessibility="no"
+                        android:visibility="gone" />
+
+                    <TextView
+                        android:id="@+id/day8t"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:fontFamily="sans-serif-medium"
+                        android:gravity="center"
+                        android:includeFontPadding="false"
+                        android:maxLines="1"
+                        android:textColor="@color/kal_widget_month_fg"
+                        android:textSize="12sp" />
+                </FrameLayout>
+
+                <TextView
+                    android:id="@+id/day8chip1"
+                    style="@style/KalWidgetMonthChip"
+                    android:visibility="gone" />
+
+                <TextView
+                    android:id="@+id/day8chip2"
+                    style="@style/KalWidgetMonthChip"
+                    android:visibility="gone" />
+            </LinearLayout>
+            <TextView
+                android:layout_width="1dp"
+                android:layout_height="match_parent"
+                android:background="@color/kal_widget_month_border" />
+            <LinearLayout
+                android:id="@+id/day9"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="1"
+                android:background="@drawable/kal_widget_day_bg"
+                android:clickable="true"
+                android:focusable="true"
+                android:gravity="center_horizontal"
+                android:orientation="vertical"
+                android:paddingStart="3dp"
+                android:paddingTop="1dp"
+                android:paddingEnd="3dp"
+                android:paddingBottom="1dp">
+
+                <FrameLayout
+                    android:layout_width="20dp"
+                    android:layout_height="20dp"
+                    android:importantForAccessibility="no">
+
+                    <ImageView
+                        android:id="@+id/day9bg"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:background="@drawable/kal_widget_today_bg"
+                        android:importantForAccessibility="no"
+                        android:visibility="gone" />
+
+                    <TextView
+                        android:id="@+id/day9t"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:fontFamily="sans-serif-medium"
+                        android:gravity="center"
+                        android:includeFontPadding="false"
+                        android:maxLines="1"
+                        android:textColor="@color/kal_widget_month_fg"
+                        android:textSize="12sp" />
+                </FrameLayout>
+
+                <TextView
+                    android:id="@+id/day9chip1"
+                    style="@style/KalWidgetMonthChip"
+                    android:visibility="gone" />
+
+                <TextView
+                    android:id="@+id/day9chip2"
+                    style="@style/KalWidgetMonthChip"
+                    android:visibility="gone" />
+            </LinearLayout>
+            <TextView
+                android:layout_width="1dp"
+                android:layout_height="match_parent"
+                android:background="@color/kal_widget_month_border" />
+            <LinearLayout
+                android:id="@+id/day10"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="1"
+                android:background="@drawable/kal_widget_day_bg"
+                android:clickable="true"
+                android:focusable="true"
+                android:gravity="center_horizontal"
+                android:orientation="vertical"
+                android:paddingStart="3dp"
+                android:paddingTop="1dp"
+                android:paddingEnd="3dp"
+                android:paddingBottom="1dp">
+
+                <FrameLayout
+                    android:layout_width="20dp"
+                    android:layout_height="20dp"
+                    android:importantForAccessibility="no">
+
+                    <ImageView
+                        android:id="@+id/day10bg"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:background="@drawable/kal_widget_today_bg"
+                        android:importantForAccessibility="no"
+                        android:visibility="gone" />
+
+                    <TextView
+                        android:id="@+id/day10t"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:fontFamily="sans-serif-medium"
+                        android:gravity="center"
+                        android:includeFontPadding="false"
+                        android:maxLines="1"
+                        android:textColor="@color/kal_widget_month_fg"
+                        android:textSize="12sp" />
+                </FrameLayout>
+
+                <TextView
+                    android:id="@+id/day10chip1"
+                    style="@style/KalWidgetMonthChip"
+                    android:visibility="gone" />
+
+                <TextView
+                    android:id="@+id/day10chip2"
+                    style="@style/KalWidgetMonthChip"
+                    android:visibility="gone" />
+            </LinearLayout>
+            <TextView
+                android:layout_width="1dp"
+                android:layout_height="match_parent"
+                android:background="@color/kal_widget_month_border" />
+            <LinearLayout
+                android:id="@+id/day11"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="1"
+                android:background="@drawable/kal_widget_day_bg"
+                android:clickable="true"
+                android:focusable="true"
+                android:gravity="center_horizontal"
+                android:orientation="vertical"
+                android:paddingStart="3dp"
+                android:paddingTop="1dp"
+                android:paddingEnd="3dp"
+                android:paddingBottom="1dp">
+
+                <FrameLayout
+                    android:layout_width="20dp"
+                    android:layout_height="20dp"
+                    android:importantForAccessibility="no">
+
+                    <ImageView
+                        android:id="@+id/day11bg"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:background="@drawable/kal_widget_today_bg"
+                        android:importantForAccessibility="no"
+                        android:visibility="gone" />
+
+                    <TextView
+                        android:id="@+id/day11t"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:fontFamily="sans-serif-medium"
+                        android:gravity="center"
+                        android:includeFontPadding="false"
+                        android:maxLines="1"
+                        android:textColor="@color/kal_widget_month_fg"
+                        android:textSize="12sp" />
+                </FrameLayout>
+
+                <TextView
+                    android:id="@+id/day11chip1"
+                    style="@style/KalWidgetMonthChip"
+                    android:visibility="gone" />
+
+                <TextView
+                    android:id="@+id/day11chip2"
+                    style="@style/KalWidgetMonthChip"
+                    android:visibility="gone" />
+            </LinearLayout>
+            <TextView
+                android:layout_width="1dp"
+                android:layout_height="match_parent"
+                android:background="@color/kal_widget_month_border" />
+            <LinearLayout
+                android:id="@+id/day12"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="1"
+                android:background="@drawable/kal_widget_day_bg"
+                android:clickable="true"
+                android:focusable="true"
+                android:gravity="center_horizontal"
+                android:orientation="vertical"
+                android:paddingStart="3dp"
+                android:paddingTop="1dp"
+                android:paddingEnd="3dp"
+                android:paddingBottom="1dp">
+
+                <FrameLayout
+                    android:layout_width="20dp"
+                    android:layout_height="20dp"
+                    android:importantForAccessibility="no">
+
+                    <ImageView
+                        android:id="@+id/day12bg"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:background="@drawable/kal_widget_today_bg"
+                        android:importantForAccessibility="no"
+                        android:visibility="gone" />
+
+                    <TextView
+                        android:id="@+id/day12t"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:fontFamily="sans-serif-medium"
+                        android:gravity="center"
+                        android:includeFontPadding="false"
+                        android:maxLines="1"
+                        android:textColor="@color/kal_widget_month_fg"
+                        android:textSize="12sp" />
+                </FrameLayout>
+
+                <TextView
+                    android:id="@+id/day12chip1"
+                    style="@style/KalWidgetMonthChip"
+                    android:visibility="gone" />
+
+                <TextView
+                    android:id="@+id/day12chip2"
+                    style="@style/KalWidgetMonthChip"
+                    android:visibility="gone" />
+            </LinearLayout>
+            <TextView
+                android:layout_width="1dp"
+                android:layout_height="match_parent"
+                android:background="@color/kal_widget_month_border" />
+            <LinearLayout
+                android:id="@+id/day13"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="1"
+                android:background="@drawable/kal_widget_day_bg"
+                android:clickable="true"
+                android:focusable="true"
+                android:gravity="center_horizontal"
+                android:orientation="vertical"
+                android:paddingStart="3dp"
+                android:paddingTop="1dp"
+                android:paddingEnd="3dp"
+                android:paddingBottom="1dp">
+
+                <FrameLayout
+                    android:layout_width="20dp"
+                    android:layout_height="20dp"
+                    android:importantForAccessibility="no">
+
+                    <ImageView
+                        android:id="@+id/day13bg"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:background="@drawable/kal_widget_today_bg"
+                        android:importantForAccessibility="no"
+                        android:visibility="gone" />
+
+                    <TextView
+                        android:id="@+id/day13t"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:fontFamily="sans-serif-medium"
+                        android:gravity="center"
+                        android:includeFontPadding="false"
+                        android:maxLines="1"
+                        android:textColor="@color/kal_widget_month_fg"
+                        android:textSize="12sp" />
+                </FrameLayout>
+
+                <TextView
+                    android:id="@+id/day13chip1"
+                    style="@style/KalWidgetMonthChip"
+                    android:visibility="gone" />
+
+                <TextView
+                    android:id="@+id/day13chip2"
+                    style="@style/KalWidgetMonthChip"
+                    android:visibility="gone" />
+            </LinearLayout>
+            <TextView
+                android:layout_width="1dp"
+                android:layout_height="match_parent"
+                android:background="@color/kal_widget_month_border" />
+            <LinearLayout
+                android:id="@+id/day14"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="1"
+                android:background="@drawable/kal_widget_day_bg"
+                android:clickable="true"
+                android:focusable="true"
+                android:gravity="center_horizontal"
+                android:orientation="vertical"
+                android:paddingStart="3dp"
+                android:paddingTop="1dp"
+                android:paddingEnd="3dp"
+                android:paddingBottom="1dp">
+
+                <FrameLayout
+                    android:layout_width="20dp"
+                    android:layout_height="20dp"
+                    android:importantForAccessibility="no">
+
+                    <ImageView
+                        android:id="@+id/day14bg"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:background="@drawable/kal_widget_today_bg"
+                        android:importantForAccessibility="no"
+                        android:visibility="gone" />
+
+                    <TextView
+                        android:id="@+id/day14t"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:fontFamily="sans-serif-medium"
+                        android:gravity="center"
+                        android:includeFontPadding="false"
+                        android:maxLines="1"
+                        android:textColor="@color/kal_widget_month_fg"
+                        android:textSize="12sp" />
+                </FrameLayout>
+
+                <TextView
+                    android:id="@+id/day14chip1"
+                    style="@style/KalWidgetMonthChip"
+                    android:visibility="gone" />
+
+                <TextView
+                    android:id="@+id/day14chip2"
+                    style="@style/KalWidgetMonthChip"
+                    android:visibility="gone" />
+            </LinearLayout>
+        </LinearLayout>
 
         <TextView
-            android:id="@+id/day10t"
+            android:id="@+id/kal_widget_month_sep3"
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:gravity="center"
-            android:textColor="#E6E6E6"
-            android:textSize="13sp" />
+            android:layout_height="1dp"
+            android:background="@color/kal_widget_month_border" />
 
-        <ImageView
-            android:id="@+id/dot10"
-            android:layout_width="5dp"
-            android:layout_height="5dp"
-            android:layout_gravity="center_horizontal|bottom"
-            android:layout_marginBottom="1dp"
-            android:importantForAccessibility="no"
-            android:src="@drawable/kal_dot" />
-    </FrameLayout>
-    <FrameLayout
-        android:id="@+id/day11"
-        android:layout_width="0dp"
-        android:layout_height="wrap_content"
-        android:layout_weight="1"
-        android:layout_margin="1dp"
-        android:padding="2dp">
+        <LinearLayout
+            android:id="@+id/kal_widget_month_row3"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:baselineAligned="false"
+            android:orientation="horizontal">
+
+            <LinearLayout
+                android:id="@+id/day15"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="1"
+                android:background="@drawable/kal_widget_day_bg"
+                android:clickable="true"
+                android:focusable="true"
+                android:gravity="center_horizontal"
+                android:orientation="vertical"
+                android:paddingStart="3dp"
+                android:paddingTop="1dp"
+                android:paddingEnd="3dp"
+                android:paddingBottom="1dp">
+
+                <FrameLayout
+                    android:layout_width="20dp"
+                    android:layout_height="20dp"
+                    android:importantForAccessibility="no">
+
+                    <ImageView
+                        android:id="@+id/day15bg"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:background="@drawable/kal_widget_today_bg"
+                        android:importantForAccessibility="no"
+                        android:visibility="gone" />
+
+                    <TextView
+                        android:id="@+id/day15t"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:fontFamily="sans-serif-medium"
+                        android:gravity="center"
+                        android:includeFontPadding="false"
+                        android:maxLines="1"
+                        android:textColor="@color/kal_widget_month_fg"
+                        android:textSize="12sp" />
+                </FrameLayout>
+
+                <TextView
+                    android:id="@+id/day15chip1"
+                    style="@style/KalWidgetMonthChip"
+                    android:visibility="gone" />
+
+                <TextView
+                    android:id="@+id/day15chip2"
+                    style="@style/KalWidgetMonthChip"
+                    android:visibility="gone" />
+            </LinearLayout>
+            <TextView
+                android:layout_width="1dp"
+                android:layout_height="match_parent"
+                android:background="@color/kal_widget_month_border" />
+            <LinearLayout
+                android:id="@+id/day16"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="1"
+                android:background="@drawable/kal_widget_day_bg"
+                android:clickable="true"
+                android:focusable="true"
+                android:gravity="center_horizontal"
+                android:orientation="vertical"
+                android:paddingStart="3dp"
+                android:paddingTop="1dp"
+                android:paddingEnd="3dp"
+                android:paddingBottom="1dp">
+
+                <FrameLayout
+                    android:layout_width="20dp"
+                    android:layout_height="20dp"
+                    android:importantForAccessibility="no">
+
+                    <ImageView
+                        android:id="@+id/day16bg"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:background="@drawable/kal_widget_today_bg"
+                        android:importantForAccessibility="no"
+                        android:visibility="gone" />
+
+                    <TextView
+                        android:id="@+id/day16t"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:fontFamily="sans-serif-medium"
+                        android:gravity="center"
+                        android:includeFontPadding="false"
+                        android:maxLines="1"
+                        android:textColor="@color/kal_widget_month_fg"
+                        android:textSize="12sp" />
+                </FrameLayout>
+
+                <TextView
+                    android:id="@+id/day16chip1"
+                    style="@style/KalWidgetMonthChip"
+                    android:visibility="gone" />
+
+                <TextView
+                    android:id="@+id/day16chip2"
+                    style="@style/KalWidgetMonthChip"
+                    android:visibility="gone" />
+            </LinearLayout>
+            <TextView
+                android:layout_width="1dp"
+                android:layout_height="match_parent"
+                android:background="@color/kal_widget_month_border" />
+            <LinearLayout
+                android:id="@+id/day17"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="1"
+                android:background="@drawable/kal_widget_day_bg"
+                android:clickable="true"
+                android:focusable="true"
+                android:gravity="center_horizontal"
+                android:orientation="vertical"
+                android:paddingStart="3dp"
+                android:paddingTop="1dp"
+                android:paddingEnd="3dp"
+                android:paddingBottom="1dp">
+
+                <FrameLayout
+                    android:layout_width="20dp"
+                    android:layout_height="20dp"
+                    android:importantForAccessibility="no">
+
+                    <ImageView
+                        android:id="@+id/day17bg"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:background="@drawable/kal_widget_today_bg"
+                        android:importantForAccessibility="no"
+                        android:visibility="gone" />
+
+                    <TextView
+                        android:id="@+id/day17t"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:fontFamily="sans-serif-medium"
+                        android:gravity="center"
+                        android:includeFontPadding="false"
+                        android:maxLines="1"
+                        android:textColor="@color/kal_widget_month_fg"
+                        android:textSize="12sp" />
+                </FrameLayout>
+
+                <TextView
+                    android:id="@+id/day17chip1"
+                    style="@style/KalWidgetMonthChip"
+                    android:visibility="gone" />
+
+                <TextView
+                    android:id="@+id/day17chip2"
+                    style="@style/KalWidgetMonthChip"
+                    android:visibility="gone" />
+            </LinearLayout>
+            <TextView
+                android:layout_width="1dp"
+                android:layout_height="match_parent"
+                android:background="@color/kal_widget_month_border" />
+            <LinearLayout
+                android:id="@+id/day18"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="1"
+                android:background="@drawable/kal_widget_day_bg"
+                android:clickable="true"
+                android:focusable="true"
+                android:gravity="center_horizontal"
+                android:orientation="vertical"
+                android:paddingStart="3dp"
+                android:paddingTop="1dp"
+                android:paddingEnd="3dp"
+                android:paddingBottom="1dp">
+
+                <FrameLayout
+                    android:layout_width="20dp"
+                    android:layout_height="20dp"
+                    android:importantForAccessibility="no">
+
+                    <ImageView
+                        android:id="@+id/day18bg"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:background="@drawable/kal_widget_today_bg"
+                        android:importantForAccessibility="no"
+                        android:visibility="gone" />
+
+                    <TextView
+                        android:id="@+id/day18t"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:fontFamily="sans-serif-medium"
+                        android:gravity="center"
+                        android:includeFontPadding="false"
+                        android:maxLines="1"
+                        android:textColor="@color/kal_widget_month_fg"
+                        android:textSize="12sp" />
+                </FrameLayout>
+
+                <TextView
+                    android:id="@+id/day18chip1"
+                    style="@style/KalWidgetMonthChip"
+                    android:visibility="gone" />
+
+                <TextView
+                    android:id="@+id/day18chip2"
+                    style="@style/KalWidgetMonthChip"
+                    android:visibility="gone" />
+            </LinearLayout>
+            <TextView
+                android:layout_width="1dp"
+                android:layout_height="match_parent"
+                android:background="@color/kal_widget_month_border" />
+            <LinearLayout
+                android:id="@+id/day19"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="1"
+                android:background="@drawable/kal_widget_day_bg"
+                android:clickable="true"
+                android:focusable="true"
+                android:gravity="center_horizontal"
+                android:orientation="vertical"
+                android:paddingStart="3dp"
+                android:paddingTop="1dp"
+                android:paddingEnd="3dp"
+                android:paddingBottom="1dp">
+
+                <FrameLayout
+                    android:layout_width="20dp"
+                    android:layout_height="20dp"
+                    android:importantForAccessibility="no">
+
+                    <ImageView
+                        android:id="@+id/day19bg"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:background="@drawable/kal_widget_today_bg"
+                        android:importantForAccessibility="no"
+                        android:visibility="gone" />
+
+                    <TextView
+                        android:id="@+id/day19t"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:fontFamily="sans-serif-medium"
+                        android:gravity="center"
+                        android:includeFontPadding="false"
+                        android:maxLines="1"
+                        android:textColor="@color/kal_widget_month_fg"
+                        android:textSize="12sp" />
+                </FrameLayout>
+
+                <TextView
+                    android:id="@+id/day19chip1"
+                    style="@style/KalWidgetMonthChip"
+                    android:visibility="gone" />
+
+                <TextView
+                    android:id="@+id/day19chip2"
+                    style="@style/KalWidgetMonthChip"
+                    android:visibility="gone" />
+            </LinearLayout>
+            <TextView
+                android:layout_width="1dp"
+                android:layout_height="match_parent"
+                android:background="@color/kal_widget_month_border" />
+            <LinearLayout
+                android:id="@+id/day20"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="1"
+                android:background="@drawable/kal_widget_day_bg"
+                android:clickable="true"
+                android:focusable="true"
+                android:gravity="center_horizontal"
+                android:orientation="vertical"
+                android:paddingStart="3dp"
+                android:paddingTop="1dp"
+                android:paddingEnd="3dp"
+                android:paddingBottom="1dp">
+
+                <FrameLayout
+                    android:layout_width="20dp"
+                    android:layout_height="20dp"
+                    android:importantForAccessibility="no">
+
+                    <ImageView
+                        android:id="@+id/day20bg"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:background="@drawable/kal_widget_today_bg"
+                        android:importantForAccessibility="no"
+                        android:visibility="gone" />
+
+                    <TextView
+                        android:id="@+id/day20t"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:fontFamily="sans-serif-medium"
+                        android:gravity="center"
+                        android:includeFontPadding="false"
+                        android:maxLines="1"
+                        android:textColor="@color/kal_widget_month_fg"
+                        android:textSize="12sp" />
+                </FrameLayout>
+
+                <TextView
+                    android:id="@+id/day20chip1"
+                    style="@style/KalWidgetMonthChip"
+                    android:visibility="gone" />
+
+                <TextView
+                    android:id="@+id/day20chip2"
+                    style="@style/KalWidgetMonthChip"
+                    android:visibility="gone" />
+            </LinearLayout>
+            <TextView
+                android:layout_width="1dp"
+                android:layout_height="match_parent"
+                android:background="@color/kal_widget_month_border" />
+            <LinearLayout
+                android:id="@+id/day21"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="1"
+                android:background="@drawable/kal_widget_day_bg"
+                android:clickable="true"
+                android:focusable="true"
+                android:gravity="center_horizontal"
+                android:orientation="vertical"
+                android:paddingStart="3dp"
+                android:paddingTop="1dp"
+                android:paddingEnd="3dp"
+                android:paddingBottom="1dp">
+
+                <FrameLayout
+                    android:layout_width="20dp"
+                    android:layout_height="20dp"
+                    android:importantForAccessibility="no">
+
+                    <ImageView
+                        android:id="@+id/day21bg"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:background="@drawable/kal_widget_today_bg"
+                        android:importantForAccessibility="no"
+                        android:visibility="gone" />
+
+                    <TextView
+                        android:id="@+id/day21t"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:fontFamily="sans-serif-medium"
+                        android:gravity="center"
+                        android:includeFontPadding="false"
+                        android:maxLines="1"
+                        android:textColor="@color/kal_widget_month_fg"
+                        android:textSize="12sp" />
+                </FrameLayout>
+
+                <TextView
+                    android:id="@+id/day21chip1"
+                    style="@style/KalWidgetMonthChip"
+                    android:visibility="gone" />
+
+                <TextView
+                    android:id="@+id/day21chip2"
+                    style="@style/KalWidgetMonthChip"
+                    android:visibility="gone" />
+            </LinearLayout>
+        </LinearLayout>
 
         <TextView
-            android:id="@+id/day11t"
+            android:id="@+id/kal_widget_month_sep4"
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:gravity="center"
-            android:textColor="#E6E6E6"
-            android:textSize="13sp" />
+            android:layout_height="1dp"
+            android:background="@color/kal_widget_month_border" />
 
-        <ImageView
-            android:id="@+id/dot11"
-            android:layout_width="5dp"
-            android:layout_height="5dp"
-            android:layout_gravity="center_horizontal|bottom"
-            android:layout_marginBottom="1dp"
-            android:importantForAccessibility="no"
-            android:src="@drawable/kal_dot" />
-    </FrameLayout>
-    <FrameLayout
-        android:id="@+id/day12"
-        android:layout_width="0dp"
-        android:layout_height="wrap_content"
-        android:layout_weight="1"
-        android:layout_margin="1dp"
-        android:padding="2dp">
+        <LinearLayout
+            android:id="@+id/kal_widget_month_row4"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:baselineAligned="false"
+            android:orientation="horizontal">
+
+            <LinearLayout
+                android:id="@+id/day22"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="1"
+                android:background="@drawable/kal_widget_day_bg"
+                android:clickable="true"
+                android:focusable="true"
+                android:gravity="center_horizontal"
+                android:orientation="vertical"
+                android:paddingStart="3dp"
+                android:paddingTop="1dp"
+                android:paddingEnd="3dp"
+                android:paddingBottom="1dp">
+
+                <FrameLayout
+                    android:layout_width="20dp"
+                    android:layout_height="20dp"
+                    android:importantForAccessibility="no">
+
+                    <ImageView
+                        android:id="@+id/day22bg"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:background="@drawable/kal_widget_today_bg"
+                        android:importantForAccessibility="no"
+                        android:visibility="gone" />
+
+                    <TextView
+                        android:id="@+id/day22t"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:fontFamily="sans-serif-medium"
+                        android:gravity="center"
+                        android:includeFontPadding="false"
+                        android:maxLines="1"
+                        android:textColor="@color/kal_widget_month_fg"
+                        android:textSize="12sp" />
+                </FrameLayout>
+
+                <TextView
+                    android:id="@+id/day22chip1"
+                    style="@style/KalWidgetMonthChip"
+                    android:visibility="gone" />
+
+                <TextView
+                    android:id="@+id/day22chip2"
+                    style="@style/KalWidgetMonthChip"
+                    android:visibility="gone" />
+            </LinearLayout>
+            <TextView
+                android:layout_width="1dp"
+                android:layout_height="match_parent"
+                android:background="@color/kal_widget_month_border" />
+            <LinearLayout
+                android:id="@+id/day23"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="1"
+                android:background="@drawable/kal_widget_day_bg"
+                android:clickable="true"
+                android:focusable="true"
+                android:gravity="center_horizontal"
+                android:orientation="vertical"
+                android:paddingStart="3dp"
+                android:paddingTop="1dp"
+                android:paddingEnd="3dp"
+                android:paddingBottom="1dp">
+
+                <FrameLayout
+                    android:layout_width="20dp"
+                    android:layout_height="20dp"
+                    android:importantForAccessibility="no">
+
+                    <ImageView
+                        android:id="@+id/day23bg"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:background="@drawable/kal_widget_today_bg"
+                        android:importantForAccessibility="no"
+                        android:visibility="gone" />
+
+                    <TextView
+                        android:id="@+id/day23t"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:fontFamily="sans-serif-medium"
+                        android:gravity="center"
+                        android:includeFontPadding="false"
+                        android:maxLines="1"
+                        android:textColor="@color/kal_widget_month_fg"
+                        android:textSize="12sp" />
+                </FrameLayout>
+
+                <TextView
+                    android:id="@+id/day23chip1"
+                    style="@style/KalWidgetMonthChip"
+                    android:visibility="gone" />
+
+                <TextView
+                    android:id="@+id/day23chip2"
+                    style="@style/KalWidgetMonthChip"
+                    android:visibility="gone" />
+            </LinearLayout>
+            <TextView
+                android:layout_width="1dp"
+                android:layout_height="match_parent"
+                android:background="@color/kal_widget_month_border" />
+            <LinearLayout
+                android:id="@+id/day24"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="1"
+                android:background="@drawable/kal_widget_day_bg"
+                android:clickable="true"
+                android:focusable="true"
+                android:gravity="center_horizontal"
+                android:orientation="vertical"
+                android:paddingStart="3dp"
+                android:paddingTop="1dp"
+                android:paddingEnd="3dp"
+                android:paddingBottom="1dp">
+
+                <FrameLayout
+                    android:layout_width="20dp"
+                    android:layout_height="20dp"
+                    android:importantForAccessibility="no">
+
+                    <ImageView
+                        android:id="@+id/day24bg"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:background="@drawable/kal_widget_today_bg"
+                        android:importantForAccessibility="no"
+                        android:visibility="gone" />
+
+                    <TextView
+                        android:id="@+id/day24t"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:fontFamily="sans-serif-medium"
+                        android:gravity="center"
+                        android:includeFontPadding="false"
+                        android:maxLines="1"
+                        android:textColor="@color/kal_widget_month_fg"
+                        android:textSize="12sp" />
+                </FrameLayout>
+
+                <TextView
+                    android:id="@+id/day24chip1"
+                    style="@style/KalWidgetMonthChip"
+                    android:visibility="gone" />
+
+                <TextView
+                    android:id="@+id/day24chip2"
+                    style="@style/KalWidgetMonthChip"
+                    android:visibility="gone" />
+            </LinearLayout>
+            <TextView
+                android:layout_width="1dp"
+                android:layout_height="match_parent"
+                android:background="@color/kal_widget_month_border" />
+            <LinearLayout
+                android:id="@+id/day25"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="1"
+                android:background="@drawable/kal_widget_day_bg"
+                android:clickable="true"
+                android:focusable="true"
+                android:gravity="center_horizontal"
+                android:orientation="vertical"
+                android:paddingStart="3dp"
+                android:paddingTop="1dp"
+                android:paddingEnd="3dp"
+                android:paddingBottom="1dp">
+
+                <FrameLayout
+                    android:layout_width="20dp"
+                    android:layout_height="20dp"
+                    android:importantForAccessibility="no">
+
+                    <ImageView
+                        android:id="@+id/day25bg"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:background="@drawable/kal_widget_today_bg"
+                        android:importantForAccessibility="no"
+                        android:visibility="gone" />
+
+                    <TextView
+                        android:id="@+id/day25t"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:fontFamily="sans-serif-medium"
+                        android:gravity="center"
+                        android:includeFontPadding="false"
+                        android:maxLines="1"
+                        android:textColor="@color/kal_widget_month_fg"
+                        android:textSize="12sp" />
+                </FrameLayout>
+
+                <TextView
+                    android:id="@+id/day25chip1"
+                    style="@style/KalWidgetMonthChip"
+                    android:visibility="gone" />
+
+                <TextView
+                    android:id="@+id/day25chip2"
+                    style="@style/KalWidgetMonthChip"
+                    android:visibility="gone" />
+            </LinearLayout>
+            <TextView
+                android:layout_width="1dp"
+                android:layout_height="match_parent"
+                android:background="@color/kal_widget_month_border" />
+            <LinearLayout
+                android:id="@+id/day26"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="1"
+                android:background="@drawable/kal_widget_day_bg"
+                android:clickable="true"
+                android:focusable="true"
+                android:gravity="center_horizontal"
+                android:orientation="vertical"
+                android:paddingStart="3dp"
+                android:paddingTop="1dp"
+                android:paddingEnd="3dp"
+                android:paddingBottom="1dp">
+
+                <FrameLayout
+                    android:layout_width="20dp"
+                    android:layout_height="20dp"
+                    android:importantForAccessibility="no">
+
+                    <ImageView
+                        android:id="@+id/day26bg"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:background="@drawable/kal_widget_today_bg"
+                        android:importantForAccessibility="no"
+                        android:visibility="gone" />
+
+                    <TextView
+                        android:id="@+id/day26t"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:fontFamily="sans-serif-medium"
+                        android:gravity="center"
+                        android:includeFontPadding="false"
+                        android:maxLines="1"
+                        android:textColor="@color/kal_widget_month_fg"
+                        android:textSize="12sp" />
+                </FrameLayout>
+
+                <TextView
+                    android:id="@+id/day26chip1"
+                    style="@style/KalWidgetMonthChip"
+                    android:visibility="gone" />
+
+                <TextView
+                    android:id="@+id/day26chip2"
+                    style="@style/KalWidgetMonthChip"
+                    android:visibility="gone" />
+            </LinearLayout>
+            <TextView
+                android:layout_width="1dp"
+                android:layout_height="match_parent"
+                android:background="@color/kal_widget_month_border" />
+            <LinearLayout
+                android:id="@+id/day27"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="1"
+                android:background="@drawable/kal_widget_day_bg"
+                android:clickable="true"
+                android:focusable="true"
+                android:gravity="center_horizontal"
+                android:orientation="vertical"
+                android:paddingStart="3dp"
+                android:paddingTop="1dp"
+                android:paddingEnd="3dp"
+                android:paddingBottom="1dp">
+
+                <FrameLayout
+                    android:layout_width="20dp"
+                    android:layout_height="20dp"
+                    android:importantForAccessibility="no">
+
+                    <ImageView
+                        android:id="@+id/day27bg"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:background="@drawable/kal_widget_today_bg"
+                        android:importantForAccessibility="no"
+                        android:visibility="gone" />
+
+                    <TextView
+                        android:id="@+id/day27t"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:fontFamily="sans-serif-medium"
+                        android:gravity="center"
+                        android:includeFontPadding="false"
+                        android:maxLines="1"
+                        android:textColor="@color/kal_widget_month_fg"
+                        android:textSize="12sp" />
+                </FrameLayout>
+
+                <TextView
+                    android:id="@+id/day27chip1"
+                    style="@style/KalWidgetMonthChip"
+                    android:visibility="gone" />
+
+                <TextView
+                    android:id="@+id/day27chip2"
+                    style="@style/KalWidgetMonthChip"
+                    android:visibility="gone" />
+            </LinearLayout>
+            <TextView
+                android:layout_width="1dp"
+                android:layout_height="match_parent"
+                android:background="@color/kal_widget_month_border" />
+            <LinearLayout
+                android:id="@+id/day28"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="1"
+                android:background="@drawable/kal_widget_day_bg"
+                android:clickable="true"
+                android:focusable="true"
+                android:gravity="center_horizontal"
+                android:orientation="vertical"
+                android:paddingStart="3dp"
+                android:paddingTop="1dp"
+                android:paddingEnd="3dp"
+                android:paddingBottom="1dp">
+
+                <FrameLayout
+                    android:layout_width="20dp"
+                    android:layout_height="20dp"
+                    android:importantForAccessibility="no">
+
+                    <ImageView
+                        android:id="@+id/day28bg"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:background="@drawable/kal_widget_today_bg"
+                        android:importantForAccessibility="no"
+                        android:visibility="gone" />
+
+                    <TextView
+                        android:id="@+id/day28t"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:fontFamily="sans-serif-medium"
+                        android:gravity="center"
+                        android:includeFontPadding="false"
+                        android:maxLines="1"
+                        android:textColor="@color/kal_widget_month_fg"
+                        android:textSize="12sp" />
+                </FrameLayout>
+
+                <TextView
+                    android:id="@+id/day28chip1"
+                    style="@style/KalWidgetMonthChip"
+                    android:visibility="gone" />
+
+                <TextView
+                    android:id="@+id/day28chip2"
+                    style="@style/KalWidgetMonthChip"
+                    android:visibility="gone" />
+            </LinearLayout>
+        </LinearLayout>
 
         <TextView
-            android:id="@+id/day12t"
+            android:id="@+id/kal_widget_month_sep5"
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:gravity="center"
-            android:textColor="#E6E6E6"
-            android:textSize="13sp" />
+            android:layout_height="1dp"
+            android:background="@color/kal_widget_month_border" />
 
-        <ImageView
-            android:id="@+id/dot12"
-            android:layout_width="5dp"
-            android:layout_height="5dp"
-            android:layout_gravity="center_horizontal|bottom"
-            android:layout_marginBottom="1dp"
-            android:importantForAccessibility="no"
-            android:src="@drawable/kal_dot" />
-    </FrameLayout>
-    <FrameLayout
-        android:id="@+id/day13"
-        android:layout_width="0dp"
-        android:layout_height="wrap_content"
-        android:layout_weight="1"
-        android:layout_margin="1dp"
-        android:padding="2dp">
+        <LinearLayout
+            android:id="@+id/kal_widget_month_row5"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:baselineAligned="false"
+            android:orientation="horizontal">
+
+            <LinearLayout
+                android:id="@+id/day29"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="1"
+                android:background="@drawable/kal_widget_day_bg"
+                android:clickable="true"
+                android:focusable="true"
+                android:gravity="center_horizontal"
+                android:orientation="vertical"
+                android:paddingStart="3dp"
+                android:paddingTop="1dp"
+                android:paddingEnd="3dp"
+                android:paddingBottom="1dp">
+
+                <FrameLayout
+                    android:layout_width="20dp"
+                    android:layout_height="20dp"
+                    android:importantForAccessibility="no">
+
+                    <ImageView
+                        android:id="@+id/day29bg"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:background="@drawable/kal_widget_today_bg"
+                        android:importantForAccessibility="no"
+                        android:visibility="gone" />
+
+                    <TextView
+                        android:id="@+id/day29t"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:fontFamily="sans-serif-medium"
+                        android:gravity="center"
+                        android:includeFontPadding="false"
+                        android:maxLines="1"
+                        android:textColor="@color/kal_widget_month_fg"
+                        android:textSize="12sp" />
+                </FrameLayout>
+
+                <TextView
+                    android:id="@+id/day29chip1"
+                    style="@style/KalWidgetMonthChip"
+                    android:visibility="gone" />
+
+                <TextView
+                    android:id="@+id/day29chip2"
+                    style="@style/KalWidgetMonthChip"
+                    android:visibility="gone" />
+            </LinearLayout>
+            <TextView
+                android:layout_width="1dp"
+                android:layout_height="match_parent"
+                android:background="@color/kal_widget_month_border" />
+            <LinearLayout
+                android:id="@+id/day30"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="1"
+                android:background="@drawable/kal_widget_day_bg"
+                android:clickable="true"
+                android:focusable="true"
+                android:gravity="center_horizontal"
+                android:orientation="vertical"
+                android:paddingStart="3dp"
+                android:paddingTop="1dp"
+                android:paddingEnd="3dp"
+                android:paddingBottom="1dp">
+
+                <FrameLayout
+                    android:layout_width="20dp"
+                    android:layout_height="20dp"
+                    android:importantForAccessibility="no">
+
+                    <ImageView
+                        android:id="@+id/day30bg"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:background="@drawable/kal_widget_today_bg"
+                        android:importantForAccessibility="no"
+                        android:visibility="gone" />
+
+                    <TextView
+                        android:id="@+id/day30t"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:fontFamily="sans-serif-medium"
+                        android:gravity="center"
+                        android:includeFontPadding="false"
+                        android:maxLines="1"
+                        android:textColor="@color/kal_widget_month_fg"
+                        android:textSize="12sp" />
+                </FrameLayout>
+
+                <TextView
+                    android:id="@+id/day30chip1"
+                    style="@style/KalWidgetMonthChip"
+                    android:visibility="gone" />
+
+                <TextView
+                    android:id="@+id/day30chip2"
+                    style="@style/KalWidgetMonthChip"
+                    android:visibility="gone" />
+            </LinearLayout>
+            <TextView
+                android:layout_width="1dp"
+                android:layout_height="match_parent"
+                android:background="@color/kal_widget_month_border" />
+            <LinearLayout
+                android:id="@+id/day31"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="1"
+                android:background="@drawable/kal_widget_day_bg"
+                android:clickable="true"
+                android:focusable="true"
+                android:gravity="center_horizontal"
+                android:orientation="vertical"
+                android:paddingStart="3dp"
+                android:paddingTop="1dp"
+                android:paddingEnd="3dp"
+                android:paddingBottom="1dp">
+
+                <FrameLayout
+                    android:layout_width="20dp"
+                    android:layout_height="20dp"
+                    android:importantForAccessibility="no">
+
+                    <ImageView
+                        android:id="@+id/day31bg"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:background="@drawable/kal_widget_today_bg"
+                        android:importantForAccessibility="no"
+                        android:visibility="gone" />
+
+                    <TextView
+                        android:id="@+id/day31t"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:fontFamily="sans-serif-medium"
+                        android:gravity="center"
+                        android:includeFontPadding="false"
+                        android:maxLines="1"
+                        android:textColor="@color/kal_widget_month_fg"
+                        android:textSize="12sp" />
+                </FrameLayout>
+
+                <TextView
+                    android:id="@+id/day31chip1"
+                    style="@style/KalWidgetMonthChip"
+                    android:visibility="gone" />
+
+                <TextView
+                    android:id="@+id/day31chip2"
+                    style="@style/KalWidgetMonthChip"
+                    android:visibility="gone" />
+            </LinearLayout>
+            <TextView
+                android:layout_width="1dp"
+                android:layout_height="match_parent"
+                android:background="@color/kal_widget_month_border" />
+            <LinearLayout
+                android:id="@+id/day32"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="1"
+                android:background="@drawable/kal_widget_day_bg"
+                android:clickable="true"
+                android:focusable="true"
+                android:gravity="center_horizontal"
+                android:orientation="vertical"
+                android:paddingStart="3dp"
+                android:paddingTop="1dp"
+                android:paddingEnd="3dp"
+                android:paddingBottom="1dp">
+
+                <FrameLayout
+                    android:layout_width="20dp"
+                    android:layout_height="20dp"
+                    android:importantForAccessibility="no">
+
+                    <ImageView
+                        android:id="@+id/day32bg"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:background="@drawable/kal_widget_today_bg"
+                        android:importantForAccessibility="no"
+                        android:visibility="gone" />
+
+                    <TextView
+                        android:id="@+id/day32t"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:fontFamily="sans-serif-medium"
+                        android:gravity="center"
+                        android:includeFontPadding="false"
+                        android:maxLines="1"
+                        android:textColor="@color/kal_widget_month_fg"
+                        android:textSize="12sp" />
+                </FrameLayout>
+
+                <TextView
+                    android:id="@+id/day32chip1"
+                    style="@style/KalWidgetMonthChip"
+                    android:visibility="gone" />
+
+                <TextView
+                    android:id="@+id/day32chip2"
+                    style="@style/KalWidgetMonthChip"
+                    android:visibility="gone" />
+            </LinearLayout>
+            <TextView
+                android:layout_width="1dp"
+                android:layout_height="match_parent"
+                android:background="@color/kal_widget_month_border" />
+            <LinearLayout
+                android:id="@+id/day33"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="1"
+                android:background="@drawable/kal_widget_day_bg"
+                android:clickable="true"
+                android:focusable="true"
+                android:gravity="center_horizontal"
+                android:orientation="vertical"
+                android:paddingStart="3dp"
+                android:paddingTop="1dp"
+                android:paddingEnd="3dp"
+                android:paddingBottom="1dp">
+
+                <FrameLayout
+                    android:layout_width="20dp"
+                    android:layout_height="20dp"
+                    android:importantForAccessibility="no">
+
+                    <ImageView
+                        android:id="@+id/day33bg"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:background="@drawable/kal_widget_today_bg"
+                        android:importantForAccessibility="no"
+                        android:visibility="gone" />
+
+                    <TextView
+                        android:id="@+id/day33t"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:fontFamily="sans-serif-medium"
+                        android:gravity="center"
+                        android:includeFontPadding="false"
+                        android:maxLines="1"
+                        android:textColor="@color/kal_widget_month_fg"
+                        android:textSize="12sp" />
+                </FrameLayout>
+
+                <TextView
+                    android:id="@+id/day33chip1"
+                    style="@style/KalWidgetMonthChip"
+                    android:visibility="gone" />
+
+                <TextView
+                    android:id="@+id/day33chip2"
+                    style="@style/KalWidgetMonthChip"
+                    android:visibility="gone" />
+            </LinearLayout>
+            <TextView
+                android:layout_width="1dp"
+                android:layout_height="match_parent"
+                android:background="@color/kal_widget_month_border" />
+            <LinearLayout
+                android:id="@+id/day34"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="1"
+                android:background="@drawable/kal_widget_day_bg"
+                android:clickable="true"
+                android:focusable="true"
+                android:gravity="center_horizontal"
+                android:orientation="vertical"
+                android:paddingStart="3dp"
+                android:paddingTop="1dp"
+                android:paddingEnd="3dp"
+                android:paddingBottom="1dp">
+
+                <FrameLayout
+                    android:layout_width="20dp"
+                    android:layout_height="20dp"
+                    android:importantForAccessibility="no">
+
+                    <ImageView
+                        android:id="@+id/day34bg"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:background="@drawable/kal_widget_today_bg"
+                        android:importantForAccessibility="no"
+                        android:visibility="gone" />
+
+                    <TextView
+                        android:id="@+id/day34t"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:fontFamily="sans-serif-medium"
+                        android:gravity="center"
+                        android:includeFontPadding="false"
+                        android:maxLines="1"
+                        android:textColor="@color/kal_widget_month_fg"
+                        android:textSize="12sp" />
+                </FrameLayout>
+
+                <TextView
+                    android:id="@+id/day34chip1"
+                    style="@style/KalWidgetMonthChip"
+                    android:visibility="gone" />
+
+                <TextView
+                    android:id="@+id/day34chip2"
+                    style="@style/KalWidgetMonthChip"
+                    android:visibility="gone" />
+            </LinearLayout>
+            <TextView
+                android:layout_width="1dp"
+                android:layout_height="match_parent"
+                android:background="@color/kal_widget_month_border" />
+            <LinearLayout
+                android:id="@+id/day35"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="1"
+                android:background="@drawable/kal_widget_day_bg"
+                android:clickable="true"
+                android:focusable="true"
+                android:gravity="center_horizontal"
+                android:orientation="vertical"
+                android:paddingStart="3dp"
+                android:paddingTop="1dp"
+                android:paddingEnd="3dp"
+                android:paddingBottom="1dp">
+
+                <FrameLayout
+                    android:layout_width="20dp"
+                    android:layout_height="20dp"
+                    android:importantForAccessibility="no">
+
+                    <ImageView
+                        android:id="@+id/day35bg"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:background="@drawable/kal_widget_today_bg"
+                        android:importantForAccessibility="no"
+                        android:visibility="gone" />
+
+                    <TextView
+                        android:id="@+id/day35t"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:fontFamily="sans-serif-medium"
+                        android:gravity="center"
+                        android:includeFontPadding="false"
+                        android:maxLines="1"
+                        android:textColor="@color/kal_widget_month_fg"
+                        android:textSize="12sp" />
+                </FrameLayout>
+
+                <TextView
+                    android:id="@+id/day35chip1"
+                    style="@style/KalWidgetMonthChip"
+                    android:visibility="gone" />
+
+                <TextView
+                    android:id="@+id/day35chip2"
+                    style="@style/KalWidgetMonthChip"
+                    android:visibility="gone" />
+            </LinearLayout>
+        </LinearLayout>
 
         <TextView
-            android:id="@+id/day13t"
+            android:id="@+id/kal_widget_month_sep6"
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:gravity="center"
-            android:textColor="#E6E6E6"
-            android:textSize="13sp" />
+            android:layout_height="1dp"
+            android:background="@color/kal_widget_month_border" />
 
-        <ImageView
-            android:id="@+id/dot13"
-            android:layout_width="5dp"
-            android:layout_height="5dp"
-            android:layout_gravity="center_horizontal|bottom"
-            android:layout_marginBottom="1dp"
-            android:importantForAccessibility="no"
-            android:src="@drawable/kal_dot" />
-    </FrameLayout>
-    <FrameLayout
-        android:id="@+id/day14"
-        android:layout_width="0dp"
-        android:layout_height="wrap_content"
-        android:layout_weight="1"
-        android:layout_margin="1dp"
-        android:padding="2dp">
-
-        <TextView
-            android:id="@+id/day14t"
+        <LinearLayout
+            android:id="@+id/kal_widget_month_row6"
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:gravity="center"
-            android:textColor="#E6E6E6"
-            android:textSize="13sp" />
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:baselineAligned="false"
+            android:orientation="horizontal">
 
-        <ImageView
-            android:id="@+id/dot14"
-            android:layout_width="5dp"
-            android:layout_height="5dp"
-            android:layout_gravity="center_horizontal|bottom"
-            android:layout_marginBottom="1dp"
-            android:importantForAccessibility="no"
-            android:src="@drawable/kal_dot" />
-    </FrameLayout>
+            <LinearLayout
+                android:id="@+id/day36"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="1"
+                android:background="@drawable/kal_widget_day_bg"
+                android:clickable="true"
+                android:focusable="true"
+                android:gravity="center_horizontal"
+                android:orientation="vertical"
+                android:paddingStart="3dp"
+                android:paddingTop="1dp"
+                android:paddingEnd="3dp"
+                android:paddingBottom="1dp">
+
+                <FrameLayout
+                    android:layout_width="20dp"
+                    android:layout_height="20dp"
+                    android:importantForAccessibility="no">
+
+                    <ImageView
+                        android:id="@+id/day36bg"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:background="@drawable/kal_widget_today_bg"
+                        android:importantForAccessibility="no"
+                        android:visibility="gone" />
+
+                    <TextView
+                        android:id="@+id/day36t"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:fontFamily="sans-serif-medium"
+                        android:gravity="center"
+                        android:includeFontPadding="false"
+                        android:maxLines="1"
+                        android:textColor="@color/kal_widget_month_fg"
+                        android:textSize="12sp" />
+                </FrameLayout>
+
+                <TextView
+                    android:id="@+id/day36chip1"
+                    style="@style/KalWidgetMonthChip"
+                    android:visibility="gone" />
+
+                <TextView
+                    android:id="@+id/day36chip2"
+                    style="@style/KalWidgetMonthChip"
+                    android:visibility="gone" />
+            </LinearLayout>
+            <TextView
+                android:layout_width="1dp"
+                android:layout_height="match_parent"
+                android:background="@color/kal_widget_month_border" />
+            <LinearLayout
+                android:id="@+id/day37"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="1"
+                android:background="@drawable/kal_widget_day_bg"
+                android:clickable="true"
+                android:focusable="true"
+                android:gravity="center_horizontal"
+                android:orientation="vertical"
+                android:paddingStart="3dp"
+                android:paddingTop="1dp"
+                android:paddingEnd="3dp"
+                android:paddingBottom="1dp">
+
+                <FrameLayout
+                    android:layout_width="20dp"
+                    android:layout_height="20dp"
+                    android:importantForAccessibility="no">
+
+                    <ImageView
+                        android:id="@+id/day37bg"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:background="@drawable/kal_widget_today_bg"
+                        android:importantForAccessibility="no"
+                        android:visibility="gone" />
+
+                    <TextView
+                        android:id="@+id/day37t"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:fontFamily="sans-serif-medium"
+                        android:gravity="center"
+                        android:includeFontPadding="false"
+                        android:maxLines="1"
+                        android:textColor="@color/kal_widget_month_fg"
+                        android:textSize="12sp" />
+                </FrameLayout>
+
+                <TextView
+                    android:id="@+id/day37chip1"
+                    style="@style/KalWidgetMonthChip"
+                    android:visibility="gone" />
+
+                <TextView
+                    android:id="@+id/day37chip2"
+                    style="@style/KalWidgetMonthChip"
+                    android:visibility="gone" />
+            </LinearLayout>
+            <TextView
+                android:layout_width="1dp"
+                android:layout_height="match_parent"
+                android:background="@color/kal_widget_month_border" />
+            <LinearLayout
+                android:id="@+id/day38"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="1"
+                android:background="@drawable/kal_widget_day_bg"
+                android:clickable="true"
+                android:focusable="true"
+                android:gravity="center_horizontal"
+                android:orientation="vertical"
+                android:paddingStart="3dp"
+                android:paddingTop="1dp"
+                android:paddingEnd="3dp"
+                android:paddingBottom="1dp">
+
+                <FrameLayout
+                    android:layout_width="20dp"
+                    android:layout_height="20dp"
+                    android:importantForAccessibility="no">
+
+                    <ImageView
+                        android:id="@+id/day38bg"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:background="@drawable/kal_widget_today_bg"
+                        android:importantForAccessibility="no"
+                        android:visibility="gone" />
+
+                    <TextView
+                        android:id="@+id/day38t"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:fontFamily="sans-serif-medium"
+                        android:gravity="center"
+                        android:includeFontPadding="false"
+                        android:maxLines="1"
+                        android:textColor="@color/kal_widget_month_fg"
+                        android:textSize="12sp" />
+                </FrameLayout>
+
+                <TextView
+                    android:id="@+id/day38chip1"
+                    style="@style/KalWidgetMonthChip"
+                    android:visibility="gone" />
+
+                <TextView
+                    android:id="@+id/day38chip2"
+                    style="@style/KalWidgetMonthChip"
+                    android:visibility="gone" />
+            </LinearLayout>
+            <TextView
+                android:layout_width="1dp"
+                android:layout_height="match_parent"
+                android:background="@color/kal_widget_month_border" />
+            <LinearLayout
+                android:id="@+id/day39"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="1"
+                android:background="@drawable/kal_widget_day_bg"
+                android:clickable="true"
+                android:focusable="true"
+                android:gravity="center_horizontal"
+                android:orientation="vertical"
+                android:paddingStart="3dp"
+                android:paddingTop="1dp"
+                android:paddingEnd="3dp"
+                android:paddingBottom="1dp">
+
+                <FrameLayout
+                    android:layout_width="20dp"
+                    android:layout_height="20dp"
+                    android:importantForAccessibility="no">
+
+                    <ImageView
+                        android:id="@+id/day39bg"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:background="@drawable/kal_widget_today_bg"
+                        android:importantForAccessibility="no"
+                        android:visibility="gone" />
+
+                    <TextView
+                        android:id="@+id/day39t"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:fontFamily="sans-serif-medium"
+                        android:gravity="center"
+                        android:includeFontPadding="false"
+                        android:maxLines="1"
+                        android:textColor="@color/kal_widget_month_fg"
+                        android:textSize="12sp" />
+                </FrameLayout>
+
+                <TextView
+                    android:id="@+id/day39chip1"
+                    style="@style/KalWidgetMonthChip"
+                    android:visibility="gone" />
+
+                <TextView
+                    android:id="@+id/day39chip2"
+                    style="@style/KalWidgetMonthChip"
+                    android:visibility="gone" />
+            </LinearLayout>
+            <TextView
+                android:layout_width="1dp"
+                android:layout_height="match_parent"
+                android:background="@color/kal_widget_month_border" />
+            <LinearLayout
+                android:id="@+id/day40"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="1"
+                android:background="@drawable/kal_widget_day_bg"
+                android:clickable="true"
+                android:focusable="true"
+                android:gravity="center_horizontal"
+                android:orientation="vertical"
+                android:paddingStart="3dp"
+                android:paddingTop="1dp"
+                android:paddingEnd="3dp"
+                android:paddingBottom="1dp">
+
+                <FrameLayout
+                    android:layout_width="20dp"
+                    android:layout_height="20dp"
+                    android:importantForAccessibility="no">
+
+                    <ImageView
+                        android:id="@+id/day40bg"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:background="@drawable/kal_widget_today_bg"
+                        android:importantForAccessibility="no"
+                        android:visibility="gone" />
+
+                    <TextView
+                        android:id="@+id/day40t"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:fontFamily="sans-serif-medium"
+                        android:gravity="center"
+                        android:includeFontPadding="false"
+                        android:maxLines="1"
+                        android:textColor="@color/kal_widget_month_fg"
+                        android:textSize="12sp" />
+                </FrameLayout>
+
+                <TextView
+                    android:id="@+id/day40chip1"
+                    style="@style/KalWidgetMonthChip"
+                    android:visibility="gone" />
+
+                <TextView
+                    android:id="@+id/day40chip2"
+                    style="@style/KalWidgetMonthChip"
+                    android:visibility="gone" />
+            </LinearLayout>
+            <TextView
+                android:layout_width="1dp"
+                android:layout_height="match_parent"
+                android:background="@color/kal_widget_month_border" />
+            <LinearLayout
+                android:id="@+id/day41"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="1"
+                android:background="@drawable/kal_widget_day_bg"
+                android:clickable="true"
+                android:focusable="true"
+                android:gravity="center_horizontal"
+                android:orientation="vertical"
+                android:paddingStart="3dp"
+                android:paddingTop="1dp"
+                android:paddingEnd="3dp"
+                android:paddingBottom="1dp">
+
+                <FrameLayout
+                    android:layout_width="20dp"
+                    android:layout_height="20dp"
+                    android:importantForAccessibility="no">
+
+                    <ImageView
+                        android:id="@+id/day41bg"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:background="@drawable/kal_widget_today_bg"
+                        android:importantForAccessibility="no"
+                        android:visibility="gone" />
+
+                    <TextView
+                        android:id="@+id/day41t"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:fontFamily="sans-serif-medium"
+                        android:gravity="center"
+                        android:includeFontPadding="false"
+                        android:maxLines="1"
+                        android:textColor="@color/kal_widget_month_fg"
+                        android:textSize="12sp" />
+                </FrameLayout>
+
+                <TextView
+                    android:id="@+id/day41chip1"
+                    style="@style/KalWidgetMonthChip"
+                    android:visibility="gone" />
+
+                <TextView
+                    android:id="@+id/day41chip2"
+                    style="@style/KalWidgetMonthChip"
+                    android:visibility="gone" />
+            </LinearLayout>
+            <TextView
+                android:layout_width="1dp"
+                android:layout_height="match_parent"
+                android:background="@color/kal_widget_month_border" />
+            <LinearLayout
+                android:id="@+id/day42"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="1"
+                android:background="@drawable/kal_widget_day_bg"
+                android:clickable="true"
+                android:focusable="true"
+                android:gravity="center_horizontal"
+                android:orientation="vertical"
+                android:paddingStart="3dp"
+                android:paddingTop="1dp"
+                android:paddingEnd="3dp"
+                android:paddingBottom="1dp">
+
+                <FrameLayout
+                    android:layout_width="20dp"
+                    android:layout_height="20dp"
+                    android:importantForAccessibility="no">
+
+                    <ImageView
+                        android:id="@+id/day42bg"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:background="@drawable/kal_widget_today_bg"
+                        android:importantForAccessibility="no"
+                        android:visibility="gone" />
+
+                    <TextView
+                        android:id="@+id/day42t"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:fontFamily="sans-serif-medium"
+                        android:gravity="center"
+                        android:includeFontPadding="false"
+                        android:maxLines="1"
+                        android:textColor="@color/kal_widget_month_fg"
+                        android:textSize="12sp" />
+                </FrameLayout>
+
+                <TextView
+                    android:id="@+id/day42chip1"
+                    style="@style/KalWidgetMonthChip"
+                    android:visibility="gone" />
+
+                <TextView
+                    android:id="@+id/day42chip2"
+                    style="@style/KalWidgetMonthChip"
+                    android:visibility="gone" />
+            </LinearLayout>
+        </LinearLayout>
     </LinearLayout>
-    <LinearLayout
-        android:id="@+id/kal_widget_month_row3"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="horizontal">
-
-    <FrameLayout
-        android:id="@+id/day15"
-        android:layout_width="0dp"
-        android:layout_height="wrap_content"
-        android:layout_weight="1"
-        android:layout_margin="1dp"
-        android:padding="2dp">
-
-        <TextView
-            android:id="@+id/day15t"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:gravity="center"
-            android:textColor="#E6E6E6"
-            android:textSize="13sp" />
-
-        <ImageView
-            android:id="@+id/dot15"
-            android:layout_width="5dp"
-            android:layout_height="5dp"
-            android:layout_gravity="center_horizontal|bottom"
-            android:layout_marginBottom="1dp"
-            android:importantForAccessibility="no"
-            android:src="@drawable/kal_dot" />
-    </FrameLayout>
-    <FrameLayout
-        android:id="@+id/day16"
-        android:layout_width="0dp"
-        android:layout_height="wrap_content"
-        android:layout_weight="1"
-        android:layout_margin="1dp"
-        android:padding="2dp">
-
-        <TextView
-            android:id="@+id/day16t"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:gravity="center"
-            android:textColor="#E6E6E6"
-            android:textSize="13sp" />
-
-        <ImageView
-            android:id="@+id/dot16"
-            android:layout_width="5dp"
-            android:layout_height="5dp"
-            android:layout_gravity="center_horizontal|bottom"
-            android:layout_marginBottom="1dp"
-            android:importantForAccessibility="no"
-            android:src="@drawable/kal_dot" />
-    </FrameLayout>
-    <FrameLayout
-        android:id="@+id/day17"
-        android:layout_width="0dp"
-        android:layout_height="wrap_content"
-        android:layout_weight="1"
-        android:layout_margin="1dp"
-        android:padding="2dp">
-
-        <TextView
-            android:id="@+id/day17t"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:gravity="center"
-            android:textColor="#E6E6E6"
-            android:textSize="13sp" />
-
-        <ImageView
-            android:id="@+id/dot17"
-            android:layout_width="5dp"
-            android:layout_height="5dp"
-            android:layout_gravity="center_horizontal|bottom"
-            android:layout_marginBottom="1dp"
-            android:importantForAccessibility="no"
-            android:src="@drawable/kal_dot" />
-    </FrameLayout>
-    <FrameLayout
-        android:id="@+id/day18"
-        android:layout_width="0dp"
-        android:layout_height="wrap_content"
-        android:layout_weight="1"
-        android:layout_margin="1dp"
-        android:padding="2dp">
-
-        <TextView
-            android:id="@+id/day18t"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:gravity="center"
-            android:textColor="#E6E6E6"
-            android:textSize="13sp" />
-
-        <ImageView
-            android:id="@+id/dot18"
-            android:layout_width="5dp"
-            android:layout_height="5dp"
-            android:layout_gravity="center_horizontal|bottom"
-            android:layout_marginBottom="1dp"
-            android:importantForAccessibility="no"
-            android:src="@drawable/kal_dot" />
-    </FrameLayout>
-    <FrameLayout
-        android:id="@+id/day19"
-        android:layout_width="0dp"
-        android:layout_height="wrap_content"
-        android:layout_weight="1"
-        android:layout_margin="1dp"
-        android:padding="2dp">
-
-        <TextView
-            android:id="@+id/day19t"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:gravity="center"
-            android:textColor="#E6E6E6"
-            android:textSize="13sp" />
-
-        <ImageView
-            android:id="@+id/dot19"
-            android:layout_width="5dp"
-            android:layout_height="5dp"
-            android:layout_gravity="center_horizontal|bottom"
-            android:layout_marginBottom="1dp"
-            android:importantForAccessibility="no"
-            android:src="@drawable/kal_dot" />
-    </FrameLayout>
-    <FrameLayout
-        android:id="@+id/day20"
-        android:layout_width="0dp"
-        android:layout_height="wrap_content"
-        android:layout_weight="1"
-        android:layout_margin="1dp"
-        android:padding="2dp">
-
-        <TextView
-            android:id="@+id/day20t"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:gravity="center"
-            android:textColor="#E6E6E6"
-            android:textSize="13sp" />
-
-        <ImageView
-            android:id="@+id/dot20"
-            android:layout_width="5dp"
-            android:layout_height="5dp"
-            android:layout_gravity="center_horizontal|bottom"
-            android:layout_marginBottom="1dp"
-            android:importantForAccessibility="no"
-            android:src="@drawable/kal_dot" />
-    </FrameLayout>
-    <FrameLayout
-        android:id="@+id/day21"
-        android:layout_width="0dp"
-        android:layout_height="wrap_content"
-        android:layout_weight="1"
-        android:layout_margin="1dp"
-        android:padding="2dp">
-
-        <TextView
-            android:id="@+id/day21t"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:gravity="center"
-            android:textColor="#E6E6E6"
-            android:textSize="13sp" />
-
-        <ImageView
-            android:id="@+id/dot21"
-            android:layout_width="5dp"
-            android:layout_height="5dp"
-            android:layout_gravity="center_horizontal|bottom"
-            android:layout_marginBottom="1dp"
-            android:importantForAccessibility="no"
-            android:src="@drawable/kal_dot" />
-    </FrameLayout>
-    </LinearLayout>
-    <LinearLayout
-        android:id="@+id/kal_widget_month_row4"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="horizontal">
-
-    <FrameLayout
-        android:id="@+id/day22"
-        android:layout_width="0dp"
-        android:layout_height="wrap_content"
-        android:layout_weight="1"
-        android:layout_margin="1dp"
-        android:padding="2dp">
-
-        <TextView
-            android:id="@+id/day22t"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:gravity="center"
-            android:textColor="#E6E6E6"
-            android:textSize="13sp" />
-
-        <ImageView
-            android:id="@+id/dot22"
-            android:layout_width="5dp"
-            android:layout_height="5dp"
-            android:layout_gravity="center_horizontal|bottom"
-            android:layout_marginBottom="1dp"
-            android:importantForAccessibility="no"
-            android:src="@drawable/kal_dot" />
-    </FrameLayout>
-    <FrameLayout
-        android:id="@+id/day23"
-        android:layout_width="0dp"
-        android:layout_height="wrap_content"
-        android:layout_weight="1"
-        android:layout_margin="1dp"
-        android:padding="2dp">
-
-        <TextView
-            android:id="@+id/day23t"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:gravity="center"
-            android:textColor="#E6E6E6"
-            android:textSize="13sp" />
-
-        <ImageView
-            android:id="@+id/dot23"
-            android:layout_width="5dp"
-            android:layout_height="5dp"
-            android:layout_gravity="center_horizontal|bottom"
-            android:layout_marginBottom="1dp"
-            android:importantForAccessibility="no"
-            android:src="@drawable/kal_dot" />
-    </FrameLayout>
-    <FrameLayout
-        android:id="@+id/day24"
-        android:layout_width="0dp"
-        android:layout_height="wrap_content"
-        android:layout_weight="1"
-        android:layout_margin="1dp"
-        android:padding="2dp">
-
-        <TextView
-            android:id="@+id/day24t"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:gravity="center"
-            android:textColor="#E6E6E6"
-            android:textSize="13sp" />
-
-        <ImageView
-            android:id="@+id/dot24"
-            android:layout_width="5dp"
-            android:layout_height="5dp"
-            android:layout_gravity="center_horizontal|bottom"
-            android:layout_marginBottom="1dp"
-            android:importantForAccessibility="no"
-            android:src="@drawable/kal_dot" />
-    </FrameLayout>
-    <FrameLayout
-        android:id="@+id/day25"
-        android:layout_width="0dp"
-        android:layout_height="wrap_content"
-        android:layout_weight="1"
-        android:layout_margin="1dp"
-        android:padding="2dp">
-
-        <TextView
-            android:id="@+id/day25t"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:gravity="center"
-            android:textColor="#E6E6E6"
-            android:textSize="13sp" />
-
-        <ImageView
-            android:id="@+id/dot25"
-            android:layout_width="5dp"
-            android:layout_height="5dp"
-            android:layout_gravity="center_horizontal|bottom"
-            android:layout_marginBottom="1dp"
-            android:importantForAccessibility="no"
-            android:src="@drawable/kal_dot" />
-    </FrameLayout>
-    <FrameLayout
-        android:id="@+id/day26"
-        android:layout_width="0dp"
-        android:layout_height="wrap_content"
-        android:layout_weight="1"
-        android:layout_margin="1dp"
-        android:padding="2dp">
-
-        <TextView
-            android:id="@+id/day26t"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:gravity="center"
-            android:textColor="#E6E6E6"
-            android:textSize="13sp" />
-
-        <ImageView
-            android:id="@+id/dot26"
-            android:layout_width="5dp"
-            android:layout_height="5dp"
-            android:layout_gravity="center_horizontal|bottom"
-            android:layout_marginBottom="1dp"
-            android:importantForAccessibility="no"
-            android:src="@drawable/kal_dot" />
-    </FrameLayout>
-    <FrameLayout
-        android:id="@+id/day27"
-        android:layout_width="0dp"
-        android:layout_height="wrap_content"
-        android:layout_weight="1"
-        android:layout_margin="1dp"
-        android:padding="2dp">
-
-        <TextView
-            android:id="@+id/day27t"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:gravity="center"
-            android:textColor="#E6E6E6"
-            android:textSize="13sp" />
-
-        <ImageView
-            android:id="@+id/dot27"
-            android:layout_width="5dp"
-            android:layout_height="5dp"
-            android:layout_gravity="center_horizontal|bottom"
-            android:layout_marginBottom="1dp"
-            android:importantForAccessibility="no"
-            android:src="@drawable/kal_dot" />
-    </FrameLayout>
-    <FrameLayout
-        android:id="@+id/day28"
-        android:layout_width="0dp"
-        android:layout_height="wrap_content"
-        android:layout_weight="1"
-        android:layout_margin="1dp"
-        android:padding="2dp">
-
-        <TextView
-            android:id="@+id/day28t"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:gravity="center"
-            android:textColor="#E6E6E6"
-            android:textSize="13sp" />
-
-        <ImageView
-            android:id="@+id/dot28"
-            android:layout_width="5dp"
-            android:layout_height="5dp"
-            android:layout_gravity="center_horizontal|bottom"
-            android:layout_marginBottom="1dp"
-            android:importantForAccessibility="no"
-            android:src="@drawable/kal_dot" />
-    </FrameLayout>
-    </LinearLayout>
-    <LinearLayout
-        android:id="@+id/kal_widget_month_row5"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="horizontal">
-
-    <FrameLayout
-        android:id="@+id/day29"
-        android:layout_width="0dp"
-        android:layout_height="wrap_content"
-        android:layout_weight="1"
-        android:layout_margin="1dp"
-        android:padding="2dp">
-
-        <TextView
-            android:id="@+id/day29t"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:gravity="center"
-            android:textColor="#E6E6E6"
-            android:textSize="13sp" />
-
-        <ImageView
-            android:id="@+id/dot29"
-            android:layout_width="5dp"
-            android:layout_height="5dp"
-            android:layout_gravity="center_horizontal|bottom"
-            android:layout_marginBottom="1dp"
-            android:importantForAccessibility="no"
-            android:src="@drawable/kal_dot" />
-    </FrameLayout>
-    <FrameLayout
-        android:id="@+id/day30"
-        android:layout_width="0dp"
-        android:layout_height="wrap_content"
-        android:layout_weight="1"
-        android:layout_margin="1dp"
-        android:padding="2dp">
-
-        <TextView
-            android:id="@+id/day30t"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:gravity="center"
-            android:textColor="#E6E6E6"
-            android:textSize="13sp" />
-
-        <ImageView
-            android:id="@+id/dot30"
-            android:layout_width="5dp"
-            android:layout_height="5dp"
-            android:layout_gravity="center_horizontal|bottom"
-            android:layout_marginBottom="1dp"
-            android:importantForAccessibility="no"
-            android:src="@drawable/kal_dot" />
-    </FrameLayout>
-    <FrameLayout
-        android:id="@+id/day31"
-        android:layout_width="0dp"
-        android:layout_height="wrap_content"
-        android:layout_weight="1"
-        android:layout_margin="1dp"
-        android:padding="2dp">
-
-        <TextView
-            android:id="@+id/day31t"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:gravity="center"
-            android:textColor="#E6E6E6"
-            android:textSize="13sp" />
-
-        <ImageView
-            android:id="@+id/dot31"
-            android:layout_width="5dp"
-            android:layout_height="5dp"
-            android:layout_gravity="center_horizontal|bottom"
-            android:layout_marginBottom="1dp"
-            android:importantForAccessibility="no"
-            android:src="@drawable/kal_dot" />
-    </FrameLayout>
-    <FrameLayout
-        android:id="@+id/day32"
-        android:layout_width="0dp"
-        android:layout_height="wrap_content"
-        android:layout_weight="1"
-        android:layout_margin="1dp"
-        android:padding="2dp">
-
-        <TextView
-            android:id="@+id/day32t"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:gravity="center"
-            android:textColor="#E6E6E6"
-            android:textSize="13sp" />
-
-        <ImageView
-            android:id="@+id/dot32"
-            android:layout_width="5dp"
-            android:layout_height="5dp"
-            android:layout_gravity="center_horizontal|bottom"
-            android:layout_marginBottom="1dp"
-            android:importantForAccessibility="no"
-            android:src="@drawable/kal_dot" />
-    </FrameLayout>
-    <FrameLayout
-        android:id="@+id/day33"
-        android:layout_width="0dp"
-        android:layout_height="wrap_content"
-        android:layout_weight="1"
-        android:layout_margin="1dp"
-        android:padding="2dp">
-
-        <TextView
-            android:id="@+id/day33t"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:gravity="center"
-            android:textColor="#E6E6E6"
-            android:textSize="13sp" />
-
-        <ImageView
-            android:id="@+id/dot33"
-            android:layout_width="5dp"
-            android:layout_height="5dp"
-            android:layout_gravity="center_horizontal|bottom"
-            android:layout_marginBottom="1dp"
-            android:importantForAccessibility="no"
-            android:src="@drawable/kal_dot" />
-    </FrameLayout>
-    <FrameLayout
-        android:id="@+id/day34"
-        android:layout_width="0dp"
-        android:layout_height="wrap_content"
-        android:layout_weight="1"
-        android:layout_margin="1dp"
-        android:padding="2dp">
-
-        <TextView
-            android:id="@+id/day34t"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:gravity="center"
-            android:textColor="#E6E6E6"
-            android:textSize="13sp" />
-
-        <ImageView
-            android:id="@+id/dot34"
-            android:layout_width="5dp"
-            android:layout_height="5dp"
-            android:layout_gravity="center_horizontal|bottom"
-            android:layout_marginBottom="1dp"
-            android:importantForAccessibility="no"
-            android:src="@drawable/kal_dot" />
-    </FrameLayout>
-    <FrameLayout
-        android:id="@+id/day35"
-        android:layout_width="0dp"
-        android:layout_height="wrap_content"
-        android:layout_weight="1"
-        android:layout_margin="1dp"
-        android:padding="2dp">
-
-        <TextView
-            android:id="@+id/day35t"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:gravity="center"
-            android:textColor="#E6E6E6"
-            android:textSize="13sp" />
-
-        <ImageView
-            android:id="@+id/dot35"
-            android:layout_width="5dp"
-            android:layout_height="5dp"
-            android:layout_gravity="center_horizontal|bottom"
-            android:layout_marginBottom="1dp"
-            android:importantForAccessibility="no"
-            android:src="@drawable/kal_dot" />
-    </FrameLayout>
-    </LinearLayout>
-    <LinearLayout
-        android:id="@+id/kal_widget_month_row6"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="horizontal">
-
-    <FrameLayout
-        android:id="@+id/day36"
-        android:layout_width="0dp"
-        android:layout_height="wrap_content"
-        android:layout_weight="1"
-        android:layout_margin="1dp"
-        android:padding="2dp">
-
-        <TextView
-            android:id="@+id/day36t"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:gravity="center"
-            android:textColor="#E6E6E6"
-            android:textSize="13sp" />
-
-        <ImageView
-            android:id="@+id/dot36"
-            android:layout_width="5dp"
-            android:layout_height="5dp"
-            android:layout_gravity="center_horizontal|bottom"
-            android:layout_marginBottom="1dp"
-            android:importantForAccessibility="no"
-            android:src="@drawable/kal_dot" />
-    </FrameLayout>
-    <FrameLayout
-        android:id="@+id/day37"
-        android:layout_width="0dp"
-        android:layout_height="wrap_content"
-        android:layout_weight="1"
-        android:layout_margin="1dp"
-        android:padding="2dp">
-
-        <TextView
-            android:id="@+id/day37t"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:gravity="center"
-            android:textColor="#E6E6E6"
-            android:textSize="13sp" />
-
-        <ImageView
-            android:id="@+id/dot37"
-            android:layout_width="5dp"
-            android:layout_height="5dp"
-            android:layout_gravity="center_horizontal|bottom"
-            android:layout_marginBottom="1dp"
-            android:importantForAccessibility="no"
-            android:src="@drawable/kal_dot" />
-    </FrameLayout>
-    <FrameLayout
-        android:id="@+id/day38"
-        android:layout_width="0dp"
-        android:layout_height="wrap_content"
-        android:layout_weight="1"
-        android:layout_margin="1dp"
-        android:padding="2dp">
-
-        <TextView
-            android:id="@+id/day38t"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:gravity="center"
-            android:textColor="#E6E6E6"
-            android:textSize="13sp" />
-
-        <ImageView
-            android:id="@+id/dot38"
-            android:layout_width="5dp"
-            android:layout_height="5dp"
-            android:layout_gravity="center_horizontal|bottom"
-            android:layout_marginBottom="1dp"
-            android:importantForAccessibility="no"
-            android:src="@drawable/kal_dot" />
-    </FrameLayout>
-    <FrameLayout
-        android:id="@+id/day39"
-        android:layout_width="0dp"
-        android:layout_height="wrap_content"
-        android:layout_weight="1"
-        android:layout_margin="1dp"
-        android:padding="2dp">
-
-        <TextView
-            android:id="@+id/day39t"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:gravity="center"
-            android:textColor="#E6E6E6"
-            android:textSize="13sp" />
-
-        <ImageView
-            android:id="@+id/dot39"
-            android:layout_width="5dp"
-            android:layout_height="5dp"
-            android:layout_gravity="center_horizontal|bottom"
-            android:layout_marginBottom="1dp"
-            android:importantForAccessibility="no"
-            android:src="@drawable/kal_dot" />
-    </FrameLayout>
-    <FrameLayout
-        android:id="@+id/day40"
-        android:layout_width="0dp"
-        android:layout_height="wrap_content"
-        android:layout_weight="1"
-        android:layout_margin="1dp"
-        android:padding="2dp">
-
-        <TextView
-            android:id="@+id/day40t"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:gravity="center"
-            android:textColor="#E6E6E6"
-            android:textSize="13sp" />
-
-        <ImageView
-            android:id="@+id/dot40"
-            android:layout_width="5dp"
-            android:layout_height="5dp"
-            android:layout_gravity="center_horizontal|bottom"
-            android:layout_marginBottom="1dp"
-            android:importantForAccessibility="no"
-            android:src="@drawable/kal_dot" />
-    </FrameLayout>
-    <FrameLayout
-        android:id="@+id/day41"
-        android:layout_width="0dp"
-        android:layout_height="wrap_content"
-        android:layout_weight="1"
-        android:layout_margin="1dp"
-        android:padding="2dp">
-
-        <TextView
-            android:id="@+id/day41t"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:gravity="center"
-            android:textColor="#E6E6E6"
-            android:textSize="13sp" />
-
-        <ImageView
-            android:id="@+id/dot41"
-            android:layout_width="5dp"
-            android:layout_height="5dp"
-            android:layout_gravity="center_horizontal|bottom"
-            android:layout_marginBottom="1dp"
-            android:importantForAccessibility="no"
-            android:src="@drawable/kal_dot" />
-    </FrameLayout>
-    <FrameLayout
-        android:id="@+id/day42"
-        android:layout_width="0dp"
-        android:layout_height="wrap_content"
-        android:layout_weight="1"
-        android:layout_margin="1dp"
-        android:padding="2dp">
-
-        <TextView
-            android:id="@+id/day42t"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:gravity="center"
-            android:textColor="#E6E6E6"
-            android:textSize="13sp" />
-
-        <ImageView
-            android:id="@+id/dot42"
-            android:layout_width="5dp"
-            android:layout_height="5dp"
-            android:layout_gravity="center_horizontal|bottom"
-            android:layout_marginBottom="1dp"
-            android:importantForAccessibility="no"
-            android:src="@drawable/kal_dot" />
-    </FrameLayout>
-    </LinearLayout></LinearLayout>
+</LinearLayout>

@@ -51,7 +51,7 @@ class WidgetsJsonTest {
         val body = """
             [
               [
-                {"date":"2026-08-31","inMonth":true,"items":[{"title":"Standup","color":"#3366cc"}]},
+                {"date":"2026-08-31","inMonth":true,"items":[{"title":"Standup","time":"09:30","color":"#3366cc"}]},
                 {"date":"2026-09-01","inMonth":false,"items":[]}
               ]
             ]
@@ -65,6 +65,7 @@ class WidgetsJsonTest {
         assertTrue(weeks[0][0].inMonth)
         assertEquals(1, weeks[0][0].items.size)
         assertEquals("Standup", weeks[0][0].items[0].title)
+        assertEquals("09:30", weeks[0][0].items[0].time)
         assertEquals("#3366cc", weeks[0][0].items[0].color)
         assertFalse(weeks[0][1].inMonth)
         assertTrue(weeks[0][1].items.isEmpty())
