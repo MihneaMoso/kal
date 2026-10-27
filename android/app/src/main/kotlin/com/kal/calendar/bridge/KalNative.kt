@@ -99,6 +99,9 @@ internal object KalNative {
      */
     external fun softDeleteItem(handle: Long, id: String): Int
 
+    /** Delete one item or a scoped part of a recurring series: 0 on success, -1 on failure. */
+    external fun deleteItemJson(handle: Long, formJson: String): Int
+
     /** Sync pairing status `{paired, fingerprint}`, or null on failure. */
     external fun syncStatusJson(handle: Long): String?
 

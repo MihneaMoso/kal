@@ -137,6 +137,17 @@ class KalSession internal constructor(private val handle: Long) {
     fun deleteItem(id: String): Boolean = command { KalNative.softDeleteItem(handle, id) >= 0 }
 
     /**
+     * Delete one item or one scoped part of a recurring series.
+     *
+     * [EditScope.ALL] from a detached occurrence removes its whole series,
+     * [EditScope.THIS_ONLY] removes just one occurrence, and
+     * [EditScope.THIS_AND_FOLLOWING] truncates the series before the clicked
+     * occurrence — without creating a replacement row.
+     */
+    fun deleteItem(form: DeleteForm): Boolean =
+        command { KalNative.deleteItemJson(handle, form.toJson()) >= 0 }
+
+    /**
      * The stored sync-chain profile: a display name plus an optional avatar,
      * one JSON row under the `profile` key. No native profile code is involved —
      * the row is a setting, exactly as the Dioxus app stored it.
@@ -248,7 +259,7 @@ object KalBridge {
      * Bridge version this Kotlin build was compiled against. Bump together with
      * `kal_ffi::KAL_BRIDGE_VERSION` and the pinned tests in `crates/kal-jni`.
      */
-    const val EXPECTED_BRIDGE_VERSION = 1
+    const val EXPECTED_BRIDGE_VERSION = 2
 
     /** `<filesDir>/kal/calendar.db` — the path the Dioxus app (and the widgets) use. */
     fun databasePath(filesDir: String): String = "$filesDir/kal/calendar.db"

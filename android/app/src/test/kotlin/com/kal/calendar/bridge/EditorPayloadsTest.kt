@@ -184,4 +184,27 @@ class EditorPayloadsTest {
         // An empty end time is what a task and an all-day item have.
         assertEquals("", json.getString("endTime"))
     }
+
+    @Test
+    fun `a scoped delete sends the occurrence and scope`() {
+        val form = DeleteForm(
+            id = "01ITEM",
+            occurrenceStart = "2026-10-30T09:00:00+02:00",
+            scope = EditScope.THIS_AND_FOLLOWING,
+        )
+
+        val json = JSONObject(form.toJson())
+
+        assertEquals("01ITEM", json.getString("id"))
+        assertEquals("2026-10-30T09:00:00+02:00", json.getString("occurrenceStart"))
+        assertEquals("this_and_following", json.getString("scope"))
+    }
+
+    @Test
+    fun `an all-events delete omits the occurrence`() {
+        val json = JSONObject(DeleteForm("01ITEM", null, EditScope.ALL).toJson())
+
+        assertTrue(json.isNull("occurrenceStart"))
+        assertEquals("all", json.getString("scope"))
+    }
 }

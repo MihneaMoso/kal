@@ -303,6 +303,16 @@ impl Database {
         crate::scoped::delete_with_exceptions(self, id)
     }
 
+    /// Delete one item, or one scoped part of a recurring series.
+    pub fn delete_scoped(
+        &self,
+        id: Ulid,
+        occ_start: Option<DateTimeTz>,
+        scope: crate::scoped::DeleteScope,
+    ) -> Result<bool> {
+        crate::scoped::delete_scoped(self, id, occ_start, scope)
+    }
+
     pub fn get_item(&self, id: Ulid) -> Result<Option<CalendarItem>> {
         let conn = self.conn.lock().unwrap();
         conn.query_row(

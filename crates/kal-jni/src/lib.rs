@@ -427,6 +427,24 @@ pub extern "system" fn Java_com_kal_calendar_bridge_KalNative_softDeleteItem(
     })
 }
 
+/// `deleteItemJson(handle: Long, formJson: String): Int` — delete one item or
+/// a scoped part of a recurring series; 0 on success, -1 with the reason on
+/// `lastError()`.
+#[no_mangle]
+pub extern "system" fn Java_com_kal_calendar_bridge_KalNative_deleteItemJson(
+    mut env: JNIEnv,
+    _class: JClass,
+    handle: jlong,
+    form_json: JString,
+) -> jint {
+    let form_json = into_cstring(&mut env, &form_json);
+    guard(-1, move || {
+        command_handle(handle, |db| unsafe {
+            kal_ffi::kal_delete_item_json(db, form_json.as_ptr())
+        })
+    })
+}
+
 /// `syncStatusJson(handle: Long): String?` — `{paired, fingerprint}`, or null
 /// on failure (the reason on `lastError()`). Reading never creates an identity.
 #[no_mangle]
@@ -582,7 +600,7 @@ mod tests {
     /// signature-compatibility gate.
     #[test]
     fn jni_exports_match_the_kotlin_declarations() {
-        let exports: [*const (); 29] = [
+        let exports: [*const (); 30] = [
             Java_com_kal_calendar_bridge_KalNative_bridgeVersion as *const (),
             Java_com_kal_calendar_bridge_KalNative_lastError as *const (),
             Java_com_kal_calendar_bridge_KalNative_open as *const (),
@@ -601,6 +619,7 @@ mod tests {
             Java_com_kal_calendar_bridge_KalNative_saveItemJson as *const (),
             Java_com_kal_calendar_bridge_KalNative_toggleItemCompletedJson as *const (),
             Java_com_kal_calendar_bridge_KalNative_softDeleteItem as *const (),
+            Java_com_kal_calendar_bridge_KalNative_deleteItemJson as *const (),
             Java_com_kal_calendar_bridge_KalNative_importIcsJson as *const (),
             Java_com_kal_calendar_bridge_KalNative_exportIcsFile as *const (),
             Java_com_kal_calendar_bridge_KalNative_checkUpdatesJson as *const (),
@@ -620,6 +639,6 @@ mod tests {
     /// change here must be a deliberate ABI bump.
     #[test]
     fn bridge_version_is_pinned() {
-        assert_eq!(KOTLIN_EXPECTS_BRIDGE_VERSION, 1);
+        assert_eq!(KOTLIN_EXPECTS_BRIDGE_VERSION, 2);
     }
 }

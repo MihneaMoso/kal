@@ -31,14 +31,16 @@ use std::ffi::{c_char, CStr, CString};
 use std::ptr;
 
 use kal_core::models::{Calendar, CalendarItem, Color, DateTimeTz, ItemKind, Occurrence, Ulid};
+use kal_storage::scoped::DeleteScope;
 use kal_storage::Database;
 
 /// Monotonic bridge schema version.
 ///
-/// Additive changes only within a major version; a breaking change bumps this
-/// and the Kotlin side must ship the matching declaration set (guide §6). The
-/// compiled Kotlin app reads this at startup through [`kal_bridge_version`].
-pub const KAL_BRIDGE_VERSION: u32 = 1;
+/// Bumped whenever the Kotlin declaration set changes: the app compares this
+/// value at startup and refuses to run against an unknown ABI. Additive JSON
+/// fields do not need a bump; a new required entry point does. The compiled
+/// Kotlin app reads this at startup through [`kal_bridge_version`].
+pub const KAL_BRIDGE_VERSION: u32 = 2;
 
 /// Opaque database handle.
 pub struct KalDb {
@@ -339,6 +341,47 @@ pub unsafe extern "C" fn kal_soft_delete_item(db: *mut KalDb, id: *const c_char)
             -1
         }
     }
+}
+
+/// Delete one item or a scoped part of a recurring series. The JSON form is
+/// `{id, occurrenceStart?, scope?}`; scope is `all` (default), `this_only` or
+/// `this_and_following`.
+///
+/// Unlike [`kal_soft_delete_item`] this is scope-aware: `this_only` EXDATEs one
+/// occurrence (or tombstones one detached copy), `this_and_following` truncates
+/// the series before the clicked occurrence and removes later detached copies,
+/// and `all` from a detached copy deletes its whole series. Returns 0 on success
+/// (including an already-absent id) and -1 with the reason on the error channel.
+///
+/// # Safety
+/// `db` must be a live handle and `json` a NUL-terminated [`DeleteItemForm`].
+#[no_mangle]
+pub unsafe extern "C" fn kal_delete_item_json(db: *mut KalDb, json: *const c_char) -> i32 {
+    with_db_status(db, |kal| {
+        let text = cstr_arg(json, "delete form json")?;
+        let form: DeleteItemForm =
+            serde_json::from_str(&text).map_err(|e| format!("invalid delete form: {e}"))?;
+        let id = parse_ulid(&form.id)?;
+        let occurrence = match form.occurrence_start.as_deref().filter(|s| !s.is_empty()) {
+            Some(text) => Some(
+                chrono::DateTime::parse_from_rfc3339(text)
+                    .map_err(|e| format!("invalid occurrence start {text:?}: {e}"))?,
+            ),
+            None => None,
+        };
+        let scope = match form.scope.as_deref() {
+            None | Some("") | Some("all") => DeleteScope::All,
+            Some("this_only") => DeleteScope::ThisOnly,
+            Some("this_and_following") => DeleteScope::ThisAndFollowing,
+            Some(other) => return Err(format!("unknown delete scope {other:?}")),
+        };
+        // A missing id is idempotent success: the editor only needs to know the
+        // item is gone.
+        kal.db
+            .delete_scoped(id, occurrence, scope)
+            .map_err(|e| e.to_string())?;
+        Ok(())
+    })
 }
 
 /// Insert or replace a calendar from its JSON model. Returns 0 / -1.
@@ -848,6 +891,17 @@ struct SaveItemForm {
     /// `#RRGGBB` override; absent/empty/`null` means "use the calendar colour".
     color: Option<String>,
     /// `all` | `this_only` | `this_and_following`.
+    scope: Option<String>,
+}
+
+/// One scoped delete request. `scope` is `all` (default), `this_only` or
+/// `this_and_following`; `occurrenceStart` is the clicked occurrence for a
+/// recurring item.
+#[derive(serde::Deserialize, Default)]
+#[serde(rename_all = "camelCase", default)]
+struct DeleteItemForm {
+    id: String,
+    occurrence_start: Option<String>,
     scope: Option<String>,
 }
 
@@ -1415,7 +1469,7 @@ mod tests {
     #[test]
     fn version_surface_is_stable() {
         assert_eq!(kal_bridge_version(), KAL_BRIDGE_VERSION);
-        assert_eq!(KAL_BRIDGE_VERSION, 1);
+        assert_eq!(KAL_BRIDGE_VERSION, 2);
     }
 
     /// NULL handles must set the error channel rather than dereferencing.
@@ -1434,7 +1488,7 @@ mod tests {
     /// project in phase 1; this is the Rust half of that gate.)
     #[test]
     fn exported_symbols_are_present() {
-        let exports: [*const (); 32] = [
+        let exports: [*const (); 33] = [
             kal_bridge_version as *const (),
             kal_last_error as *const (),
             kal_open as *const (),
@@ -1445,6 +1499,7 @@ mod tests {
             kal_item_json as *const (),
             kal_upsert_item_json as *const (),
             kal_soft_delete_item as *const (),
+            kal_delete_item_json as *const (),
             kal_upsert_calendar_json as *const (),
             kal_get_setting as *const (),
             kal_set_setting as *const (),

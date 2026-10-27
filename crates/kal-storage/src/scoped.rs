@@ -11,17 +11,23 @@
 //!   rather than an unrelated event: opening it still offers the scope choice,
 //!   "This event" keeps editing just it, and "All events" reaches it.
 //! - `this_and_following`: truncate the base series with an `UNTIL` just
-//!   before the occurrence, then create the edited series from it.
+//!   before the occurrence, then create the edited series from it with the
+//!   original end (an existing `UNTIL`, or a `COUNT`'s last occurrence) carried
+//!   onto the tail.
 //! - `all` ([`anchored_on_series`] + [`apply_all_edit`]): the base row is
 //!   rewritten, so it keeps the series' own anchor date (the editor form is
 //!   anchored on the clicked occurrence), and the dialog's shared fields are
 //!   carried to every exception of the series.
+//!
+//! [`delete_scoped`] is the delete-side counterpart: it EXDATEs, truncates or
+//! tombstones, and never creates a replacement row.
 //!
 //! As before, the writes are not transactional (a failure midway leaves the
 //! earlier writes applied).
 
 use chrono::{TimeZone, Utc};
 use kal_core::models::{CalendarItem, DateTimeTz};
+use kal_core::viewmodel::series_end;
 use ulid::Ulid;
 
 use crate::Result;
@@ -35,6 +41,17 @@ pub trait ScopedStore {
     /// `metadata.series_id`, so no extra query surface is needed.
     fn scoped_list_items(&self) -> Result<Vec<CalendarItem>>;
     fn scoped_soft_delete_item(&self, id: Ulid) -> Result<bool>;
+}
+
+/// Which part of a recurring item a delete applies to.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DeleteScope {
+    /// Only the clicked occurrence.
+    ThisOnly,
+    /// The clicked occurrence and every later one.
+    ThisAndFollowing,
+    /// The whole series, including occurrences detached from it.
+    All,
 }
 
 /// Apply a scoped edit to `base_id`. Returns `Ok(false)` when the base row no
@@ -51,21 +68,30 @@ pub fn apply_scoped_edit<S: ScopedStore + ?Sized>(
         return Ok(false);
     };
 
+    // The tail created by a split must keep the original series' end. Capture
+    // it before the base rule is rewritten: an existing UNTIL is exactly what
+    // the old code left untouched, so the base kept running through the split
+    // while the copy started a second, unbounded series.
+    let tail_end = and_following.then(|| series_end(&base)).flatten();
+
     if and_following {
-        // Truncate the base series right before the edited occurrence.
-        if !base.rrule.as_deref().unwrap_or("").contains("COUNT=")
-            && !base.rrule.as_deref().unwrap_or("").contains("UNTIL=")
-        {
-            let until = (occ_start - chrono::Duration::minutes(1))
-                .with_timezone(&Utc)
-                .format("%Y%m%dT%H%M%SZ")
-                .to_string();
-            let rule = base.rrule.take().unwrap_or_default();
-            base.rrule = Some(format!("{rule};UNTIL={until}"));
-        }
+        // Truncate the base series right before the edited occurrence, even
+        // when it already has an UNTIL or COUNT. `truncate_rule_before`
+        // converts COUNT to the equivalent UNTIL and never extends a series
+        // that already ended earlier.
+        let Some(rule) = truncate_rule_before(&base, occ_start) else {
+            return Ok(false);
+        };
+        base.rrule = Some(rule);
+        // EXDATEs at/after the split belong to the tail. The branch below
+        // copies them there before dropping them here.
+        base.exdates
+            .retain(|d| d.timestamp() < occ_start.timestamp());
     } else {
         // Exclude just this occurrence from the base series.
-        base.exdates.push(occ_start);
+        if !has_instant(&base.exdates, occ_start) {
+            base.exdates.push(occ_start);
+        }
     }
     base.updated_at = now;
     store.scoped_upsert_item(&base)?;
@@ -84,12 +110,91 @@ pub fn apply_scoped_edit<S: ScopedStore + ?Sized>(
         new_item.metadata.series_id = Some(base_id);
         new_item.metadata.recurrence_id = Some(occ_start);
     } else {
-        // A split starts a series in its own right.
+        // A split starts a series in its own right, but it must stop where the
+        // original did. Keep the tail's own EXDATEs (the occurrences after the
+        // split that were individually deleted) and drop the ones that belonged
+        // to the now-truncated base.
         new_item.metadata.series_id = None;
         new_item.metadata.recurrence_id = None;
+        new_item
+            .exdates
+            .retain(|d| d.timestamp() >= occ_start.timestamp());
+        if let Some(end) = tail_end {
+            if end.timestamp() < new_item.start.timestamp() {
+                // The original series ended before the edited occurrence; keep
+                // just that one item rather than an empty tail.
+                new_item.rrule = None;
+            } else if let Some(rule) = new_item.rrule.as_deref() {
+                new_item.rrule = Some(with_tail_end(rule, end));
+            }
+        }
     }
     store.scoped_upsert_item(&new_item)?;
     Ok(true)
+}
+
+/// Rewrite `base`'s rule so the series ends before `split`.
+///
+/// A `COUNT` becomes the equivalent `UNTIL` (the earlier of the original count
+/// end, an existing `UNTIL`, and the split cutoff), which keeps the rule valid
+/// and, crucially, never extends a series that already ended before the split.
+/// Returns `None` when there is no rule to truncate.
+fn truncate_rule_before(base: &CalendarItem, split: DateTimeTz) -> Option<String> {
+    let rule = base.rrule.as_deref()?;
+    let cutoff = split - chrono::Duration::minutes(1);
+    let bound = match series_end(base) {
+        // The series already ended before the split: keep its real end (and its
+        // last occurrence) instead of pulling the end back to the cutoff.
+        Some(end) if end.timestamp() < split.timestamp() => end,
+        _ => cutoff,
+    };
+    let until = bound
+        .with_timezone(&Utc)
+        .format("%Y%m%dT%H%M%SZ")
+        .to_string();
+    let mut parts: Vec<String> = rule
+        .split(';')
+        .filter(|part| {
+            let upper = part.to_ascii_uppercase();
+            !part.is_empty() && !upper.starts_with("UNTIL=") && !upper.starts_with("COUNT=")
+        })
+        .map(str::to_string)
+        .collect();
+    if parts.is_empty() {
+        return None;
+    }
+    parts.push(format!("UNTIL={until}"));
+    Some(parts.join(";"))
+}
+
+/// Carry the original series' end onto the new tail.
+///
+/// The dialog shows the series' own rule, so the tail may arrive carrying the
+/// original `COUNT`/`UNTIL` verbatim. Those bounds describe the old whole
+/// series, not the tail; replace them with the original end captured before the
+/// split. (The UI has no end-date field, so no user-authored bound is lost.)
+fn with_tail_end(rule: &str, end: DateTimeTz) -> String {
+    let until = end.with_timezone(&Utc).format("%Y%m%dT%H%M%SZ").to_string();
+    let mut parts: Vec<String> = rule
+        .split(';')
+        .filter(|part| {
+            let upper = part.to_ascii_uppercase();
+            !part.is_empty() && !upper.starts_with("UNTIL=") && !upper.starts_with("COUNT=")
+        })
+        .map(str::to_string)
+        .collect();
+    if parts.is_empty() {
+        return rule.to_string();
+    }
+    parts.push(format!("UNTIL={until}"));
+    parts.join(";")
+}
+
+/// Whether `list` already contains `instant`. Compare instants rather than the
+/// stored offsets: the same occurrence can arrive with a different fixed offset
+/// (the editor uses the device's current offset).
+fn has_instant(list: &[DateTimeTz], instant: DateTimeTz) -> bool {
+    list.iter().any(|d| d.timestamp() == instant.timestamp())
 }
 
 /// Copy the fields an "All events" save shares with every row of the series:
@@ -223,6 +328,152 @@ pub fn delete_with_exceptions<S: ScopedStore + ?Sized>(store: &S, id: Ulid) -> R
         }
     }
     Ok(deleted)
+}
+
+/// Delete one item, or one part of a recurring item.
+///
+/// `occ_start` is the clicked occurrence. For a detached occurrence its
+/// `metadata.recurrence_id` wins, because that is its position in the series
+/// even when the user moved the occurrence elsewhere.
+///
+/// - `ThisOnly` excludes a base-series occurrence, or tombstones one detached
+///   occurrence.
+/// - `ThisAndFollowing` truncates the series before `occ_start` and tombstones
+///   every detached occurrence at/after it; it never creates a replacement row.
+/// - `All` from a detached occurrence deletes its whole series, matching the
+///   scope the editor offers for a recurring item.
+pub fn delete_scoped<S: ScopedStore + ?Sized>(
+    store: &S,
+    id: Ulid,
+    occ_start: Option<DateTimeTz>,
+    scope: DeleteScope,
+) -> Result<bool> {
+    let target = store.scoped_get_item(id)?;
+    match scope {
+        DeleteScope::All => {
+            let series_id = target
+                .as_ref()
+                .and_then(|item| item.metadata.series_id)
+                .unwrap_or(id);
+            let deleted = delete_with_exceptions(store, series_id)?;
+            if !deleted && series_id != id {
+                // The series is already gone; remove the orphaned occurrence.
+                return store.scoped_soft_delete_item(id);
+            }
+            Ok(deleted)
+        }
+        DeleteScope::ThisOnly => match target {
+            Some(target) => delete_one(store, target, occ_start),
+            None => Ok(false),
+        },
+        DeleteScope::ThisAndFollowing => match target {
+            Some(target) => delete_following(store, target, occ_start),
+            None => Ok(false),
+        },
+    }
+}
+
+/// "This event" on a delete: remove just this occurrence.
+fn delete_one<S: ScopedStore + ?Sized>(
+    store: &S,
+    mut target: CalendarItem,
+    occ_start: Option<DateTimeTz>,
+) -> Result<bool> {
+    if let Some(series_id) = target.metadata.series_id {
+        // A detached occurrence is its own row. Keep the series' EXDATE (and
+        // add it if an import produced the row without one), then tombstone the
+        // copy so the instant stays gone.
+        let occurrence = target.metadata.recurrence_id.unwrap_or(target.start);
+        if let Some(mut base) = store.scoped_get_item(series_id)? {
+            if !base.deleted && !has_instant(&base.exdates, occurrence) {
+                base.exdates.push(occurrence);
+                base.updated_at = Utc::now().fixed_offset();
+                store.scoped_upsert_item(&base)?;
+            }
+        }
+        return store.scoped_soft_delete_item(target.id);
+    }
+
+    let occurrence = occ_start.unwrap_or(target.start);
+    if target.rrule.is_none() {
+        return delete_with_exceptions(store, target.id);
+    }
+    if !has_instant(&target.exdates, occurrence) {
+        target.exdates.push(occurrence);
+    }
+    target.updated_at = Utc::now().fixed_offset();
+    store.scoped_upsert_item(&target)?;
+    // An imported RECURRENCE-ID can leave a live copy without an EXDATE on the
+    // base; remove it too so "This event" really removes the instant.
+    for row in store.scoped_list_items()? {
+        if row.id != target.id && row.metadata.series_id == Some(target.id) {
+            let at = row.metadata.recurrence_id.unwrap_or(row.start);
+            if at.timestamp() == occurrence.timestamp() {
+                store.scoped_soft_delete_item(row.id)?;
+            }
+        }
+    }
+    Ok(true)
+}
+
+/// "This and following" on a delete: truncate the series, then remove the
+/// detached occurrences that belonged to the deleted tail.
+fn delete_following<S: ScopedStore + ?Sized>(
+    store: &S,
+    target: CalendarItem,
+    occ_start: Option<DateTimeTz>,
+) -> Result<bool> {
+    let (series_id, split) = match target.metadata.series_id {
+        Some(series_id) => (
+            series_id,
+            target
+                .metadata
+                .recurrence_id
+                .or(occ_start)
+                .unwrap_or(target.start),
+        ),
+        None => (target.id, occ_start.unwrap_or(target.start)),
+    };
+    let Some(mut base) = store.scoped_get_item(series_id)? else {
+        return store.scoped_soft_delete_item(target.id);
+    };
+    if base.deleted {
+        return store.scoped_soft_delete_item(target.id);
+    }
+    if base.rrule.is_none() {
+        return delete_with_exceptions(store, series_id);
+    }
+    if split.timestamp() <= base.start.timestamp() {
+        // Deleting from the first occurrence onward is the whole series.
+        return delete_with_exceptions(store, series_id);
+    }
+    let Some(rule) = truncate_rule_before(&base, split) else {
+        return Ok(false);
+    };
+    base.rrule = Some(rule);
+    base.exdates.retain(|d| d.timestamp() < split.timestamp());
+    base.updated_at = Utc::now().fixed_offset();
+    store.scoped_upsert_item(&base)?;
+
+    for row in store.scoped_list_items()? {
+        if row.id == series_id || row.metadata.series_id != Some(series_id) {
+            continue;
+        }
+        let at = row.metadata.recurrence_id.unwrap_or(row.start);
+        if at.timestamp() >= split.timestamp() {
+            store.scoped_soft_delete_item(row.id)?;
+        }
+    }
+    // The dialog can be opened on a moved detached occurrence whose original
+    // recurrence is before the split; still remove the row the user deleted.
+    if target.id != series_id && !target.deleted {
+        if let Some(row) = store.scoped_get_item(target.id)? {
+            if !row.deleted {
+                store.scoped_soft_delete_item(target.id)?;
+            }
+        }
+    }
+    Ok(true)
 }
 
 /// The row an "All events" save should write: `edited`'s fields, moved back onto

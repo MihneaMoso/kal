@@ -159,6 +159,43 @@ pub fn expand_occurrences(item: &CalendarItem, from: NaiveDate, to: NaiveDate) -
     out
 }
 
+/// The last instant a bounded rule can generate, ignoring EXDATEs.
+///
+/// A split series must carry its original end onto the new tail; without this a
+/// `FREQ=DAILY;UNTIL=…` series would become an infinite tail at the split point.
+/// `None` means the rule is unbounded (or unreadable), in which case there is no
+/// end to preserve.
+pub fn series_end(item: &CalendarItem) -> Option<DateTimeTz> {
+    // rrule 0.14 works in its own Tz enum; convert through UTC, as the
+    // expansion does.
+    let to_rrule = |dt: &DateTimeTz| dt.with_timezone(&chrono::Utc).with_timezone(&RRuleTz::UTC);
+    let rule = RRule::from_str(item.rrule.as_deref()?)
+        .ok()?
+        .validate(to_rrule(&item.start))
+        .ok()?;
+    let until = rule.get_until().cloned();
+    let count_end = if rule.get_count().is_some() {
+        let set = rrule::RRuleSet::new(to_rrule(&item.start)).rrule(rule);
+        // A count larger than the guard would make the end unknowable; report
+        // "unbounded" rather than truncate the tail at an arbitrary occurrence.
+        let result = set.all(u16::MAX);
+        if result.limited {
+            None
+        } else {
+            result.dates.last().cloned()
+        }
+    } else {
+        None
+    };
+    let end = match (until, count_end) {
+        (Some(a), Some(b)) => Some(a.min(b)),
+        (Some(a), None) => Some(a),
+        (None, Some(b)) => Some(b),
+        (None, None) => None,
+    }?;
+    Some(end.with_timezone(item.start.offset()))
+}
+
 /// Group expanded occurrences of `items` by the day each starts on.
 /// Days with no occurrences are absent; each day's list is time-sorted.
 pub fn occurrences_by_date(

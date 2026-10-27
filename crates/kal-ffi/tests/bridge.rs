@@ -69,7 +69,7 @@ impl Fixture {
 #[test]
 fn version_handshake_is_available() {
     assert_eq!(kal_ffi::kal_bridge_version(), kal_ffi::KAL_BRIDGE_VERSION);
-    assert_eq!(kal_ffi::KAL_BRIDGE_VERSION, 1);
+    assert_eq!(kal_ffi::KAL_BRIDGE_VERSION, 2);
 }
 
 #[test]
@@ -807,6 +807,21 @@ unsafe fn seed_weekly_series(db: *mut kal_ffi::KalDb, cal_id: &str, title: &str)
     item.id.to_string()
 }
 
+/// Delete one item or a scoped part of a series through the bridge.
+unsafe fn delete_scoped(
+    db: *mut kal_ffi::KalDb,
+    id: &str,
+    occurrence: Option<&str>,
+    scope: &str,
+) -> i32 {
+    let form = serde_json::json!({
+        "id": id,
+        "occurrenceStart": occurrence,
+        "scope": scope,
+    });
+    unsafe { kal_ffi::kal_delete_item_json(db, c(&form.to_string()).as_ptr()) }
+}
+
 /// Reminder minutes, sorted, as the model stores them.
 fn reminder_minutes(item: &serde_json::Value) -> Vec<i64> {
     item["reminders"]
@@ -1428,6 +1443,140 @@ fn deleting_a_series_removes_its_linked_occurrences() {
 }
 
 #[test]
+fn delete_this_only_exdates_without_creating_a_replacement() {
+    let f = fixture();
+    unsafe {
+        let mut db = f.open();
+        let base_id = seed_weekly_series(db, &f.cal_id, "Yoga");
+        let base = read_item(db, &base_id);
+        let start = chrono::DateTime::parse_from_rfc3339(base["start"].as_str().unwrap()).unwrap();
+        let occ = start + chrono::Duration::days(7);
+
+        assert_eq!(
+            delete_scoped(db, &base_id, Some(&occ.to_rfc3339()), "this_only"),
+            0,
+            "{:?}",
+            last_error()
+        );
+
+        let live = read_items(db);
+        let yoga: Vec<_> = live.iter().filter(|i| i["title"] == "Yoga").collect();
+        assert_eq!(yoga.len(), 1, "no replacement copy: {live:?}");
+        assert_eq!(yoga[0]["id"], base_id);
+        let after = read_item(db, &base_id);
+        let excluded: Vec<_> = after["exdates"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|d| chrono::DateTime::parse_from_rfc3339(d.as_str().unwrap()).unwrap())
+            .collect();
+        assert!(
+            excluded.iter().any(|d| d.timestamp() == occ.timestamp()),
+            "{after}"
+        );
+
+        kal_ffi::kal_close(&mut db);
+    }
+}
+
+#[test]
+fn delete_this_and_following_truncates_without_creating_a_replacement() {
+    let f = fixture();
+    unsafe {
+        let mut db = f.open();
+        let base_id = seed_weekly_series(db, &f.cal_id, "Yoga");
+        let base = read_item(db, &base_id);
+        let start = chrono::DateTime::parse_from_rfc3339(base["start"].as_str().unwrap()).unwrap();
+        let occ = start + chrono::Duration::weeks(2);
+
+        assert_eq!(
+            delete_scoped(db, &base_id, Some(&occ.to_rfc3339()), "this_and_following"),
+            0,
+            "{:?}",
+            last_error()
+        );
+
+        let live = read_items(db);
+        let yoga: Vec<_> = live.iter().filter(|i| i["title"] == "Yoga").collect();
+        assert_eq!(yoga.len(), 1, "only the truncated series remains: {live:?}");
+        assert_eq!(yoga[0]["id"], base_id);
+        let after = read_item(db, &base_id);
+        let cutoff = (occ - chrono::Duration::minutes(1))
+            .with_timezone(&chrono::Utc)
+            .format("%Y%m%dT%H%M%SZ")
+            .to_string();
+        assert_eq!(after["rrule"], format!("FREQ=WEEKLY;UNTIL={cutoff}"));
+
+        kal_ffi::kal_close(&mut db);
+    }
+}
+
+#[test]
+fn delete_all_from_a_linked_occurrence_removes_the_series() {
+    let f = fixture();
+    unsafe {
+        let mut db = f.open();
+        let base_id = seed_weekly_series(db, &f.cal_id, "Yoga");
+        let base = read_item(db, &base_id);
+        let start = chrono::DateTime::parse_from_rfc3339(base["start"].as_str().unwrap()).unwrap();
+        let occ = start + chrono::Duration::days(7);
+        save(
+            db,
+            &serde_json::json!({
+                "id": base_id,
+                "occurrenceStart": occ.to_rfc3339(),
+                "kind": "event",
+                "title": "Yoga (this one)",
+                "date": occ.format("%Y-%m-%d").to_string(),
+                "startTime": occ.format("%H:%M").to_string(),
+                "endTime": (occ + chrono::Duration::hours(1)).format("%H:%M").to_string(),
+                "calendarId": f.cal_id,
+                "scope": "this_only",
+            }),
+        );
+        let copy = find_item(db, "Yoga (this one)");
+        let copy_id = copy["id"].as_str().unwrap();
+
+        assert_eq!(
+            delete_scoped(db, copy_id, Some(&occ.to_rfc3339()), "all"),
+            0,
+            "{:?}",
+            last_error()
+        );
+        let live = read_items(db);
+        assert!(
+            live.iter()
+                .all(|i| i["title"] != "Yoga" && i["title"] != "Yoga (this one)"),
+            "the whole series is gone: {live:?}"
+        );
+
+        kal_ffi::kal_close(&mut db);
+    }
+}
+
+#[test]
+fn delete_form_rejects_bad_input_without_panicking() {
+    let f = fixture();
+    unsafe {
+        let mut db = f.open();
+        assert_eq!(
+            delete_scoped(db, &f.item_id, None, "bogus"),
+            -1,
+            "an unknown scope is a real error"
+        );
+        assert!(last_error().unwrap().contains("scope"));
+
+        assert_eq!(
+            kal_ffi::kal_delete_item_json(db, c("{\"id\":\"not-a-ulid\"}").as_ptr()),
+            -1
+        );
+        assert!(last_error().unwrap().contains("ULID"));
+
+        kal_ffi::kal_close(&mut db);
+    }
+}
+
+#[test]
 fn save_form_this_and_following_truncates_the_base_with_until() {
     let f = fixture();
     unsafe {
@@ -1480,12 +1629,14 @@ fn save_form_this_and_following_truncates_the_base_with_until() {
 }
 
 #[test]
-fn save_form_this_and_following_leaves_an_existing_until_alone() {
+fn save_form_this_and_following_shortens_and_carries_an_existing_until() {
     let f = fixture();
     unsafe {
         let mut db = f.open();
 
-        // A series that already bounds itself must not gain a second UNTIL.
+        // A bounded series used to keep its old UNTIL while the new tail started
+        // unbounded, so every following occurrence existed twice. The split must
+        // shorten the base and carry the same end onto the tail.
         let start = local_dt(2026, 8, 3, 9, 0);
         let mut item =
             CalendarItem::new(ItemKind::Event, "Bounded", f.cal_id.parse().unwrap(), start);
@@ -1509,9 +1660,35 @@ fn save_form_this_and_following_leaves_an_existing_until_alone() {
             }),
         );
 
+        let cutoff = (occ - chrono::Duration::minutes(1))
+            .with_timezone(&chrono::Utc)
+            .format("%Y%m%dT%H%M%SZ")
+            .to_string();
         assert_eq!(
             read_item(db, &base_id)["rrule"],
-            "FREQ=WEEKLY;UNTIL=20261231T090000Z"
+            format!("FREQ=WEEKLY;UNTIL={cutoff}"),
+            "the base is shortened to just before the split"
+        );
+        let tail = find_item(db, "Bounded (new)");
+        assert_eq!(
+            tail["rrule"], "FREQ=WEEKLY;UNTIL=20261231T090000Z",
+            "the tail inherits the original end, so it cannot run forever"
+        );
+        assert_eq!(
+            read_items(db)
+                .iter()
+                .filter(|i| i["title"] == "Bounded")
+                .count(),
+            1,
+            "the original series"
+        );
+        assert_eq!(
+            read_items(db)
+                .iter()
+                .filter(|i| i["title"] == "Bounded (new)")
+                .count(),
+            1,
+            "exactly one tail"
         );
 
         kal_ffi::kal_close(&mut db);

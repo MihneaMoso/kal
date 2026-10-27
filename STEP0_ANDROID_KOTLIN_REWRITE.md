@@ -73,7 +73,7 @@ current APK, v0.1.9):
 | 6 | View navigation strip | `ViewNav` `app/src/main.rs:853-917` | ‹ / Today / › plus Month|Week|Day|Agenda buttons; period label per mode; cursor by ±1 day/week/month |
 | 7 | Sidebar: calendars | `Sidebar`/`CalendarRow` `app/src/main.rs:769-835, 934-966` | checkbox toggles visibility (persists, restarts both resources), color dot, name, source label ("google" / "ics" / "auto" / "") |
 | 8 | Sidebar: New item | `app/src/main.rs:817-832` | "+ Event / + Task / + Birthday" buttons → editor preset for kind |
-| 9 | Editor modal (create/edit event/task/birthday) | `ui::EditorModal` `app/src/ui.rs:888-1217` | fields: Title, Person (birthdays), Date, All-day, Start/End, reminder preset chips (10m/30m/1h/1d/1w) + custom minutes, Location, Calendar select, Color swatches (8 presets + "Calendar"), Repeat presets (none/daily/weekly/monthly/yearly), two-step Delete; Save; for recurring edits: "All events / …and following / This event" |
+| 9 | Editor modal (create/edit event/task/birthday) | `ui::EditorModal` `app/src/ui.rs:888-1217` | fields: Title, Person (birthdays), Date, All-day, Start/End, reminder preset chips (10m/30m/1h/1d/1w) + custom minutes, Location, Calendar select, Color swatches (8 presets + "Calendar"), Repeat presets (none/daily/weekly/monthly/yearly), scope-aware Delete; Save; for recurring edits: "All events / …and following / This event" |
 | 10 | Settings modal (profile + software) | `profile::SettingsScreen` `app/src/profile.rs:169-278` | username, avatar (native picker on Android / file input elsewhere), Remove avatar, inline error line, Software & updates section |
 | 11 | Software & updates | `profile::SoftwareSection` `app/src/profile.rs:306-353` | "Kal vX", "Check for updates", "Check at startup" checkbox, status line, "Apply update now" when ready |
 | 12 | Sync panel (sidebar section) | `sync_ui::SyncPanel` `app/src/sync_ui.rs:255-421` | profile header (avatar/initials + name, opens settings); NotPaired: "Start sync chain" + join-by-pasted-phrase; ShowPhrase: 24-word grid modal + "I wrote it down"; Paired: fingerprint, "Show recovery phrase", "Sync now"/"Syncing…" with last-round status line, "Leave sync chain…" two-step confirm |
@@ -1064,16 +1064,21 @@ renders as a plain birth-date entry (the name comes from the title).
   (`anchor + (end − start)`), so editing one instance of a series neither snaps it
   back onto the series start nor changes how long it lasts.
 - Scope: *This event* pushes one EXDATE onto the base and writes the edit as a
-  rule-free item; *…and following* truncates the base with `;UNTIL={occ − 1min}`
-  only when the rule has no `COUNT=`/`UNTIL=` yet, and the split-off copy keeps the
-  rule. Both are the shared storage helper.
+  rule-free item; *…and following* shortens the base with `;UNTIL={occ − 1min}`
+  even when the rule already has `COUNT=`/`UNTIL=` (a `COUNT` is converted to
+  its equivalent `UNTIL`), and the split-off copy inherits the original end so
+  it cannot run forever. Both are the shared storage helper.
 - No notes field and no custom-RRULE editor — upstream had neither, and notes
   survive an edit because the form never carries them.
 - Reminders are `10 / 30 / 60 / 1440 / 10080` minutes with the original captions;
   the custom box adds one positive minute value, dedup/sort/`minutes_before` stay
   native (reminders carry ULIDs).
-- The two-step delete (`Delete` → red *"Delete this item?"* + `Delete` + `Keep`) is
-  the original's.
+- Delete is scope-aware: on a recurring item the confirmation offers *This
+  event* (one EXDATE / one detached copy), *…and following* (truncate the
+  series before the clicked occurrence and tombstone later detached copies), and
+  *All events* (the whole series, even when opened on a detached occurrence).
+  The delete confirmation replaces the save row, so the same words can never
+  run the save/split path by mistake.
 
 ### Deliberate substitutions
 
@@ -2272,3 +2277,56 @@ Dioxus:
 
 Gates: fmt/clippy clean, Rust 198 tests, JVM 126 tests (new compact-title
 case), wasm check green.
+
+### 8.8 Scoped delete + split end bound (owner bug report)
+
+Report: Delete on a recurring event, then **"…and following"**, duplicated
+every following occurrence instead of deleting them.
+
+Cause: those scope buttons ran the *save* split. `apply_scoped_edit` only
+appended an `UNTIL` when the base had neither `UNTIL` nor `COUNT`; a base that
+already ended (`FREQ=DAILY;UNTIL=20261120T055900Z`) kept its old end, while the
+new tail started at the split with the form's preset rule and **no end**. Every
+following occurrence therefore existed twice, and the tail ran forever. The
+phone DB showed three such tails created at 19:46:38/43/47Z, all starting
+30 Oct with `FREQ=DAILY` and the base's 23 EXDATEs, beside the still-live base.
+
+Fix (shared storage, both front ends):
+
+- **Real scoped delete.** New `kal_storage::scoped::delete_scoped`
+  (`DeleteScope::{ThisOnly, ThisAndFollowing, All}`): *This event* EXDATEs one
+  base occurrence or tombstones one detached copy; *…and following* truncates
+  the base before the clicked occurrence, drops the tail's EXDATEs and
+  tombstones later detached copies; *All* resolves a detached copy back to its
+  series. It never creates a replacement row.
+- **The delete confirmation replaces the save row.** Kotlin `EditorModal` and
+  Dioxus `EditorModal` show the three delete scopes while confirming, so the
+  same words can never run the save/split path. *…and following* is offered for
+  a detached occurrence on **delete** (the storage resolves its base), while it
+  stays hidden for a detached **save**.
+- **The split preserves the end.** `truncate_rule_before` now shortens an
+  existing `UNTIL` and converts `COUNT` to the earlier equivalent `UNTIL`
+  (never extending a series that already ended earlier);
+  `kal_core::viewmodel::series_end` computes the original end and the new tail
+  carries it. A split no longer turns a bounded series into an infinite tail.
+- **Bridge**: new `kal_delete_item_json` / JNI `deleteItemJson`, Kotlin
+  `DeleteForm`; `KAL_BRIDGE_VERSION` is now **2** (33 C exports, 30 JNI
+  symbols). The widget surface is unchanged.
+- **Live DB cleanup (owner-approved)**: after force-stopping the app, the three
+  duplicate tails `01M5WW09…`, `01M5WW0F…`, `01M5WW0J…` were tombstoned in
+  place (LWW timestamp refreshed); the base `01M1PJBC…` and all older rows were
+  left untouched. The new debug APK (same debug cert, versionCode 2000) was
+  installed in place; the app was not launched.
+
+Tests: `crates/kal-storage/tests/scoped_delete.rs` (9: all three delete scopes,
+later detached copies, first-occurrence delete, existing-UNTIL split, COUNT
+split, no replacement rows); `crates/kal-ffi/tests/bridge.rs` (4 delete cases +
+the old "leaves an existing UNTIL alone" case rewritten to expect a shortened
+base and an inherited tail end); JVM `EditorPayloadsTest` pins the `DeleteForm`
+wire shape.
+
+Gates: fmt/clippy clean, Rust **211** tests (FFI bridge 60), JVM **128** tests,
+`check-bridge-abi.sh` **33 symbols / version 2**, wasm check green, debug and
+release APKs build. The locally built release APK is debug-signed (no stable
+keystore on this machine) — `release.yml` still refuses to publish that; the
+signed release comes from CI with `KAL_KEYSTORE_BASE64`.

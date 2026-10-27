@@ -79,13 +79,17 @@ private fun EditorDialog(
     error: String?,
     onChange: (EditorFields) -> Unit,
     onSave: (EditScope) -> Unit,
-    onDelete: () -> Unit,
+    onDelete: (EditScope) -> Unit,
     onDismiss: () -> Unit,
 ) {
     val colors = LocalKalColors.current
     var showDate by remember { mutableStateOf(false) }
     var showStartTime by remember { mutableStateOf(false) }
     var showEndTime by remember { mutableStateOf(false) }
+    // Deleting a recurring item needs a scope, and the confirmation replaces
+    // the save row: tapping "…and following" after "Delete" must delete the
+    // tail, never run a save/split.
+    var confirmingDelete by remember { mutableStateOf(false) }
 
     // The hardware/gesture back closes the dialog, as a modal should; the
     // original only had the backdrop click, which is also still wired below.
@@ -253,26 +257,34 @@ private fun EditorDialog(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             if (fields.id != null) {
-                DeleteControls(onConfirm = onDelete)
+                DeleteControls(
+                    offersScopes = fields.offersScopes,
+                    confirming = confirmingDelete,
+                    onStart = { confirmingDelete = true },
+                    onKeep = { confirmingDelete = false },
+                    onDelete = onDelete,
+                )
             } else {
                 Spacer(Modifier)
             }
 
-            FlowRow(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                KalButton(label = "Cancel", onClick = onDismiss)
-                if (fields.offersScopes) {
-                    KalButton(label = "All events", primary = true) { onSave(EditScope.ALL) }
-                    // A detached occurrence is the row itself, so there is no
-                    // later part of the series to split from it.
-                    if (!fields.exception) {
-                        KalButton(label = "\u2026and following") { onSave(EditScope.THIS_AND_FOLLOWING) }
+            if (!confirmingDelete) {
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    KalButton(label = "Cancel", onClick = onDismiss)
+                    if (fields.offersScopes) {
+                        KalButton(label = "All events", primary = true) { onSave(EditScope.ALL) }
+                        // A detached occurrence is the row itself, so there is no
+                        // later part of the series to split from it.
+                        if (!fields.exception) {
+                            KalButton(label = "\u2026and following") { onSave(EditScope.THIS_AND_FOLLOWING) }
+                        }
+                        KalButton(label = "This event", primary = true) { onSave(EditScope.THIS_ONLY) }
+                    } else {
+                        KalButton(label = "Save", primary = true) { onSave(EditScope.ALL) }
                     }
-                    KalButton(label = "This event", primary = true) { onSave(EditScope.THIS_ONLY) }
-                } else {
-                    KalButton(label = "Save", primary = true) { onSave(EditScope.ALL) }
                 }
             }
         }
@@ -415,25 +427,49 @@ private fun SmallButton(label: String, primary: Boolean = false, onClick: () -> 
     }
 }
 
-/** Two-step delete: the first tap asks, the second confirms. */
+/**
+ * Delete confirmation. A recurring item offers the same three scopes as the
+ * editor's save buttons, but they delete: "This event" EXDATEs one occurrence,
+ * "…and following" truncates the series, and "All events" removes the whole
+ * series (reaching the base even when opened on a detached occurrence).
+ */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun DeleteControls(onConfirm: () -> Unit) {
-    var confirming by remember { mutableStateOf(false) }
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        if (confirming) {
-            Text(
-                text = "Delete this item?",
-                color = KalDanger,
-                fontSize = KalDims.smallSize,
-                maxLines = 1,
-            )
-            KalButton(label = "Delete", onClick = onConfirm)
-            KalButton(label = "Keep", onClick = { confirming = false })
-        } else {
-            KalButton(label = "Delete", onClick = { confirming = true })
+private fun DeleteControls(
+    offersScopes: Boolean,
+    confirming: Boolean,
+    onStart: () -> Unit,
+    onKeep: () -> Unit,
+    onDelete: (EditScope) -> Unit,
+) {
+    if (!confirming) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            KalButton(label = "Delete", onClick = onStart)
         }
+        return
+    }
+    FlowRow(
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Text(
+            text = "Delete this item?",
+            color = KalDanger,
+            fontSize = KalDims.smallSize,
+            maxLines = 1,
+        )
+        if (offersScopes) {
+            KalButton(label = "This event", dense = true) { onDelete(EditScope.THIS_ONLY) }
+            KalButton(label = "\u2026and following", dense = true) {
+                onDelete(EditScope.THIS_AND_FOLLOWING)
+            }
+            KalButton(label = "All events", dense = true) { onDelete(EditScope.ALL) }
+        } else {
+            KalButton(label = "Delete", dense = true) { onDelete(EditScope.ALL) }
+        }
+        KalButton(label = "Keep", dense = true, onClick = onKeep)
     }
 }

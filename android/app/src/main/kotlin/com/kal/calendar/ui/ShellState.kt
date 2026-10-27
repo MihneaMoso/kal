@@ -6,6 +6,7 @@ import androidx.compose.runtime.setValue
 import com.kal.calendar.bridge.AgendaRow
 import com.kal.calendar.bridge.CalendarModel
 import com.kal.calendar.bridge.DayPayload
+import com.kal.calendar.bridge.DeleteForm
 import com.kal.calendar.bridge.DisplayEntry
 import com.kal.calendar.bridge.EditScope
 import com.kal.calendar.bridge.ItemKind
@@ -264,10 +265,16 @@ class ShellState(private val session: KalSession) {
         }
     }
 
-    /** Confirmed delete: tombstone the item, then close and refresh. */
-    fun deleteEditorItem() {
-        val id = editor?.id ?: return
-        if (session.deleteItem(id)) {
+    /** Confirmed delete: apply the chosen scope, then close and refresh. */
+    fun deleteEditorItem(scope: EditScope) {
+        val fields = editor ?: return
+        val id = fields.id ?: return
+        val form = DeleteForm(
+            id = id,
+            occurrenceStart = fields.occurrenceStart?.let(Formats::wireInstant),
+            scope = scope,
+        )
+        if (session.deleteItem(form)) {
             closeEditor()
             reload()
         } else {

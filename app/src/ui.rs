@@ -4,6 +4,7 @@ use chrono::{Datelike, Local, NaiveDate, NaiveTime, Weekday};
 use dioxus::prelude::*;
 use kal_core::models::{CalendarItem, DateTimeTz, ItemKind, Occurrence};
 use kal_core::viewmodel;
+use kal_storage::scoped::DeleteScope;
 use ulid::Ulid;
 
 use crate::DbHandle;
@@ -916,6 +917,9 @@ pub fn EditorModal(state: EditorState) -> Element {
         .as_ref()
         .map(|i| i.metadata.series_id.is_some())
         .unwrap_or(false);
+    // The delete confirmation replaces the save row, so "Delete → …and
+    // following" applies the delete scope instead of running the save/split.
+    let delete_mode = use_signal(|| false);
 
     // Signal captures are Copy in Dioxus, so we build one handler per scope.
     // Signal captures are Copy in Dioxus; each scope gets its own handler
@@ -1019,13 +1023,20 @@ pub fn EditorModal(state: EditorState) -> Element {
     let save_following = mk_save(Scope::ThisAndFollowing, db_save.clone());
     let save_this_only = mk_save(Scope::ThisOnly, db_save);
 
-    let delete = move |_| {
-        if let Some(id) = state.id {
-            // Deleting a series also tombstones its detached occurrences, so a
-            // series delete cannot leave "This event" copies behind.
-            let _ = db_delete.delete_with_exceptions(id);
-            items_res.restart();
-            *EDITOR_OPEN.write() = None;
+    let edit_id = state.id;
+    let edit_occ = state.occurrence_start;
+    let delete = {
+        let db_delete = db_delete.clone();
+        move |scope: DeleteScope| {
+            if let Some(id) = edit_id {
+                // This is a real scoped delete: "This event" EXDATEs one
+                // occurrence, "…and following" truncates the series, and "All
+                // events" removes the series even when opened on a detached
+                // occurrence. No replacement row is created.
+                let _ = db_delete.delete_scoped(id, edit_occ, scope);
+                items_res.restart();
+                *EDITOR_OPEN.write() = None;
+            }
         }
     };
 
@@ -1204,22 +1215,28 @@ pub fn EditorModal(state: EditorState) -> Element {
                 }
                 div { class: "modal-actions",
                     if is_edit {
-                        DeleteControls { on_delete: delete }
+                        DeleteControls {
+                            is_recurring: is_recurring_edit,
+                            mode: delete_mode,
+                            on_delete: delete,
+                        }
                     } else {
                         span {}
                     }
-                    div { style: "display:flex;gap:8px;flex-wrap:wrap;",
-                        button { onclick: move |_| *EDITOR_OPEN.write() = None, "Cancel" }
-                        if is_recurring_edit {
-                            button { class: "primary", onclick: save_all, "All events" }
-                            // A detached occurrence is the row itself; there is
-                            // no later part of the series to split from it.
-                            if !is_exception {
-                                button { onclick: save_following, "…and following" }
+                    if !*delete_mode.read() {
+                        div { style: "display:flex;gap:8px;flex-wrap:wrap;",
+                            button { onclick: move |_| *EDITOR_OPEN.write() = None, "Cancel" }
+                            if is_recurring_edit {
+                                button { class: "primary", onclick: save_all, "All events" }
+                                // A detached occurrence is the row itself; there is
+                                // no later part of the series to split from it.
+                                if !is_exception {
+                                    button { onclick: save_following, "…and following" }
+                                }
+                                button { class: "primary", onclick: save_this_only, "This event" }
+                            } else {
+                                button { class: "primary", onclick: save_all, "Save" }
                             }
-                            button { class: "primary", onclick: save_this_only, "This event" }
-                        } else {
-                            button { class: "primary", onclick: save_all, "Save" }
                         }
                     }
                 }
@@ -1228,20 +1245,52 @@ pub fn EditorModal(state: EditorState) -> Element {
     }
 }
 
-/// Two-step delete: first click asks, second click confirms.
+/// Scoped delete. The first click opens the confirmation; on a recurring item
+/// the three scope buttons *delete* rather than save, so "Delete → …and
+/// following" can never run the split path and duplicate the tail.
 #[component]
-fn DeleteControls(on_delete: EventHandler<()>) -> Element {
-    let mut confirm = use_signal(|| false);
-    if *confirm.read() {
+fn DeleteControls(
+    is_recurring: bool,
+    mode: Signal<bool>,
+    on_delete: EventHandler<DeleteScope>,
+) -> Element {
+    let mut mode = mode;
+    if *mode.read() {
         rsx! {
-            span { style: "font-size:12px;color:#c0392b;align-self:center;", "Delete this item?" }
-            button { class: "danger", onclick: move |_| on_delete.call(()), "Delete" }
-            button { onclick: move |_| confirm.set(false), "Keep" }
+            div { style: "display:flex;gap:8px;flex-wrap:wrap;align-items:center;",
+                span { style: "font-size:12px;color:#c0392b;", "Delete this item?" }
+                if is_recurring {
+                    button {
+                        class: "danger",
+                        onclick: move |_| on_delete.call(DeleteScope::ThisOnly),
+                        "This event"
+                    }
+                    button {
+                        class: "danger",
+                        onclick: move |_| on_delete.call(DeleteScope::ThisAndFollowing),
+                        "…and following"
+                    }
+                    button {
+                        class: "danger",
+                        onclick: move |_| on_delete.call(DeleteScope::All),
+                        "All events"
+                    }
+                } else {
+                    button {
+                        class: "danger",
+                        onclick: move |_| on_delete.call(DeleteScope::All),
+                        "Delete"
+                    }
+                }
+                button { onclick: move |_| mode.set(false), "Keep" }
+            }
         }
     } else {
         rsx! {
-            span {}
-            button { class: "danger", onclick: move |_| confirm.set(true), "Delete" }
+            div { style: "display:flex;gap:8px;align-items:center;",
+                span {}
+                button { class: "danger", onclick: move |_| mode.set(true), "Delete" }
+            }
         }
     }
 }

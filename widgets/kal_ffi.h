@@ -12,10 +12,10 @@
 extern "C" {
 #endif
 
-/* Bridge schema version. Additive changes only within a major version; a
- * breaking change bumps this and the Kotlin declaration set must match.
+/* Bridge schema version. The Kotlin declaration set must match this value;
+ * any new required entry point bumps it (additive JSON fields do not).
  * Callers handshake on this before any other call. */
-#define KAL_BRIDGE_VERSION 1u
+#define KAL_BRIDGE_VERSION 2u
 uint32_t kal_bridge_version(void);
 
 /* Opaque database handle. */
@@ -55,6 +55,11 @@ int32_t kal_upsert_item_json(KalDb *db, const char *json);
  * 0 when no such id exists, -1 on error. Re-deleting refreshes the LWW
  * timestamp that propagates the deletion, so it returns 1 as well. */
 int32_t kal_soft_delete_item(KalDb *db, const char *id);
+
+/* Delete one item or a scoped part of a recurring series from the JSON form
+ * {id, occurrenceStart?, scope?}. scope is "all" (default), "this_only", or
+ * "this_and_following"; a missing id is idempotent success. 0 ok / -1 error. */
+int32_t kal_delete_item_json(KalDb *db, const char *json);
 
 /* Full-row upsert of a calendar from its JSON model. 0 ok / -1 error. */
 int32_t kal_upsert_calendar_json(KalDb *db, const char *json);

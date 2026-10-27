@@ -166,6 +166,20 @@ data class EditorForm(
     }.toString()
 }
 
+/** One scoped delete, exactly as `kal_delete_item_json` reads it. */
+data class DeleteForm(
+    val id: String,
+    /** The clicked occurrence's instant (RFC 3339), or null for the whole item. */
+    val occurrenceStart: String?,
+    val scope: EditScope,
+) {
+    fun toJson(): String = JSONObject().apply {
+        put("id", id)
+        put("occurrenceStart", occurrenceStart ?: JSONObject.NULL)
+        put("scope", scope.wire)
+    }.toString()
+}
+
 /** One day cell of the month grid. */
 data class MonthCell(val date: LocalDate, val inMonth: Boolean, val items: List<DisplayEntry>)
 
