@@ -432,7 +432,8 @@ fn decode_hex(s: &str) -> Option<[u8; 32]> {
         return None;
     }
     let mut out = [0u8; 32];
-    for (i, pair) in bytes.chunks_exact(2).enumerate() {
+    let (pairs, _) = bytes.as_chunks::<2>();
+    for (i, pair) in pairs.iter().enumerate() {
         out[i] = hex_nibble(pair[0])? << 4 | hex_nibble(pair[1])?;
     }
     Some(out)
