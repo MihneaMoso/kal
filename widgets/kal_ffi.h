@@ -15,7 +15,7 @@ extern "C" {
 /* Bridge schema version. The Kotlin declaration set must match this value;
  * any new required entry point bumps it (additive JSON fields do not).
  * Callers handshake on this before any other call. */
-#define KAL_BRIDGE_VERSION 2u
+#define KAL_BRIDGE_VERSION 3u
 uint32_t kal_bridge_version(void);
 
 /* Opaque database handle. */
@@ -289,6 +289,20 @@ int32_t kal_sync_leave(KalDb *db);
  * "live P2P: no peers yet ...").
  */
 char *kal_sync_round_json(KalDb *db);
+
+/*
+ * Devices seen on this chain, for the sync panel:
+ *   {"devices":[{"id":"01...","revoked":false}, ...]}
+ * Blocked ids are included even when they predate this install's peer history.
+ * NULL on error.
+ */
+char *kal_sync_devices_json(KalDb *db);
+
+/*
+ * Remove a device: persist its id in the local blocklist so this device drops
+ * every envelope it sends from now on. 0 ok / -1 error (bad id, bad handle).
+ */
+int32_t kal_sync_revoke_device(KalDb *db, const char *device_id);
 
 #ifdef __cplusplus
 }

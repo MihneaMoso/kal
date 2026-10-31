@@ -83,6 +83,11 @@ pub fn parse_version(v: &str) -> Vec<u64> {
 }
 
 /// True when `latest` is strictly newer than `current`.
+///
+/// Components compare left to right, like a version: the first differing
+/// component decides. (A scan that reports *any* larger component would call
+/// `0.1.9` newer than `0.2.0` because `9 > 0`.) Missing components count as
+/// zero, so `0.2` and `0.2.0` are the same version.
 pub fn is_newer(latest: &str, current: &str) -> bool {
     if latest == current {
         return false;
@@ -90,7 +95,16 @@ pub fn is_newer(latest: &str, current: &str) -> bool {
     let a = parse_version(latest);
     let b = parse_version(current);
     let max = a.len().max(b.len());
-    (0..max).any(|i| a.get(i).copied().unwrap_or(0) > b.get(i).copied().unwrap_or(0))
+    for i in 0..max {
+        let (left, right) = (
+            a.get(i).copied().unwrap_or(0),
+            b.get(i).copied().unwrap_or(0),
+        );
+        if left != right {
+            return left > right;
+        }
+    }
+    false
 }
 
 /// The asset token for the running platform, as `std::env::consts::OS` spells it.
@@ -237,6 +251,18 @@ mod tests {
         // A shorter latest with a bigger numeric tail still wins.
         assert!(!is_newer("0.1", "0.1.0"));
         assert!(is_newer("0.2", "0.1.9"));
+    }
+
+    #[test]
+    fn a_later_component_cannot_outvote_an_earlier_one() {
+        // The first differing component decides the order; a bigger patch
+        // number must not make a lower minor look newer.
+        assert!(!is_newer("0.1.9", "0.2.0"));
+        assert!(!is_newer("1.0.1", "1.1.0"));
+        assert!(!is_newer("1.9.9", "2.0.0"));
+        assert!(is_newer("0.2.0", "0.1.9"));
+        assert!(is_newer("1.1.0", "1.0.1"));
+        assert!(is_newer("2.0.0", "1.9.9"));
     }
 
     #[test]

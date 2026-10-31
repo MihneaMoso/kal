@@ -230,6 +230,13 @@ data class SyncPhrase(val phrase: String, val fingerprint: String)
 data class SyncRound(val merged: Int)
 
 /**
+ * One device seen on the chain (`kal_sync_devices_json`). [id] is the stable
+ * per-install device id carried in every envelope; [revoked] means this device
+ * drops that peer's snapshots.
+ */
+data class SyncDevice(val id: String, val revoked: Boolean)
+
+/**
  * Parsing for the native JSON payloads — pure functions with no Android or
  * database dependency, so the JVM unit tests pin the exact contract the Rust
  * side emits.
@@ -360,6 +367,19 @@ object Payloads {
     fun parseSyncRound(json: String?): SyncRound? = parse(json) { root ->
         SyncRound(merged = JSONObject(root).optInt("merged", 0))
     }
+
+    /**
+     * Devices the sync panel can list. An unreadable payload yields none, so a
+     * failed read never invents a peer row; rows without an id are dropped.
+     */
+    fun parseSyncDevices(json: String?): List<SyncDevice> = parse(json) { root ->
+        val arr = JSONObject(root).optJSONArray("devices") ?: JSONArray()
+        (0 until arr.length()).mapNotNull { i ->
+            val obj = arr.optJSONObject(i) ?: return@mapNotNull null
+            val id = obj.optString("id", "")
+            if (id.isEmpty()) null else SyncDevice(id, obj.optBoolean("revoked", false))
+        }
+    } ?: emptyList()
 
     /**
      * Reminder firings, nearest first and already capped by the native side.

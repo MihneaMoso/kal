@@ -11,9 +11,36 @@ import java.util.Locale
  */
 internal object MonthWidgetModel {
 
-    /** The month a widget shows: today's month plus its stored offset. */
-    fun monthFor(base: YearMonth, offset: Int): YearMonth =
-        base.plusMonths(offset.toLong())
+    /**
+     * The month a widget shows. A widget the user never navigated has no pin
+     * and follows [today]; a navigated widget keeps its pinned month, so time
+     * passing cannot drag the view somewhere it never visited.
+     */
+    fun monthFor(today: YearMonth, pinned: YearMonth?): YearMonth = pinned ?: today
+
+    /**
+     * The pin to store after moving one month from [shown]. Moving back to
+     * [today] clears the pin (`null`), so the widget resumes following the
+     * calendar instead of freezing on the current month.
+     */
+    fun pinAfter(shown: YearMonth, delta: Int, today: YearMonth): YearMonth? =
+        shown.plusMonths(delta.toLong()).takeUnless { it == today }
+
+    /** Stable prefs text for a pinned month, e.g. "2026-10". */
+    fun monthKey(month: YearMonth): String = month.toString()
+
+    /** Reads a pinned month; junk is treated as "not pinned". */
+    fun parseMonthKey(raw: String?): YearMonth? =
+        raw?.takeIf { it.isNotBlank() }
+            ?.let { runCatching { YearMonth.parse(it) }.getOrNull() }
+
+    /**
+     * Converts the old per-widget relative offset to an absolute pin, or
+     * `null` when that month is [today]'s (the widget follows the calendar
+     * again). Used once when upgrading a widget that predates the pin.
+     */
+    fun pinFromLegacyOffset(offset: Int, today: YearMonth): YearMonth? =
+        today.plusMonths(offset.toLong()).takeUnless { it == today }
 
     /** "October 2026" in the device locale. */
     fun title(month: YearMonth, locale: Locale): String =

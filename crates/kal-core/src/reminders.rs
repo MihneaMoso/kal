@@ -7,7 +7,7 @@
 use chrono::NaiveDate;
 
 use crate::models::{CalendarItem, ItemKind, Occurrence};
-use crate::viewmodel::expand_occurrences;
+use crate::viewmodel::expand_occurrence_starts;
 
 /// A single upcoming reminder firing.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -72,29 +72,14 @@ pub fn compute_firings(
 /// The occurrences a reminder fires from.
 ///
 /// A non-recurring item fires once, from its own start. The grid expansion
-/// ([`expand_occurrences`]) repeats a multi-day — or midnight-crossing — event
-/// on every day it covers, which is right for the calendar views but wrong
-/// here: it armed the same reminder once per covered day, so a 23:00–01:00
-/// event rang twice and a week-long event rang seven times. Recurring series
-/// keep the per-occurrence expansion (a rule never covers a day twice).
+/// repeats a multi-day — or midnight-crossing — event on every day it covers,
+/// which is right for the calendar views but wrong here: it armed the same
+/// reminder once per covered day, so a 23:00–01:00 event rang twice and a
+/// week-long event rang seven times. [`expand_occurrence_starts`] gives one
+/// entry per series occurrence, so a multi-day recurring instance also fires
+/// once while a weekly series still fires on every instance.
 fn firing_occurrences(item: &CalendarItem, from: NaiveDate, to: NaiveDate) -> Vec<Occurrence> {
-    if item.rrule.is_some() {
-        return occurrences_window(item, from, to);
-    }
-    // Reminders resolve from the item's own instant; the horizon still bounds
-    // what is armed (`from` is applied to the resolved fire time above).
-    if item.start.date_naive() > to {
-        return Vec::new();
-    }
-    vec![Occurrence {
-        item_id: item.id,
-        start: item.start,
-        end: item.end,
-    }]
-}
-
-fn occurrences_window(item: &CalendarItem, from: NaiveDate, to: NaiveDate) -> Vec<Occurrence> {
-    expand_occurrences(item, from, to)
+    expand_occurrence_starts(item, from, to)
 }
 
 #[cfg(test)]
@@ -188,6 +173,22 @@ mod tests {
         let firings = compute_firings(&[week], ts(2026, 8, 1, 0), 40);
         assert_eq!(firings.len(), 1, "{firings:?}");
         assert_eq!(firings[0].fire_at, ts(2026, 8, 23, 9));
+    }
+
+    #[test]
+    fn a_multi_day_series_fires_once_per_occurrence() {
+        // The grid shows a 2026-09-01..03 occurrence on three days, but it is
+        // still one event per week: two occurrences must ring twice, not six
+        // times.
+        let mut it = event(ts(2026, 9, 1, 9), &[60]);
+        it.end = Some(it.start + chrono::Duration::days(2));
+        it.rrule = Some("FREQ=WEEKLY;COUNT=2".into());
+
+        let firings = compute_firings(&[it], ts(2026, 8, 31, 0), 30);
+
+        assert_eq!(firings.len(), 2, "{firings:?}");
+        assert_eq!(firings[0].fire_at, ts(2026, 9, 1, 8));
+        assert_eq!(firings[1].fire_at, ts(2026, 9, 8, 8));
     }
 
     #[test]

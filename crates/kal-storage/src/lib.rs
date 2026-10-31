@@ -26,6 +26,11 @@ mod wasm;
 #[cfg(target_arch = "wasm32")]
 pub use wasm::Database;
 
+/// Flush coalescing for the wasm snapshot store. Compiled for native tests too,
+/// so the interleaving rules stay covered by `cargo test`.
+#[cfg(any(target_arch = "wasm32", test))]
+mod flush;
+
 /// Errors surfaced by either storage backend.
 #[derive(Debug, Error)]
 pub enum StorageError {

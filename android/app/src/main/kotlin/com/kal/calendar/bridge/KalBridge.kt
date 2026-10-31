@@ -205,6 +205,14 @@ class KalSession internal constructor(private val handle: Long) {
     fun syncRound(): SyncRound? =
         Payloads.parseSyncRound(query { KalNative.syncRoundJson(handle) })
 
+    /** Devices seen on this chain, for the sync panel's Remove action. */
+    fun syncDevices(): List<SyncDevice> =
+        Payloads.parseSyncDevices(query { KalNative.syncDevicesJson(handle) })
+
+    /** Block a device: its envelopes are ignored from now on. */
+    fun revokeSyncDevice(id: String): Boolean =
+        command { KalNative.syncRevokeDevice(handle, id) == 0 }
+
     /** Close the handle; further queries return empty results. */
     fun close() {
         if (!closed) {
@@ -259,7 +267,7 @@ object KalBridge {
      * Bridge version this Kotlin build was compiled against. Bump together with
      * `kal_ffi::KAL_BRIDGE_VERSION` and the pinned tests in `crates/kal-jni`.
      */
-    const val EXPECTED_BRIDGE_VERSION = 2
+    const val EXPECTED_BRIDGE_VERSION = 3
 
     /** `<filesDir>/kal/calendar.db` — the path the Dioxus app (and the widgets) use. */
     fun databasePath(filesDir: String): String = "$filesDir/kal/calendar.db"

@@ -21,6 +21,8 @@ Push to main (or open a PR) → Actions tab → kotlin-build job → download
 kal-kotlin-debug.apk. Tag pushes publish kal-<version>-android.apk (signed with
 the release key) via the release workflow.
 
-What's NOT wired up yet
-- Widget taps open the app on its current view (no deep link to the tapped day).
+Remaining gaps
+- Schedule-widget rows open the app's current view; no per-event deep link yet
+  (month-widget day taps do open that day's new-event editor).
+- iOS WidgetKit extension and the Dioxus iOS shell.
 - Desktop extras (mini-widget, rfd dialogs) stay behind desktop-only gates.

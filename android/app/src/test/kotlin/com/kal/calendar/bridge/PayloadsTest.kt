@@ -223,6 +223,26 @@ class PayloadsTest {
     }
 
     @Test
+    fun `sync devices payload parses ids and blocked status`() {
+        val devices = Payloads.parseSyncDevices(
+            """{"devices":[{"id":"01AAA","revoked":false},{"id":"01BBB","revoked":true}]}""",
+        )
+        assertEquals(listOf("01AAA", "01BBB"), devices.map { it.id })
+        assertEquals(listOf(false, true), devices.map { it.revoked })
+
+        // Missing/empty ids are dropped, and bad payloads never invent a peer.
+        assertEquals(
+            listOf("01CCC"),
+            Payloads.parseSyncDevices(
+                """{"devices":[{"revoked":false},{"id":""},{"id":"01CCC"}]}""",
+            ).map { it.id },
+        )
+        assertTrue(Payloads.parseSyncDevices("not json").isEmpty())
+        assertTrue(Payloads.parseSyncDevices(null).isEmpty())
+        assertTrue(Payloads.parseSyncDevices("{}").isEmpty())
+    }
+
+    @Test
     fun `getSetting replies decode to the stored string`() {
         assertEquals("dark", Payloads.decodeText("\"dark\""))
         // A legacy JSON-encoded theme arrives with literal quotes on the value;

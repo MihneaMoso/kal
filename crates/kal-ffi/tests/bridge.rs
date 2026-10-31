@@ -69,7 +69,7 @@ impl Fixture {
 #[test]
 fn version_handshake_is_available() {
     assert_eq!(kal_ffi::kal_bridge_version(), kal_ffi::KAL_BRIDGE_VERSION);
-    assert_eq!(kal_ffi::KAL_BRIDGE_VERSION, 2);
+    assert_eq!(kal_ffi::KAL_BRIDGE_VERSION, 3);
 }
 
 #[test]
@@ -267,6 +267,58 @@ fn failures_report_through_the_error_channel_not_panics() {
             -1
         );
         assert!(last_error().is_some());
+
+        kal_ffi::kal_close(&mut db);
+    }
+}
+
+#[test]
+fn widgets_omit_items_on_hidden_calendars() {
+    let f = fixture();
+    // Hide the fixture calendar and add a second, visible one. The widgets get
+    // no calendar list, so the native payload must already apply the filter the
+    // app views apply client-side.
+    {
+        let db = Database::open(&f.path).unwrap();
+        let mut hidden = db
+            .list_calendars()
+            .unwrap()
+            .into_iter()
+            .find(|c| c.id.to_string() == f.cal_id)
+            .expect("fixture calendar");
+        hidden.visible = false;
+        db.upsert_calendar(&hidden).unwrap();
+
+        let shown = Calendar::local("Personal", Color("#16a085".into()));
+        db.upsert_calendar(&shown).unwrap();
+        let item = CalendarItem::new(
+            ItemKind::Event,
+            "Visible event",
+            shown.id,
+            datetime_from_parts(2026, 8, 24, 10, 0, 0).unwrap(),
+        );
+        db.upsert_item(&item).unwrap();
+    }
+
+    // SAFETY: `f.open()` returns a live handle for this test's database and
+    // every call below uses it; `take_string` frees each returned C string, and
+    // `kal_close` is called exactly once before the test ends.
+    unsafe {
+        let mut db = f.open();
+
+        let upcoming = take_string(kal_ffi::kal_upcoming_json(db, 1785000000, 1787700000)).unwrap();
+        assert!(upcoming.contains("Visible event"), "{upcoming}");
+        assert!(
+            !upcoming.contains("Standup"),
+            "hidden calendar leaked into the schedule widget: {upcoming}"
+        );
+
+        let grid = take_string(kal_ffi::kal_month_grid_json(db, 2026, 8, 0)).unwrap();
+        assert!(grid.contains("Visible event"), "{grid}");
+        assert!(
+            !grid.contains("Standup"),
+            "hidden calendar leaked into the month widget: {grid}"
+        );
 
         kal_ffi::kal_close(&mut db);
     }
@@ -2609,6 +2661,51 @@ fn sync_leave_clears_the_chain_but_keeps_the_node_identity() {
     }
 }
 
+/// The device list starts empty, a removed id is persisted with `revoked:
+/// true`, and the blocklist survives closing/reopening the database.
+#[test]
+fn sync_device_blocklist_round_trips_through_the_ffi() {
+    let f = fixture();
+    let dev_id = "01ARZ3NDEKTSV4RRFFQ69G5FAV";
+    unsafe {
+        let mut db = f.open();
+        let empty = take_string(kal_ffi::kal_sync_devices_json(db)).unwrap();
+        let v: serde_json::Value = serde_json::from_str(&empty).unwrap();
+        assert_eq!(v["devices"], serde_json::json!([]));
+
+        // A malformed id is refused instead of being written.
+        assert_eq!(
+            kal_ffi::kal_sync_revoke_device(db, c("not-a-ulid").as_ptr()),
+            -1
+        );
+        assert_eq!(last_error().as_deref(), Some("Invalid device id"));
+
+        assert_eq!(kal_ffi::kal_sync_revoke_device(db, c(dev_id).as_ptr()), 0);
+        assert!(last_error().is_none());
+
+        let listed = take_string(kal_ffi::kal_sync_devices_json(db)).unwrap();
+        let v: serde_json::Value = serde_json::from_str(&listed).unwrap();
+        assert_eq!(v["devices"][0]["id"], dev_id);
+        assert_eq!(v["devices"][0]["revoked"], true);
+
+        // Reopen: the blocklist is in the device-local settings table.
+        kal_ffi::kal_close(&mut db);
+        let mut db = f.open();
+        let listed = take_string(kal_ffi::kal_sync_devices_json(db)).unwrap();
+        let v: serde_json::Value = serde_json::from_str(&listed).unwrap();
+        assert_eq!(v["devices"][0]["id"], dev_id);
+        assert_eq!(v["devices"][0]["revoked"], true);
+
+        // Revoking the same id twice leaves one row.
+        assert_eq!(kal_ffi::kal_sync_revoke_device(db, c(dev_id).as_ptr()), 0);
+        let listed = take_string(kal_ffi::kal_sync_devices_json(db)).unwrap();
+        let v: serde_json::Value = serde_json::from_str(&listed).unwrap();
+        assert_eq!(v["devices"].as_array().unwrap().len(), 1);
+
+        kal_ffi::kal_close(&mut db);
+    }
+}
+
 /// A round without a chain reports "not paired" instead of touching the
 /// network.
 #[test]
@@ -2631,6 +2728,14 @@ fn sync_exports_reject_a_null_handle() {
         assert!(kal_ffi::kal_sync_start_chain_json(std::ptr::null_mut()).is_null());
         assert!(kal_ffi::kal_sync_phrase_json(std::ptr::null_mut()).is_null());
         assert!(kal_ffi::kal_sync_round_json(std::ptr::null_mut()).is_null());
+        assert!(kal_ffi::kal_sync_devices_json(std::ptr::null_mut()).is_null());
+        assert_eq!(
+            kal_ffi::kal_sync_revoke_device(
+                std::ptr::null_mut(),
+                c("01ARZ3NDEKTSV4RRFFQ69G5FAV").as_ptr()
+            ),
+            -1
+        );
         assert_eq!(kal_ffi::kal_sync_leave(std::ptr::null_mut()), -1);
         assert_eq!(last_error().as_deref(), Some("null database handle"));
     }

@@ -2,8 +2,8 @@
 
 Free, open-source, local-first calendar for desktop & mobile. Events, tasks
 and birthdays; full RFC 5545 recurrence; unlimited locally-scheduled
-reminders; `.ics` import/export; Google Calendar import; optional account-free
-peer-to-peer sync — all in one Rust codebase (Dioxus 0.7).
+reminders; `.ics` import/export; a Google Calendar import library; optional
+account-free peer-to-peer sync — all in one Rust codebase (Dioxus 0.7).
 
 ## Status
 
@@ -12,8 +12,9 @@ peer-to-peer sync — all in one Rust codebase (Dioxus 0.7).
 | Events / tasks / birthdays, multi-calendar | ✅ |
 | Month / week / day / agenda views | ✅ |
 | RRULE recurrence + per-instance edit scoping | ✅ |
-| Unlimited reminders → OS notifications | ✅ desktop |
-| .ics round-trip + Google Calendar import | ✅ |
+| Unlimited reminders → OS notifications | ✅ desktop / Android |
+| .ics round-trip | ✅ |
+| Google Calendar import (library only — no UI or token storage yet) | 🚧 |
 | Sync chain: phrase pairing, encrypted live P2P (iroh) + folder-gossip merge | ✅ |
 | Settings (theme, clock, week start, default view) | ✅ |
 | i18n scaffolding (en-US), a11y pass | ✅ |
@@ -23,7 +24,7 @@ peer-to-peer sync — all in one Rust codebase (Dioxus 0.7).
 | Cross-platform installer (`install.sh`) + in-app updater | ✅ desktop/Android |
 | Web app (`/kal/app/` — wasm build with IndexedDB storage) | ✅ built in CI on every master push + release tag |
 | Live P2P: iroh gossip + DHT discovery (same-phrase devices find each other) | ✅ native |
-| LAN mDNS transport, iOS/mobile app targets | 🔜 |
+| LAN mDNS transport, iOS app/WidgetKit targets | 🔜 |
 
 Design decisions: `DECISIONS.md` · Sync internals: `ARCHITECTURE.md` ·
 Contributing: `CONTRIBUTING.md` · Environment gotchas: `RULES.md`.
@@ -71,7 +72,7 @@ Prerequisites: Rust stable.
 
 ```sh
 cargo run -p kal-app          # dev build & launch
-cargo test --workspace        # test suite (100+ tests)
+cargo test --workspace        # full workspace suite
 cargo clippy --workspace      # lints (CI enforces -D warnings)
 ```
 
@@ -96,18 +97,21 @@ cargo build -p kal-core -p kal-storage -p kal-ffi \
 cargo build -p kal-ffi --target aarch64-apple-ios   # staticlib for XCFramework
 ```
 
-The Dioxus mobile shell and platform notification FFI are the remaining work
-tracked under phase 6 in `RULES.md`.
+The Android app lives in [`android/app/`](android/app/) (Kotlin/Compose over
+`libkal_jni.so`). The Dioxus iOS shell, the WidgetKit extension and the LAN
+mDNS transport are the remaining mobile work; see
+`STEP0_ANDROID_KOTLIN_REWRITE.md` and `info.md`.
 
 ## Widgets
 
-Native widgets read the same SQLite file through the C ABI in
-[`widgets/kal_ffi.h`](widgets/kal_ffi.h):
+The Android home-screen widgets (schedule + month) live in the Kotlin app
+module (`android/app/src/main/kotlin/com/kal/calendar/widgets/`) and read the
+same SQLite file through `libkal_jni.so`. They refresh on
+`updatePeriodMillis`, after a reboot, and immediately after an app mutation.
 
-- **Android**: build `libkal_ffi.so` per ABI into `jniLibs/`, then the Glance
-  widget in [`widgets/android/`](widgets/android/).
-- **iOS**: package the staticlib as an XCFramework for the WidgetKit extension
-  in [`widgets/ios/`](widgets/ios/).
+[`widgets/kal_ffi.h`](widgets/kal_ffi.h) is the stable C ABI shared with the
+older shim sources in [`widgets/`](widgets/); the iOS WidgetKit extension is
+still future work (it needs an Xcode target).
 
 ## Packaging
 
@@ -132,7 +136,7 @@ GitHub Actions**.
 The app itself also runs in the browser as a wasm build at
 **https://mihneamoso.github.io/kal/app/** (deployed by the same `pages`
 workflow). On `wasm32` the storage crate swaps SQLite for an in-memory,
-IndexedDB-backed `Database` that keeps the same synchronous 13-method API and
+IndexedDB-backed `Database` that keeps the same synchronous `Database` API and
 persists snapshots to the browser's IndexedDB (`base_path = "kal/app"` in
 `app/Dioxus.toml`).
 

@@ -93,21 +93,69 @@ CREATE TABLE IF NOT EXISTS settings (
     value TEXT NOT NULL
 );
 "#,
-    // v4: one-time repair of duplicated default calendars (a historical bug
-    // re-inserted Personal/Birthdays on every failed list). Items are
-    // re-pointed to the surviving row before the duplicates are removed.
+    // v4: one-time repair of the duplicated *default* calendars a historical
+    // bug left behind (it re-inserted Personal/Birthdays on every failed list).
+    //
+    // Scope is deliberately narrow: only those two names, and only copies that
+    // share the same source and colour — the signature the seeding bug always
+    // wrote. Two calendars the user deliberately gave the same name are left
+    // alone, since names are not unique in this data model.
+    //
+    // The survivor is the well-known default id when the group contains it
+    // (so the repaired rows keep the ids the seed/sync code recognises), then a
+    // visible row, then the lowest id. Items are re-pointed before the
+    // duplicates are removed. The canonical ids mirror
+    // `kal_core::DEFAULT_PERSONAL_ID` / `DEFAULT_BIRTHDAYS_ID` (asserted by a
+    // unit test, since a migration is a plain SQL string).
     r#"
-UPDATE items SET calendar_id = (
+CREATE TEMP TABLE v4_defaults (
+    name TEXT NOT NULL, source TEXT NOT NULL, color TEXT NOT NULL,
+    keep_id TEXT NOT NULL,
+    PRIMARY KEY (name, source, color)
+);
+
+INSERT INTO v4_defaults (name, source, color, keep_id)
+SELECT g.name, g.source, g.color, (
     SELECT c.id FROM calendars c
-    WHERE c.name = (SELECT name FROM calendars WHERE id = items.calendar_id)
-    ORDER BY c.id LIMIT 1
+    WHERE c.name = g.name AND c.source = g.source AND c.color = g.color
+    ORDER BY
+        CASE WHEN c.id IN ('01ARZ3NDEKTSV4RRFFQ69G5FAV',
+                           '01ARZ3NDEKTSV4RRFFQ69G5FBW') THEN 0
+             WHEN c.visible <> 0 THEN 1
+             ELSE 2 END,
+        c.id
+    LIMIT 1
+)
+FROM (
+    SELECT name, source, color
+    FROM calendars
+    WHERE name IN ('Personal', 'Birthdays')
+    GROUP BY name, source, color
+    HAVING COUNT(*) > 1
+) AS g;
+
+UPDATE items SET calendar_id = (
+    SELECT d.keep_id FROM calendars c
+    JOIN v4_defaults d
+      ON c.name = d.name AND c.source = d.source AND c.color = d.color
+    WHERE c.id = items.calendar_id
 )
 WHERE calendar_id IN (
-    SELECT id FROM calendars
-    WHERE id NOT IN (SELECT MIN(id) FROM calendars GROUP BY name)
+    SELECT c.id FROM calendars c
+    JOIN v4_defaults d
+      ON c.name = d.name AND c.source = d.source AND c.color = d.color
+    WHERE c.id <> d.keep_id
 );
+
 DELETE FROM calendars
-WHERE id NOT IN (SELECT MIN(id) FROM calendars GROUP BY name);
+WHERE id IN (
+    SELECT c.id FROM calendars c
+    JOIN v4_defaults d
+      ON c.name = d.name AND c.source = d.source AND c.color = d.color
+    WHERE c.id <> d.keep_id
+);
+
+DROP TABLE v4_defaults;
 "#,
     // v5: calendar soft-delete tombstone so deletions propagate over sync
     // (union-merge resurrects physically removed rows from any peer that
@@ -502,5 +550,21 @@ impl crate::scoped::ScopedStore for Database {
 
     fn scoped_soft_delete_item(&self, id: Ulid) -> Result<bool> {
         self.soft_delete_item(id)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    /// The v4 repair recognises the defaults by their well-known ids. They sit
+    /// as literals inside a migration string (a `const &str` cannot interpolate
+    /// another const), so this keeps the two definitions from drifting.
+    #[test]
+    fn v4_migration_uses_the_well_known_default_ids() {
+        let sql = super::MIGRATIONS
+            .iter()
+            .find(|sql| sql.contains("v4_defaults"))
+            .expect("v4 migration");
+        assert!(sql.contains(kal_core::DEFAULT_PERSONAL_ID));
+        assert!(sql.contains(kal_core::DEFAULT_BIRTHDAYS_ID));
     }
 }

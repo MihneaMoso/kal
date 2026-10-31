@@ -3,6 +3,8 @@
 //! The transport trait keeps protocol logic testable offline; real transports
 //! (mDNS/LAN, iroh QUIC+relay) plug in behind the same interface.
 
+use std::collections::BTreeSet;
+
 use ulid::Ulid;
 
 use crate::crdt::{SyncEnvelope, SyncState};
@@ -38,9 +40,13 @@ pub struct SyncSession<'a> {
     pub device_id: Ulid,
     pub device_name: String,
     pub state: SyncState,
-    /// Fingerprints of devices removed by the user; their envelopes are
-    /// dropped instead of merged (§5.4 step 5).
-    pub revoked: Vec<String>,
+    /// Device ids removed by the user; their envelopes are dropped instead of
+    /// merged (§5.4 step 5). The list is loaded from the device-local settings
+    /// store before every round, so a revocation survives restarts.
+    pub revoked: Vec<Ulid>,
+    /// Device ids whose envelopes this session accepted. Persisted after the
+    /// round so the sync panel can list (and remove) peers it has seen.
+    pub peers: BTreeSet<Ulid>,
 }
 
 impl<'a> SyncSession<'a> {
@@ -56,6 +62,7 @@ impl<'a> SyncSession<'a> {
             device_name: device_name.into(),
             state,
             revoked: Vec::new(),
+            peers: BTreeSet::new(),
         }
     }
 
@@ -78,9 +85,10 @@ impl<'a> SyncSession<'a> {
         )
         .map_err(|e| SyncError::Malformed(e.to_string()))?;
 
-        if self.revoked.contains(&format!("{:?}", env.device_id)) {
+        if self.revoked.contains(&env.device_id) {
             return Err(SyncError::Revoked);
         }
+        self.peers.insert(env.device_id);
         self.state.merge(&env.state);
         Ok(env.state)
     }
@@ -218,9 +226,13 @@ mod tests {
         let blob = rogue.seal_state().unwrap();
 
         let mut main = make_session(&id, "Main", SyncState::default());
-        main.revoked.push(format!("{:?}", rogue.device_id));
+        main.revoked.push(rogue.device_id);
 
         assert!(matches!(main.accept_blob(&blob), Err(SyncError::Revoked)));
+        assert!(
+            main.peers.is_empty(),
+            "a revoked envelope must not be recorded as a peer"
+        );
     }
 
     #[test]

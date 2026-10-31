@@ -123,4 +123,13 @@ internal object KalNative {
      * UI thread.
      */
     external fun syncRoundJson(handle: Long): String?
+
+    /** Devices seen on the chain: `{devices:[{id, revoked}]}`, or null on failure. */
+    external fun syncDevicesJson(handle: Long): String?
+
+    /**
+     * Add a device id to this install's sync blocklist. Its snapshots are
+     * dropped from now on. 0 on success, -1 on failure.
+     */
+    external fun syncRevokeDevice(handle: Long, deviceId: String): Int
 }

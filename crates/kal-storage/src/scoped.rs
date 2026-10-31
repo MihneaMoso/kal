@@ -14,10 +14,10 @@
 //!   before the occurrence, then create the edited series from it with the
 //!   original end (an existing `UNTIL`, or a `COUNT`'s last occurrence) carried
 //!   onto the tail.
-//! - `all` ([`anchored_on_series`] + [`apply_all_edit`]): the base row is
-//!   rewritten, so it keeps the series' own anchor date (the editor form is
-//!   anchored on the clicked occurrence), and the dialog's shared fields are
-//!   carried to every exception of the series.
+//! - `all` ([`anchored_on_series`] + [`apply_all_edit`]): a recurring base row
+//!   keeps the series' own anchor date (the editor form is anchored on the
+//!   clicked occurrence), a plain item takes the dialog's date, and the
+//!   dialog's shared fields are carried to every exception of the series.
 //!
 //! [`delete_scoped`] is the delete-side counterpart: it EXDATEs, truncates or
 //! tombstones, and never creates a replacement row.
@@ -214,6 +214,32 @@ fn copy_shared_fields(target: &mut CalendarItem, edited: &CalendarItem) {
     target.metadata.birthday_of = edited.metadata.birthday_of.clone();
 }
 
+/// The end instant for an edit whose dialog has one date field: keep the row's
+/// stored day-span (the number of days between its start and end dates) and
+/// apply the dialog's end time to the shifted end date. Without this, every
+/// save of a multi-day item collapsed its end onto the start day, because the
+/// form carries no second date to preserve.
+fn end_for_edit(
+    base: &CalendarItem,
+    edited: &CalendarItem,
+    start: DateTimeTz,
+) -> Option<DateTimeTz> {
+    let edited_end = edited.end?;
+    let days = base
+        .end
+        .map(|end| {
+            (end.date_naive() - base.start.date_naive())
+                .num_days()
+                .max(0)
+        })
+        .unwrap_or(0);
+    let date = start.date_naive() + chrono::Duration::days(days);
+    date.and_time(edited_end.time())
+        .and_local_timezone(*start.offset())
+        .single()
+        .map(|dt| dt.fixed_offset())
+}
+
 /// "All events": rewrite the series row and carry the dialog's shared fields to
 /// every occurrence detached from it.
 ///
@@ -244,19 +270,38 @@ pub fn apply_all_edit<S: ScopedStore + ?Sized>(store: &S, edited: &CalendarItem)
     };
 
     let now = Utc::now().fixed_offset();
-    let anchored = anchored_on_series(&base, edited);
 
     let mut series = base.clone();
     copy_shared_fields(&mut series, edited);
-    series.start = anchored.start;
-    series.end = anchored.end;
+    if base.rrule.is_some() {
+        // A recurring series is edited from one of its occurrences, so the
+        // series keeps its own anchor date and takes only the dialog's
+        // wall-clock time.
+        let anchored = anchored_on_series(&base, edited);
+        series.start = anchored.start;
+        series.end = end_for_edit(&base, edited, anchored.start);
+    } else {
+        // A plain item is edited from its own row, so the dialog's date is
+        // authoritative. (The dialog has a single date field; `end_for_edit`
+        // carries a multi-day span over instead of collapsing it.)
+        series.start = edited.start;
+        series.end = end_for_edit(&base, edited, edited.start);
+    }
     series.rrule = edited.rrule.clone();
+    // How far the series' own clock moved; its exceptions move with it, keeping
+    // the dates the user gave them. EXDATEs and recurrence ids are instants of
+    // the old clock, so they move by the same amount: otherwise a time-of-day
+    // edit would leave every exclusion pointing at an occurrence the rule no
+    // longer generates, and deleted occurrences would reappear at the new time.
+    let shift = series.start - base.start;
+    if base.rrule.is_some() && shift != chrono::Duration::zero() {
+        for exdate in &mut series.exdates {
+            *exdate += shift;
+        }
+    }
     series.updated_at = now;
     store.scoped_upsert_item(&series)?;
 
-    // How far the series' own clock moved; its exceptions move with it, keeping
-    // the dates the user gave them.
-    let shift = series.start - base.start;
     for mut occurrence in store.scoped_list_items()? {
         if occurrence.metadata.series_id != Some(series.id) {
             continue;
@@ -274,6 +319,11 @@ pub fn apply_all_edit<S: ScopedStore + ?Sized>(store: &S, edited: &CalendarItem)
             if let Some(end) = occurrence.end {
                 occurrence.end = Some(end + shift);
             }
+        }
+        // The exception's position in the series moves with the series clock,
+        // even when its own date was moved away from that occurrence.
+        if let Some(recurrence_id) = occurrence.metadata.recurrence_id {
+            occurrence.metadata.recurrence_id = Some(recurrence_id + shift);
         }
         // An exception is always a single item, whatever repeat preset the
         // dialog carried (it shows the series' rule).

@@ -14,6 +14,7 @@
 
 use chrono::{Datelike, TimeZone};
 use kal_core::models::{Calendar, CalendarItem, Color, DateTimeTz, ItemKind};
+use kal_storage::scoped::DeleteScope;
 use kal_storage::Database;
 use ulid::Ulid;
 
@@ -208,6 +209,52 @@ fn all_events_from_an_occurrence_keeps_the_series_rule_and_shifts_the_clock() {
     );
     assert_eq!(after_second.end, Some(ts("2026-08-24T15:00:00+03:00")));
     assert_eq!(after_second.color_override, Some(Color("#e67e22".into())));
+}
+
+#[test]
+fn all_events_moves_every_exclusion_and_position_with_the_clock() {
+    let (db, cal) = setup();
+    let base = series(cal);
+    db.upsert_item(&base).unwrap();
+    let (first, second) = two_exceptions(&db, &base);
+
+    // Move the series from 09:00 to 14:00 through "All events".
+    let mut edited = form(&base, "Standup (late)", "#e67e22");
+    edited.start = at(base.start, 14, 0);
+    edited.end = Some(edited.start + chrono::Duration::hours(1));
+    assert!(db.apply_all_edit(&edited).unwrap());
+
+    let items = db.list_items(false).unwrap();
+    let after_base = by_id(&items, base.id);
+    let mut exdates = after_base.exdates.clone();
+    exdates.sort();
+    assert_eq!(
+        exdates,
+        vec![
+            ts("2026-08-17T14:00:00+03:00"),
+            ts("2026-08-24T14:00:00+03:00"),
+        ],
+        "the exclusions follow the series clock instead of pointing at the old time"
+    );
+
+    for (copy, expected) in [
+        (&first, "2026-08-17T14:00:00+03:00"),
+        (&second, "2026-08-24T14:00:00+03:00"),
+    ] {
+        assert_eq!(
+            by_id(&items, copy.id).metadata.recurrence_id,
+            Some(ts(expected)),
+            "the occurrence keeps its position in the series at the new time"
+        );
+    }
+
+    // Deleting the detached occurrence still matches its (moved) exclusion, so
+    // it must not add a stale second EXDATE for the old time.
+    assert!(db
+        .delete_scoped(first.id, Some(first.start), DeleteScope::ThisOnly)
+        .unwrap());
+    let after = db.get_item(base.id).unwrap().unwrap();
+    assert_eq!(after.exdates, exdates);
 }
 
 #[test]

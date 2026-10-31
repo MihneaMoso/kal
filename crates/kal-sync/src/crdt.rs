@@ -27,7 +27,7 @@ pub struct SyncState {
 /// Envelope gossiped between paired devices.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SyncEnvelope {
-    /// Sender's stable device id (random ULID generated on chain join).
+    /// Sender's stable device id (persisted per installation, not per chain).
     pub device_id: Ulid,
     pub state: SyncState,
 }
@@ -50,10 +50,10 @@ impl SyncState {
                 Some(mine) => pick_winner(
                     mine.updated_at,
                     mine.deleted || !mine.visible,
-                    &mine.name,
+                    mine,
                     cal.updated_at,
                     cal.deleted || !cal.visible,
-                    &cal.name,
+                    cal,
                 ),
                 None => Winner::Remote,
             };
@@ -66,10 +66,10 @@ impl SyncState {
                 Some(mine) => pick_winner(
                     mine.updated_at,
                     mine.deleted,
-                    &mine.title,
+                    mine,
                     item.updated_at,
                     item.deleted,
-                    &item.title,
+                    item,
                 ),
                 None => Winner::Remote,
             };
@@ -89,14 +89,19 @@ enum Winner {
 /// Total, deterministic ordering used by every register:
 /// 1. newer `updated_at` wins;
 /// 2. tombstone-ish flag beats live value at the exact same timestamp;
-/// 3. otherwise lexicographic content compare breaks final ties.
-fn pick_winner(
+/// 3. otherwise a canonical serialization of the whole record breaks final ties.
+///
+/// The last step must compare every field, not just the display name: two
+/// peers holding the same timestamp and title but different locations would
+/// otherwise each see its own value as `>=` the other's and both keep it,
+/// leaving the replicas permanently divergent.
+fn pick_winner<T: Serialize>(
     local_ts: DateTime<FixedOffset>,
     local_tombstone: bool,
-    local_content: &str,
+    local_content: &T,
     remote_ts: DateTime<FixedOffset>,
     remote_tombstone: bool,
-    remote_content: &str,
+    remote_content: &T,
 ) -> Winner {
     match local_ts.cmp(&remote_ts) {
         std::cmp::Ordering::Greater => return Winner::Local,
@@ -108,7 +113,12 @@ fn pick_winner(
         (false, true) => return Winner::Remote,
         _ => {}
     }
-    if local_content >= remote_content {
+    // Both sides serialize the same pair of rows the same way, so they pick the
+    // same winner. Equal rows compare equal, which leaves the (identical)
+    // local value in place.
+    let local = serde_json::to_string(local_content).unwrap_or_default();
+    let remote = serde_json::to_string(remote_content).unwrap_or_default();
+    if local >= remote {
         Winner::Local
     } else {
         Winner::Remote
@@ -161,11 +171,57 @@ mod tests {
         pick_winner(
             local.updated_at,
             local.deleted,
-            &local.title,
+            local,
             remote.updated_at,
             remote.deleted,
-            &remote.title,
+            remote,
         )
+    }
+
+    #[test]
+    fn equal_timestamp_and_title_still_converge_on_every_field() {
+        // Same tick and same title, but different location: the old title-only
+        // tie-break saw ">=" on both peers, so each kept its own row forever.
+        let a = item("same", 100, false);
+        let mut b = a.clone();
+        b.location = Some("remote room".into());
+
+        assert_ne!(
+            merge_choice(&a, &b),
+            merge_choice(&b, &a),
+            "opposite directions must not both keep their own row"
+        );
+
+        let mut left = SyncState::default();
+        left.items.insert(a.id, a);
+        let mut right = SyncState::default();
+        right.items.insert(b.id, b);
+
+        let mut left_after = left.clone();
+        left_after.merge(&right);
+        let mut right_after = right.clone();
+        right_after.merge(&left);
+
+        assert_eq!(left_after, right_after, "both peers choose the same row");
+    }
+
+    #[test]
+    fn equal_calendar_names_and_timestamps_converge_on_every_field() {
+        let a = calendar("Shared", 100);
+        let mut b = a.clone();
+        b.color = Color("#ff0000".into());
+
+        let mut left = SyncState::default();
+        left.calendars.insert(a.id, a);
+        let mut right = SyncState::default();
+        right.calendars.insert(b.id, b);
+
+        let mut left_after = left.clone();
+        left_after.merge(&right);
+        let mut right_after = right.clone();
+        right_after.merge(&left);
+
+        assert_eq!(left_after, right_after, "both peers choose the same row");
     }
 
     #[test]

@@ -2340,10 +2340,12 @@ menu for that date; the `+` targets today. Keep it fast and smooth.
 
 Kotlin:
 
-- `MonthWidgetProvider` is now per-widget: each instance stores a month offset
-  in `kal_month_widget` SharedPreferences, so the arrows navigate independently
-  and `onDeleted` cleans the entry up. The header is a 56 dp row with a 20 sp
-  month/year title and 40 dp add/previous/next buttons. The body is a full-width
+- `MonthWidgetProvider` is now per-widget: each instance stores an absolute
+  month pin (or no pin, meaning "follow today") in `kal_month_widget`
+  SharedPreferences, so the arrows navigate independently, the view does not
+  drift when the calendar rolls over, and `onDeleted` cleans the entry up.
+  The header is a 56 dp row with a 20 sp month/year title and 40 dp
+  add/previous/next buttons. The body is a full-width
   1 dp bordered grid: a Monday-first one-letter weekday row, 42 generated day
   cells, vertical column dividers and horizontal week separators, centered day
   numbers, and a filled 20 dp today circle. Up to two single-line, ellipsised
@@ -2370,9 +2372,10 @@ Kotlin:
   Glance, no Compose in the widget process.
 - The old `kal_widget_open` month tap extra and `KalMonthHead` style are gone.
 
-Tests/gates: JVM **134** (`MonthWidgetModelTest` covers year-boundary offsets,
-five/six-week collapse, request-code uniqueness, the spoken date and chip
-labels), `:app:assembleDebug` and `:app:lintDebug` green,
+Tests/gates: JVM **139** (`MonthWidgetModelTest` covers absolute-month pinning
+across year boundaries, the no-drift rollover, five/six-week collapse,
+request-code uniqueness, the spoken date and chip labels),
+`:app:assembleDebug` and `:app:lintDebug` green,
 `scripts/check-android.sh` green. Rust is untouched. Device verification
 (place/resize the widget, arrows, `+`, day taps, grid/event rendering in
 light/dark, the new-event round trip) remains owner-only; the new APK was built

@@ -238,7 +238,7 @@ bite you again if ignored, plus the exact state to resume from.
   must be "GitHub Actions" — one-time repo setting). Pages uses relative URLs,
   works under the `/kal/` prefix.
 - ✅ Web app at `/kal/app/` SHIPS: `kal-storage` swaps SQLite for an
-  in-memory IndexedDB-backed `Database` on wasm (same synchronous 13-method
+  in-memory IndexedDB-backed `Database` on wasm (same synchronous `Database`
   API; `schedule_persist()` writes snapshots to IndexedDB and `load_into()`
   restores them on boot — see DECISIONS D59). `app/Dioxus.toml` sets
   `[web.app] base_path = "kal/app"`. The bundle is built FROM SOURCE (never
@@ -391,9 +391,11 @@ bite you again if ignored, plus the exact state to resume from.
   `kal-ffi` widget payloads (`kal_upcoming_json`/`kal_month_grid_json`); the
   widgets open the same `files/kal/calendar.db` in the app process through
   `libkal_jni.so`. Refresh is `updatePeriodMillis` + a `BOOT_COMPLETED`
-  receiver (no real-time push). Taps launch `com.kal.calendar.MainActivity`
-  with a `kal_widget_open` extra (deep-linking to a specific day/item is a
-  documented follow-up).
+  receiver (no real-time push). Taps launch `com.kal.calendar.MainActivity`:
+  month-widget day cells carry `kal_widget_add_date` and open the new-event
+  editor for that day (the `+` carries `kal_widget_add_today`), while schedule
+  rows carry `kal_widget_open` and open the app's current view (a per-event
+  deep link is a documented follow-up).
 - `apply-icons.sh` generates desktop PNG/ICO/ICNS + Android density PNGs +
   adaptive fg/bg + iOS AppIcon.appiconset from `logo.jpeg` (content bbox
   x475-932/y123-597, center 703,360 → `-crop 600x600+403+60`). ICNS needs a
@@ -405,9 +407,12 @@ bite you again if ignored, plus the exact state to resume from.
 - Live P2P transports: implement `kal_sync::Transport` for iroh and/or mDNS
   (crates/kal-sync/src/session.rs defines the trait; FileTransport is the
   reference impl). Feature-gate deps.
-- Mobile app shells (phase 6): dioxus mobile renderer + AlarmManager /
-  UNUserNotificationCenter notification FFI. kal-ffi already cross-compiles.
-- Widget shims need Xcode/Android SDK builds (sources in widgets/).
+- iOS app shell (phase 6): Dioxus iOS renderer + UNUserNotificationCenter
+  notification FFI. The Android shell (Kotlin/Compose over `libkal_jni.so`) is
+  shipped; kal-ffi already cross-compiles for iOS.
+- iOS WidgetKit shim needs an Xcode target (source in `widgets/ios/`); the
+  Android widgets ship in `:app`.
 - Sync-chain key rotation & re-pairing UX (revocation blocklist exists).
 - fluent-rs runtime when locale #2 lands (parser swap documented in D43).
-- Widget `kal_widget_open` deep-link: honor the extra to land on a specific day/item.
+- Schedule-widget per-item deep link: land on the tapped event (month-widget
+  day taps already open the add editor; the `+` targets today).

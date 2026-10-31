@@ -345,6 +345,27 @@ fn migration_v4_dedupes_default_calendars_and_repoints_items() {
     let names: Vec<_> = cals.iter().map(|c| c.name.as_str()).collect();
     assert_eq!(names, ["Birthdays", "Personal"]);
 
+    // The well-known rows are the survivors: sync and seeding recognise the
+    // defaults by these ids, so keeping a random duplicate would orphan the
+    // repaired calendar from the fixed-id logic.
+    let survivors: Vec<(String, String)> = cals
+        .iter()
+        .map(|c| (c.name.clone(), c.id.to_string()))
+        .collect();
+    assert_eq!(
+        survivors,
+        [
+            (
+                "Birthdays".to_string(),
+                kal_core::DEFAULT_BIRTHDAYS_ID.to_string()
+            ),
+            (
+                "Personal".to_string(),
+                kal_core::DEFAULT_PERSONAL_ID.to_string()
+            ),
+        ]
+    );
+
     // Both items survived and live on the surviving Personal copy.
     let items = db.list_items(false).unwrap();
     assert_eq!(items.len(), 2);
@@ -357,4 +378,124 @@ fn migration_v4_dedupes_default_calendars_and_repoints_items() {
     assert!(items
         .iter()
         .all(|i| i.calendar_id.to_string() == personal_id));
+}
+
+/// v4 repairs the seeding bug's default duplicates, not every repeated name.
+/// Calendar names are not unique in this data model, so two calendars a user
+/// deliberately named alike must keep their rows, ids and items.
+#[test]
+fn migration_v4_leaves_user_calendars_with_shared_names_alone() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("shared-names.db");
+    {
+        let conn = rusqlite::Connection::open(&path).unwrap();
+        conn.execute_batch(
+            r#"
+            CREATE TABLE calendars (
+                id TEXT PRIMARY KEY, name TEXT NOT NULL, color TEXT NOT NULL,
+                source TEXT NOT NULL, visible INTEGER NOT NULL DEFAULT 1
+            );
+            CREATE TABLE items (
+                id TEXT PRIMARY KEY, kind TEXT NOT NULL, title TEXT NOT NULL,
+                notes TEXT, location TEXT, calendar_id TEXT NOT NULL REFERENCES calendars(id),
+                start_epoch INTEGER NOT NULL, start_rfc3339 TEXT NOT NULL,
+                end_epoch INTEGER, end_rfc3339 TEXT, all_day INTEGER NOT NULL DEFAULT 0,
+                rrule TEXT, exdates_json TEXT NOT NULL DEFAULT '[]',
+                completed_epoch, completed_rfc3339 TEXT,
+                reminders_json TEXT NOT NULL DEFAULT '[]', color_override TEXT,
+                created_epoch INTEGER NOT NULL, created_rfc3339 TEXT NOT NULL,
+                updated_epoch INTEGER NOT NULL, updated_rfc3339 TEXT NOT NULL,
+                deleted INTEGER NOT NULL DEFAULT 0, metadata_json TEXT NOT NULL DEFAULT '{}'
+            );
+            -- Two deliberate "Work" calendars (identical source and colour).
+            INSERT INTO calendars VALUES ('01ARZ3NDEKTSV4RRFFQ69G5FDV', 'Work', '#112233', '"local"', 1);
+            INSERT INTO calendars VALUES ('01ARZ3NDEKTSV4RRFFQ69G5FDW', 'Work', '#112233', '"local"', 1);
+            -- The default "Personal" plus one the user renamed and recoloured.
+            INSERT INTO calendars VALUES ('01ARZ3NDEKTSV4RRFFQ69G5FAV', 'Personal', '#3366cc', '"local"', 1);
+            INSERT INTO calendars VALUES ('01ARZ3NDEKTSV4RRFFQ69G5FEV', 'Personal', '#ff0000', '"local"', 1);
+            INSERT INTO items (id, kind, title, calendar_id, start_epoch, start_rfc3339,
+                exdates_json, reminders_json, created_epoch, created_rfc3339,
+                updated_epoch, updated_rfc3339, metadata_json)
+            VALUES ('01ARZ3NDEKTSV4RRFFQ69G5FFV', '"event"', 'Work A', '01ARZ3NDEKTSV4RRFFQ69G5FDV', 0, '', '[]', '[]', 0, '', 0, '', '{}');
+            INSERT INTO items (id, kind, title, calendar_id, start_epoch, start_rfc3339,
+                exdates_json, reminders_json, created_epoch, created_rfc3339,
+                updated_epoch, updated_rfc3339, metadata_json)
+            VALUES ('01ARZ3NDEKTSV4RRFFQ69G5FFW', '"event"', 'Personal red', '01ARZ3NDEKTSV4RRFFQ69G5FEV', 0, '', '[]', '[]', 0, '', 0, '', '{}');
+            PRAGMA user_version = 1;
+            "#,
+        )
+        .unwrap();
+    }
+
+    let db = Database::open(&path).unwrap(); // applies v4 + v5
+    let cals = db.list_calendars().unwrap();
+    assert_eq!(cals.len(), 4, "no user calendar may be merged away");
+    let items = db.list_items(false).unwrap();
+    assert_eq!(items.len(), 2);
+    let work_a = items.iter().find(|i| i.title == "Work A").unwrap();
+    let personal_red = items.iter().find(|i| i.title == "Personal red").unwrap();
+    assert_eq!(
+        work_a.calendar_id.to_string(),
+        "01ARZ3NDEKTSV4RRFFQ69G5FDV",
+        "shared non-default names stay put"
+    );
+    assert_eq!(
+        personal_red.calendar_id.to_string(),
+        "01ARZ3NDEKTSV4RRFFQ69G5FEV",
+        "a differently-coloured Personal is a different calendar"
+    );
+}
+
+/// Legacy databases predate the well-known ids: every default copy has a
+/// random ULID. Those duplicates are exactly what v4 must repair, and the
+/// visible copy wins so re-pointed items do not vanish behind a hidden one.
+#[test]
+fn migration_v4_merges_legacy_defaults_without_a_canonical_id() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("legacy-defaults.db");
+    {
+        let conn = rusqlite::Connection::open(&path).unwrap();
+        conn.execute_batch(
+            r#"
+            CREATE TABLE calendars (
+                id TEXT PRIMARY KEY, name TEXT NOT NULL, color TEXT NOT NULL,
+                source TEXT NOT NULL, visible INTEGER NOT NULL DEFAULT 1
+            );
+            CREATE TABLE items (
+                id TEXT PRIMARY KEY, kind TEXT NOT NULL, title TEXT NOT NULL,
+                notes TEXT, location TEXT, calendar_id TEXT NOT NULL REFERENCES calendars(id),
+                start_epoch INTEGER NOT NULL, start_rfc3339 TEXT NOT NULL,
+                end_epoch INTEGER, end_rfc3339 TEXT, all_day INTEGER NOT NULL DEFAULT 0,
+                rrule TEXT, exdates_json TEXT NOT NULL DEFAULT '[]',
+                completed_epoch, completed_rfc3339 TEXT,
+                reminders_json TEXT NOT NULL DEFAULT '[]', color_override TEXT,
+                created_epoch INTEGER NOT NULL, created_rfc3339 TEXT NOT NULL,
+                updated_epoch INTEGER NOT NULL, updated_rfc3339 TEXT NOT NULL,
+                deleted INTEGER NOT NULL DEFAULT 0, metadata_json TEXT NOT NULL DEFAULT '{}'
+            );
+            -- Lower id is hidden; the visible copy must survive.
+            INSERT INTO calendars VALUES ('01ARZ3NDEKTSV4RRFFQ69G5FEE', 'Personal', '#3366cc', '"local"', 0);
+            INSERT INTO calendars VALUES ('01ARZ3NDEKTSV4RRFFQ69G5FEF', 'Personal', '#3366cc', '"local"', 1);
+            INSERT INTO items (id, kind, title, calendar_id, start_epoch, start_rfc3339,
+                exdates_json, reminders_json, created_epoch, created_rfc3339,
+                updated_epoch, updated_rfc3339, metadata_json)
+            VALUES ('01ARZ3NDEKTSV4RRFFQ69G5FFV', '"event"', 'On hidden copy', '01ARZ3NDEKTSV4RRFFQ69G5FEE', 0, '', '[]', '[]', 0, '', 0, '', '{}');
+            INSERT INTO items (id, kind, title, calendar_id, start_epoch, start_rfc3339,
+                exdates_json, reminders_json, created_epoch, created_rfc3339,
+                updated_epoch, updated_rfc3339, metadata_json)
+            VALUES ('01ARZ3NDEKTSV4RRFFQ69G5FFW', '"event"', 'On visible copy', '01ARZ3NDEKTSV4RRFFQ69G5FEF', 0, '', '[]', '[]', 0, '', 0, '', '{}');
+            PRAGMA user_version = 1;
+            "#,
+        )
+        .unwrap();
+    }
+
+    let db = Database::open(&path).unwrap();
+    let cals = db.list_calendars().unwrap();
+    assert_eq!(cals.len(), 1);
+    assert_eq!(cals[0].id.to_string(), "01ARZ3NDEKTSV4RRFFQ69G5FEF");
+    assert!(cals[0].visible);
+    let items = db.list_items(false).unwrap();
+    assert_eq!(items.len(), 2);
+    assert!(items.iter().all(|i| i.calendar_id == cals[0].id));
 }

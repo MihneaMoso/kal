@@ -135,10 +135,6 @@ pub fn use_visible_items() -> Vec<CalendarItem> {
         .collect()
 }
 
-fn local_offset() -> chrono::FixedOffset {
-    *Local::now().offset()
-}
-
 fn parse_when(date: &str, time: &str) -> Option<kal_core::models::DateTimeTz> {
     let d = NaiveDate::parse_from_str(date, "%Y-%m-%d").ok()?;
     let t = if time.is_empty() {
@@ -146,8 +142,10 @@ fn parse_when(date: &str, time: &str) -> Option<kal_core::models::DateTimeTz> {
     } else {
         NaiveTime::parse_from_str(time, "%H:%M").ok()?
     };
+    // Resolve in the local zone on *that* date: today's offset is wrong across
+    // a DST boundary, which shifted every saved time by an hour.
     d.and_time(t)
-        .and_local_timezone(local_offset())
+        .and_local_timezone(Local)
         .single()
         .map(|dt| dt.fixed_offset())
 }
@@ -409,8 +407,9 @@ pub fn DayView() -> Element {
         timed.clone(),
         d.and_hms_opt(0, 0, 0)
             .unwrap()
-            .and_local_timezone(*Local::now().offset())
+            .and_local_timezone(Local)
             .single()
+            .map(|dt| dt.fixed_offset())
             .unwrap_or_else(|| Local::now().fixed_offset()),
         0.02,
     );

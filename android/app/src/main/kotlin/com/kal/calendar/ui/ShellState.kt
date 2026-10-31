@@ -14,6 +14,7 @@ import com.kal.calendar.bridge.ItemKind
 import com.kal.calendar.bridge.KalSession
 import com.kal.calendar.bridge.MonthCell
 import com.kal.calendar.bridge.ReminderFiring
+import com.kal.calendar.bridge.SyncDevice
 import com.kal.calendar.bridge.Visibility
 import com.kal.calendar.bridge.WeekDay
 import com.kal.calendar.BuildConfig
@@ -134,6 +135,10 @@ class ShellState(private val session: KalSession) {
     var lastSync by mutableStateOf<String?>(null)
         private set
 
+    /** Peers the sync panel can remove (plus ids already blocked). */
+    var syncDevices by mutableStateOf(emptyList<SyncDevice>())
+        private set
+
     /** The Software & updates status line, or null before the first check. */
     var updateLine by mutableStateOf<String?>(null)
         private set
@@ -160,6 +165,7 @@ class ShellState(private val session: KalSession) {
         profile = session.profile()
         profileEdit = profile
         syncUi = currentSyncState()
+        syncDevices = session.syncDevices()
     }
 
     /**
@@ -413,6 +419,19 @@ class ShellState(private val session: KalSession) {
     }
 
     /**
+     * Remove a device: append it to the local blocklist, then refresh the rows.
+     * A device's id is stable for its install, so the block survives restarts
+     * and future rounds.
+     */
+    fun removeSyncDevice(id: String) {
+        if (session.revokeSyncDevice(id)) {
+            syncDevices = session.syncDevices()
+        } else {
+            reportFailure()
+        }
+    }
+
+    /**
      * One manual round: blocking (peer discovery can take ~15 s), so it runs on
      * the IO dispatcher and the caller launches it from a UI scope. The result
      * line mirrors the Dioxus panel; a merge reloads the views.
@@ -425,6 +444,7 @@ class ShellState(private val session: KalSession) {
         }
         syncing = false
         if (round != null) {
+            syncDevices = session.syncDevices()
             lastSync = if (round.merged > 0) {
                 "Synced ${round.merged} change(s) \u2014 ${clock()}"
             } else {
@@ -451,6 +471,7 @@ class ShellState(private val session: KalSession) {
         val merged = withContext(Dispatchers.IO) { session.syncRound()?.merged }
         syncing = false
         if (merged != null && merged > 0) {
+            syncDevices = session.syncDevices()
             reload()
             noteDataChanged()
         }

@@ -89,41 +89,114 @@ pub fn agenda_range(
 /// Expand an item's occurrences (base + RRULE series minus EXDATEs) that fall
 /// within `[from, to]` (inclusive by day).
 ///
-/// Multi-day non-recurring events produce one occurrence per covered day so
-/// they appear on every grid cell they span. Recurring occurrences keep the
-/// original start time and duration.
+/// Multi-day events produce one occurrence per covered day so they appear on
+/// every grid cell they span. Each occurrence keeps the item's original
+/// time-of-day and duration.
 pub fn expand_occurrences(item: &CalendarItem, from: NaiveDate, to: NaiveDate) -> Vec<Occurrence> {
+    expand(item, from, to, Coverage::EveryDay)
+}
+
+/// Expand an item's occurrences with one entry per series occurrence, on its
+/// start day.
+///
+/// This is the reminder view of [`expand_occurrences`]: a multi-day occurrence
+/// covers several grid days but is still one event, so its reminders must fire
+/// once. A non-recurring item yields at most one entry.
+pub fn expand_occurrence_starts(
+    item: &CalendarItem,
+    from: NaiveDate,
+    to: NaiveDate,
+) -> Vec<Occurrence> {
+    expand(item, from, to, Coverage::StartOnly)
+}
+
+/// How many entries a multi-day event produces.
+#[derive(Clone, Copy)]
+enum Coverage {
+    /// One occurrence per day the event covers, across its whole span.
+    EveryDay,
+    /// One occurrence per event, on the day it starts.
+    StartOnly,
+}
+
+fn expand(
+    item: &CalendarItem,
+    from: NaiveDate,
+    to: NaiveDate,
+    coverage: Coverage,
+) -> Vec<Occurrence> {
     if item.deleted {
         return Vec::new();
     }
+    let per_day = matches!(coverage, Coverage::EveryDay);
     // rrule 0.14 works in its own Tz enum; convert through UTC.
     let to_rrule = |dt: &DateTimeTz| dt.with_timezone(&chrono::Utc).with_timezone(&RRuleTz::UTC);
     let window_end_dt =
         to_rrule(&(item.start + (to - item.start.date_naive()) + chrono::Duration::days(1)));
+    // Start the enumeration at the window, not at the series' first occurrence:
+    // a years-old daily rule would otherwise exhaust `MAX_OCCURRENCES` long
+    // before the requested window and return nothing. On the per-day view a
+    // multi-day occurrence may begin before the window and still cover its
+    // first visible day, so the lower bound moves back by the item's span.
+    // Midnight (not the start's time) keeps same-day BYHOUR/BYMINUTE
+    // occurrences in range; the day loops below still decide membership by
+    // date.
+    let span_days = if per_day {
+        item.end
+            .map(|end| {
+                (end.date_naive() - item.start.date_naive())
+                    .num_days()
+                    .max(0)
+            })
+            .unwrap_or(0)
+    } else {
+        0
+    };
+    let window_start_dt = to_rrule(
+        &(from - chrono::Duration::days(span_days))
+            .and_time(chrono::NaiveTime::MIN)
+            .and_local_timezone(*item.start.offset())
+            .single()
+            .expect("a fixed offset is never ambiguous")
+            .fixed_offset(),
+    );
 
     let mut out = Vec::new();
     match &item.rrule {
         None => {
-            // Non-recurring: one occurrence per covered day in range.
             let start_date = item.start.date_naive();
-            let end_date = item
-                .end
-                .as_ref()
-                .map(|e| e.date_naive())
-                .unwrap_or(start_date);
-            let first = from.max(start_date);
-            let last = to.min(end_date);
-            let mut d = first;
-            while d <= last {
-                let offset_days = (d - start_date).num_days();
-                let occ_start = item.start + chrono::Duration::days(offset_days);
-                let occ_end = item.end.map(|e| e + chrono::Duration::days(offset_days));
-                out.push(Occurrence {
-                    item_id: item.id,
-                    start: occ_start,
-                    end: occ_end,
-                });
-                d += chrono::Duration::days(1);
+            if !per_day {
+                // Reminders resolve from the item's own instant (which may be a
+                // fixed absolute reminder), so only the horizon's end bounds
+                // what is armed; past fire times are dropped by the caller.
+                if start_date <= to {
+                    out.push(Occurrence {
+                        item_id: item.id,
+                        start: item.start,
+                        end: item.end,
+                    });
+                }
+            } else {
+                // Non-recurring: one occurrence per covered day in range.
+                let end_date = item
+                    .end
+                    .as_ref()
+                    .map(|e| e.date_naive())
+                    .unwrap_or(start_date);
+                let first = from.max(start_date);
+                let last = to.min(end_date);
+                let mut d = first;
+                while d <= last {
+                    let offset_days = (d - start_date).num_days();
+                    let occ_start = item.start + chrono::Duration::days(offset_days);
+                    let occ_end = item.end.map(|e| e + chrono::Duration::days(offset_days));
+                    out.push(Occurrence {
+                        item_id: item.id,
+                        start: occ_start,
+                        end: occ_end,
+                    });
+                    d += chrono::Duration::days(1);
+                }
             }
         }
         Some(rule_str) => {
@@ -139,19 +212,39 @@ pub fn expand_occurrences(item: &CalendarItem, from: NaiveDate, to: NaiveDate) -
                     set = set.exdate(to_rrule(ex));
                 }
             }
-            let result = set.before(window_end_dt).all(MAX_OCCURRENCES);
+            let result = set
+                .after(window_start_dt)
+                .before(window_end_dt)
+                .all(MAX_OCCURRENCES);
             let duration = item.end.map(|e| e - item.start);
             for dt in result.dates {
                 let dt = dt.with_timezone(item.start.offset());
-                let d = dt.date_naive();
-                if d < from || d > to {
+                let occ_end = duration.map(|dur| dt + dur);
+                let first = dt.date_naive();
+                if !per_day {
+                    if first >= from && first <= to {
+                        out.push(Occurrence {
+                            item_id: item.id,
+                            start: dt,
+                            end: occ_end,
+                        });
+                    }
                     continue;
                 }
-                out.push(Occurrence {
-                    item_id: item.id,
-                    start: dt,
-                    end: duration.map(|dur| dt + dur),
-                });
+                let last = occ_end.map(|e| e.date_naive()).unwrap_or(first);
+                // Mirror the non-recurring branch: one occurrence per covered
+                // day, each carrying the item's time-of-day on that day.
+                let mut day = first.max(from);
+                let stop = last.min(to);
+                while day <= stop {
+                    let offset = (day - first).num_days();
+                    out.push(Occurrence {
+                        item_id: item.id,
+                        start: dt + chrono::Duration::days(offset),
+                        end: occ_end.map(|e| e + chrono::Duration::days(offset)),
+                    });
+                    day += chrono::Duration::days(1);
+                }
             }
         }
     }
@@ -382,6 +475,71 @@ mod recurrence_tests {
         let occs = expand_occurrences(&it, date(2026, 9, 1), date(2026, 9, 7));
         assert_eq!(occs.len(), 7);
         assert_eq!(occs[0].start.date_naive(), date(2026, 9, 1));
+    }
+
+    #[test]
+    fn years_old_series_still_reaches_a_later_window() {
+        // The first 1,000 daily occurrences end in 2022; a 2026 window must not
+        // exhaust the expansion cap before it starts.
+        let mut it = item(2020, 1, 1);
+        it.rrule = Some("FREQ=DAILY".into());
+        let occs = expand_occurrences(&it, date(2026, 10, 1), date(2026, 10, 3));
+        assert_eq!(
+            occs.iter()
+                .map(|o| o.start.date_naive())
+                .collect::<Vec<_>>(),
+            vec![date(2026, 10, 1), date(2026, 10, 2), date(2026, 10, 3)]
+        );
+    }
+
+    #[test]
+    fn recurring_multiday_spans_every_covered_day() {
+        let mut it = item(2026, 8, 24); // Monday 09:00
+        it.end = Some(datetime_from_parts(2026, 8, 26, 17, 0, 0).unwrap());
+        it.rrule = Some("FREQ=WEEKLY;COUNT=2".into());
+
+        let occs = expand_occurrences(&it, date(2026, 8, 24), date(2026, 9, 6));
+
+        assert_eq!(
+            occs.iter()
+                .map(|o| o.start.date_naive())
+                .collect::<Vec<_>>(),
+            vec![
+                date(2026, 8, 24),
+                date(2026, 8, 25),
+                date(2026, 8, 26),
+                date(2026, 8, 31),
+                date(2026, 9, 1),
+                date(2026, 9, 2),
+            ]
+        );
+        assert_eq!(
+            occs[0].end,
+            Some(datetime_from_parts(2026, 8, 26, 17, 0, 0).unwrap()),
+            "the occurrence's own day keeps the real end"
+        );
+        assert_eq!(
+            occs[1].start,
+            datetime_from_parts(2026, 8, 25, 9, 0, 0).unwrap(),
+            "a covered day keeps the item's time-of-day"
+        );
+    }
+
+    #[test]
+    fn recurring_multiday_covers_the_window_from_the_day_before() {
+        let mut it = item(2026, 8, 31); // Monday 09:00
+        it.end = Some(datetime_from_parts(2026, 9, 2, 17, 0, 0).unwrap());
+        it.rrule = Some("FREQ=WEEKLY;COUNT=1".into());
+
+        let occs = expand_occurrences(&it, date(2026, 9, 1), date(2026, 9, 3));
+
+        assert_eq!(
+            occs.iter()
+                .map(|o| o.start.date_naive())
+                .collect::<Vec<_>>(),
+            vec![date(2026, 9, 1), date(2026, 9, 2)],
+            "the occurrence began before the window but covers its first day"
+        );
     }
 
     #[test]

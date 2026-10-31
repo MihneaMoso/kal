@@ -15,7 +15,7 @@
 //! mutations are full-row replaces keyed by ULID, so a write is always
 //! self-consistent and a crash leaves the previous complete snapshot intact.
 
-use std::cell::{Cell, RefCell};
+use std::cell::RefCell;
 use std::rc::Rc;
 
 use chrono::Utc;
@@ -52,7 +52,7 @@ struct State {
 /// methods only need `&self` and use interior mutability.
 pub struct Database {
     state: Rc<RefCell<State>>,
-    dirty: Rc<Cell<bool>>,
+    gate: Rc<crate::flush::WriteGate>,
 }
 
 /// The IndexedDB `Database` handle from `indexed_db_futures`.
@@ -139,7 +139,7 @@ impl Database {
             state: Rc::new(RefCell::new(State {
                 snapshot: Snapshot::default(),
             })),
-            dirty: Rc::new(Cell::new(false)),
+            gate: Rc::new(crate::flush::WriteGate::new()),
         })
     }
 
@@ -149,7 +149,7 @@ impl Database {
         let snapshot = idb_get_snapshot().await?.unwrap_or_default();
         Ok(Self {
             state: Rc::new(RefCell::new(State { snapshot })),
-            dirty: Rc::new(Cell::new(false)),
+            gate: Rc::new(crate::flush::WriteGate::new()),
         })
     }
 
@@ -166,28 +166,44 @@ impl Database {
     /// Schedule an asynchronous flush of the full snapshot to IndexedDB. Safe
     /// to call after any mutation; coalesces concurrent flushes, and always
     /// writes the latest state at execution time.
+    ///
+    /// At most one task runs at a time. If a mutation lands while a write is in
+    /// flight the task runs another pass, so the last edit before the tab
+    /// closes is never dropped (see [`crate::flush`] for the protocol).
     pub fn schedule_persist(&self) {
-        if self.dirty.replace(true) {
+        if !self.gate.claim() {
             return;
         }
         let state = self.state.clone();
-        let dirty = self.dirty.clone();
+        let gate = self.gate.clone();
         wasm_bindgen_futures::spawn_local(async move {
-            let snapshot = {
-                // Capture a consistent snapshot under a single borrow, then
-                // drop it before awaiting so the future isn't holding a borrow.
-                let s = &state.borrow().snapshot;
-                Snapshot {
-                    calendars: s.calendars.clone(),
-                    items: s.items.clone(),
-                    settings: s.settings.clone(),
+            loop {
+                // Clear the mark before capturing state: a mutation after this
+                // point re-raises it, and the loop below writes again. Clearing
+                // it after the await used to forget those mutations.
+                gate.begin();
+                let snapshot = {
+                    // Capture a consistent snapshot under a single borrow, then
+                    // drop it before awaiting so the future isn't holding a
+                    // borrow.
+                    let s = &state.borrow().snapshot;
+                    Snapshot {
+                        calendars: s.calendars.clone(),
+                        items: s.items.clone(),
+                        settings: s.settings.clone(),
+                    }
+                };
+                if let Err(e) = idb_put_snapshot(&snapshot).await {
+                    web_sys::console::error_1(&JsValue::from_str(&e.to_string()));
+                    // Release the gate so the next mutation schedules a fresh
+                    // write instead of joining a task that has exited.
+                    gate.release();
+                    return;
                 }
-            };
-            if let Err(e) = idb_put_snapshot(&snapshot).await {
-                web_sys::console::error_1(&JsValue::from_str(&e.to_string()));
+                if !gate.finish() {
+                    return;
+                }
             }
-            // Allow subsequent mutations to schedule the next flush.
-            dirty.set(false);
         });
     }
 

@@ -105,7 +105,6 @@ pub static SYNC_DRIVER_DIRTY: AtomicUsize = AtomicUsize::new(0);
 /// shared outbox folder.
 fn run_sync_once(db: &crate::DbHandle) -> Result<usize, String> {
     let identity = load_identity().ok_or("not paired")?;
-    let device_id = ulid::Ulid::new(); // per-round id; stable ids land with settings store
 
     // Live P2P first: when the gossip topic has peers, sync over the network
     // (mobile joiners reach the desktop without any shared folder).
@@ -113,6 +112,13 @@ fn run_sync_once(db: &crate::DbHandle) -> Result<usize, String> {
         return Ok(merged);
     }
     // Not joined yet / unavailable — fall back to the shared folder.
+    //
+    // One stable id per device, the same one the live transport uses. A fresh
+    // ULID per round made the fallback treat its own previous blob as a peer
+    // merge (reporting work and refreshing every view on each round) and gave
+    // peers a new device id to revoke each time.
+    let device_id =
+        kal_sync::client::device_id(&db_file()).ok_or("could not persist this device's sync id")?;
 
     let outbox = outbox_path(&db_file());
     let transport = FileTransport::new(&outbox).map_err(|e| e.to_string())?;
@@ -125,6 +131,9 @@ fn run_sync_once(db: &crate::DbHandle) -> Result<usize, String> {
         "desktop",
         SyncState::from_parts(calendars.clone(), items.clone()),
     );
+    // The same blocklist the live round honours, for devices that only ever
+    // meet through the shared folder.
+    session.revoked = kal_sync::client::revoked_devices(db);
 
     // Publish our state, then drain peers'.
     transport
@@ -144,6 +153,11 @@ fn run_sync_once(db: &crate::DbHandle) -> Result<usize, String> {
             merged += 1;
         }
     }
+    // Record peers even when the merge itself found nothing new; the panel must
+    // list a device that reached us. Bookkeeping failure is not a sync failure.
+    if let Err(e) = kal_sync::client::record_peers(db, session.peers.iter().copied()) {
+        tracing::warn!(error = %e, "could not persist the sync peer list");
+    }
     if merged == 0 {
         return Ok(0);
     }
@@ -157,6 +171,13 @@ fn run_sync_once(db: &crate::DbHandle) -> Result<usize, String> {
     }
     kal_sync::client::retire_shadowed_placeholders(db);
     Ok(merged)
+}
+
+/// Peer rows for the sync panel: ids whose envelopes this install accepted,
+/// plus any id already on the local blocklist.
+fn sync_devices() -> Vec<kal_sync::client::SyncDevice> {
+    let db = crate::open_db();
+    kal_sync::client::devices(&db).unwrap_or_default()
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -183,7 +204,38 @@ pub fn SyncPanel() -> Element {
     // ~15 s for a peer; blocking the UI thread on that froze the whole app).
     let mut syncing = use_signal(|| false);
     // Human-readable outcome of the most recent round (shown in the panel).
-    let last_sync = use_signal(String::new);
+    let mut last_sync = use_signal(String::new);
+    // Peer devices discovered by past rounds, refreshed whenever a sync merge
+    // bumps the shared dirty counter (including background rounds).
+    let mut devices = use_signal(sync_devices);
+    let mut devices_dirty = use_signal(|| *RESOURCES_DIRTY.read());
+    use_effect(move || {
+        let now = *RESOURCES_DIRTY.read();
+        if now != *devices_dirty.read() {
+            *devices_dirty.write() = now;
+            devices.set(sync_devices());
+        }
+    });
+
+    let remove_device = EventHandler::new(move |id: String| {
+        let result = id
+            .parse::<ulid::Ulid>()
+            .map_err(|_| "Invalid device id".to_string())
+            .and_then(|id| {
+                let db = crate::open_db();
+                kal_sync::client::revoke_device(&db, id)
+            });
+        match result {
+            Ok(()) => {
+                devices.set(sync_devices());
+                last_sync.set(format!(
+                    "Removed device \u{2014} its snapshots will be ignored \u{2014} {}",
+                    clock_str()
+                ));
+            }
+            Err(e) => last_sync.set(format!("Could not remove device: {e}")),
+        }
+    });
 
     let start_chain = move |_| match kal_sync::ChainIdentity::generate() {
         Ok(id) => {
@@ -319,6 +371,20 @@ pub fn SyncPanel() -> Element {
                     if !last_sync.read().is_empty() {
                         small { class: "when", style: "color:var(--fg-muted);", "{last_sync}" }
                     }
+                    small { class: "when", "Devices" }
+                    if devices.read().is_empty() {
+                        small { class: "when", style: "color:var(--fg-muted);",
+                            "No other devices seen yet."
+                        }
+                    } else {
+                        for device in devices.read().iter().cloned() {
+                            DeviceRow {
+                                key: "{device.id}",
+                                device: device.clone(),
+                                on_remove: remove_device,
+                            }
+                        }
+                    }
                     div { style: "margin-top:10px;border-top:1px solid var(--border,#2a2f3a);padding-top:10px;",
                         LeaveSyncControls { on_leave: move |_| {
                             leave_chain();
@@ -341,6 +407,32 @@ pub fn SyncPanel() -> Element {
 /// Local time "HH:MM" for the last-sync status line.
 fn clock_str() -> String {
     chrono::Local::now().format("%H:%M").to_string()
+}
+
+/// One peer row: stable device id, a two-step Remove action, or its blocked
+/// status once removed.
+#[component]
+fn DeviceRow(device: kal_sync::client::SyncDevice, on_remove: EventHandler<String>) -> Element {
+    let mut confirm = use_signal(|| false);
+    let id = device.id.clone();
+    rsx! {
+        div { style: "display:flex;align-items:center;gap:8px;",
+            code { style: "font-size:10px;flex:1;min-width:0;word-break:break-all;", "{device.id}" }
+            if device.revoked {
+                small { style: "color:var(--fg-muted);font-size:11px;", "Removed" }
+            } else if *confirm.read() {
+                button { class: "danger", onclick: move |_| on_remove.call(id.clone()), "Remove" }
+                button { onclick: move |_| confirm.set(false), "Cancel" }
+            } else {
+                button { onclick: move |_| confirm.set(true), "Remove\u{2026}" }
+            }
+        }
+        if *confirm.read() && !device.revoked {
+            small { class: "when", style: "color:var(--fg-muted);",
+                "Ignore snapshots from this device?"
+            }
+        }
+    }
 }
 
 /// Two-step "Leave sync chain" control with inline confirmation.

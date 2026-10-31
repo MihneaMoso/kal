@@ -86,18 +86,22 @@ impl GoogleEvent {
     pub fn end_dtz(&self) -> Option<DateTimeTz> {
         let t = self.end.as_ref()?;
         if let Some(date) = &t.date {
-            // Google's DATE end is exclusive already.
-            return midnight(NaiveDate::parse_from_str(date, "%Y-%m-%d").ok()?);
+            // Google's DATE end is exclusive; Kal stores the last covered day
+            // at local midnight (the same convention the .ics importer uses).
+            let exclusive = NaiveDate::parse_from_str(date, "%Y-%m-%d").ok()?;
+            return midnight(exclusive.pred_opt()?);
         }
         DateTime::parse_from_rfc3339(t.date_time.as_deref()?).ok()
     }
 }
 
 fn midnight(d: NaiveDate) -> Option<DateTimeTz> {
-    let offset = *chrono::Local::now().offset();
-    offset
+    // All-day dates resolve at local midnight on their own date; using the
+    // current offset put a summer date at 01:00 or 23:00 across a DST change.
+    chrono::Local
         .from_local_datetime(&d.and_time(NaiveTime::MIN))
         .single()
+        .map(|dt| dt.fixed_offset())
 }
 
 fn ulid_from_google_id(google_id: &str) -> ulid::Ulid {
@@ -131,11 +135,11 @@ pub fn map_event(event: &GoogleEvent, calendar_id: ulid::Ulid) -> Option<Calenda
     item.all_day = event.start.as_ref().and_then(|s| s.date.clone()).is_some();
     item.notes = event.description.clone().filter(|s| !s.is_empty());
     item.location = event.location.clone().filter(|s| !s.is_empty());
-    item.rrule = event.recurrence_rules.first().map(|r| {
-        r.split_once(':')
-            .map(|(_, body)| body)
-            .unwrap_or(r)
-            .to_string()
+    item.rrule = event.recurrence_rules.iter().find_map(|rule| {
+        // Google's recurrence array can also contain EXDATE/RDATE lines; only
+        // the RRULE belongs in the item's rule field.
+        let (name, body) = rule.split_once(':')?;
+        name.eq_ignore_ascii_case("RRULE").then(|| body.to_string())
     });
     Some(item)
 }
@@ -200,10 +204,9 @@ impl Transport for UreqTransport {
 /// the same endpoint with `syncToken` appended by the caller).
 pub fn events_url(calendar_id: &str) -> String {
     format!(
-        "https://www.googleapis.com/calendar/v3/calendars/{calendar_id}/events         ?maxResults=2500&singleEvents=false"
+        "https://www.googleapis.com/calendar/v3/calendars/{}/events?maxResults=2500&singleEvents=false",
+        urlencode(calendar_id)
     )
-    .replace("calendars/", "calendars/")
-    .replace("{calendar_id}", &urlencode(calendar_id))
 }
 
 pub fn fetch_events<T: Transport>(
@@ -320,6 +323,46 @@ mod tests {
             it.start.date_naive(),
             NaiveDate::from_ymd_opt(2026, 12, 25).unwrap()
         );
+        // Google's end DATE is exclusive; the item's inclusive end is the
+        // single covered day, not the following midnight.
+        assert_eq!(
+            it.end.as_ref().unwrap().date_naive(),
+            NaiveDate::from_ymd_opt(2026, 12, 25).unwrap()
+        );
+    }
+
+    /// A calendar id can contain reserved URL characters (`#`, `@`), which must
+    /// be percent-encoded or the request targets the wrong resource. The old
+    /// builder interpolated the raw id and left literal spaces before `?`.
+    #[test]
+    fn events_url_percent_encodes_the_calendar_id() {
+        let url = events_url("en.usa#holiday@group.v.calendar.google.com");
+        assert_eq!(
+            url,
+            "https://www.googleapis.com/calendar/v3/calendars/\
+             en.usa%23holiday%40group.v.calendar.google.com/events\
+             ?maxResults=2500&singleEvents=false"
+        );
+        assert!(!url.contains(' '));
+    }
+
+    /// Google's `recurrence` array carries EXDATE/RDATE lines too; the first
+    /// entry is not guaranteed to be the RRULE.
+    #[test]
+    fn recurrence_picks_the_rrule_line() {
+        let json = r#"{
+            "id": "evt_recurring",
+            "summary": "Weekly",
+            "start": { "dateTime": "2026-09-01T14:00:00-04:00" },
+            "end": { "dateTime": "2026-09-01T15:00:00-04:00" },
+            "recurrence": [
+                "EXDATE;TZID=America/New_York:20260908T140000",
+                "RRULE:FREQ=WEEKLY;BYDAY=TU;COUNT=3"
+            ]
+        }"#;
+        let ev: GoogleEvent = serde_json::from_str(json).unwrap();
+        let item = map_event(&ev, ulid::Ulid::nil()).unwrap();
+        assert_eq!(item.rrule.as_deref(), Some("FREQ=WEEKLY;BYDAY=TU;COUNT=3"));
     }
 
     #[test]

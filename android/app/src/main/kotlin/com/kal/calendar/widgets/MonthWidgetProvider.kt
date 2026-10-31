@@ -22,14 +22,21 @@ import java.time.YearMonth
  * The header is a month/year title with add and previous/next controls. Each
  * day cell is a [PendingIntent] that deep-links into [MainActivity] with the
  * tapped date, so the app opens the new-event editor for that day. Month
- * navigation is per-widget: a broadcast updates the stored offset and
- * redraws only that widget (home-screen widgets cannot swipe).
+ * navigation is per-widget: a broadcast updates the stored pin and redraws
+ * only that widget (home-screen widgets cannot swipe).
+ *
+ * An untouched widget follows the calendar month. Once the user navigates, the
+ * absolute month is pinned instead of stored as an offset from "today", so the
+ * view does not drift forward when the month rolls over. Navigating back to the
+ * current month clears the pin and resumes following the calendar.
  */
 class MonthWidgetProvider : AppWidgetProvider() {
 
     companion object {
         private const val PREFS = "kal_month_widget"
-        private const val OFFSET_PREFIX = "offset_"
+        private const val PINNED_PREFIX = "pinned_"
+        private const val LEGACY_OFFSET_PREFIX = "offset_"
+        private const val NO_LEGACY_OFFSET = Int.MIN_VALUE
 
         private const val ACTION_PREV = "com.kal.calendar.widgets.action.MONTH_PREV"
         private const val ACTION_NEXT = "com.kal.calendar.widgets.action.MONTH_NEXT"
@@ -55,11 +62,33 @@ class MonthWidgetProvider : AppWidgetProvider() {
         private fun widgetPrefs(context: Context) =
             context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 
-        private fun offsetKey(widgetId: Int) = "$OFFSET_PREFIX$widgetId"
+        private fun pinnedKey(widgetId: Int) = "$PINNED_PREFIX$widgetId"
 
-        private fun monthFor(context: Context, widgetId: Int): YearMonth {
-            val offset = widgetPrefs(context).getInt(offsetKey(widgetId), 0)
-            return MonthWidgetModel.monthFor(YearMonth.now(), offset)
+        private fun legacyOffsetKey(widgetId: Int) = "$LEGACY_OFFSET_PREFIX$widgetId"
+
+        /**
+         * The month this widget shows. A pinned month wins; otherwise the
+         * widget follows today. The one-time legacy branch converts a widget
+         * that still has the old relative offset, so an upgrade keeps the
+         * month the user had navigated to.
+         */
+        private fun monthFor(context: Context, widgetId: Int, today: YearMonth): YearMonth {
+            val prefs = widgetPrefs(context)
+            MonthWidgetModel.parseMonthKey(prefs.getString(pinnedKey(widgetId), null))
+                ?.let { return MonthWidgetModel.monthFor(today, it) }
+
+            val legacy = prefs.getInt(legacyOffsetKey(widgetId), NO_LEGACY_OFFSET)
+            if (legacy == NO_LEGACY_OFFSET) return today
+
+            val pin = MonthWidgetModel.pinFromLegacyOffset(legacy, today)
+            val editor = prefs.edit().remove(legacyOffsetKey(widgetId))
+            if (pin == null) {
+                editor.remove(pinnedKey(widgetId))
+            } else {
+                editor.putString(pinnedKey(widgetId), MonthWidgetModel.monthKey(pin))
+            }
+            editor.apply()
+            return pin ?: today
         }
 
         /** Parses a "YYYY-MM-DD" date string into a LocalDate, or null. */
@@ -70,7 +99,7 @@ class MonthWidgetProvider : AppWidgetProvider() {
         private fun buildViews(context: Context, widgetId: Int): RemoteViews {
             val today = LocalDate.now()
             val locale = context.resources.configuration.locales[0]
-            val month = monthFor(context, widgetId)
+            val month = monthFor(context, widgetId, YearMonth.from(today))
             val body = KalWidgets.nativeMonth(
                 KalWidgets.dbPath(context),
                 month.year,
@@ -482,16 +511,24 @@ class MonthWidgetProvider : AppWidgetProvider() {
         val widgetId = intent.getIntExtra(EXTRA_WIDGET_ID, AppWidgetManager.INVALID_APPWIDGET_ID)
         if (widgetId == AppWidgetManager.INVALID_APPWIDGET_ID) return
 
-        val prefs = widgetPrefs(context)
-        val key = offsetKey(widgetId)
-        prefs.edit().putInt(key, prefs.getInt(key, 0) + delta).apply()
+        val today = YearMonth.now()
+        val shown = monthFor(context, widgetId, today)
+        val pin = MonthWidgetModel.pinAfter(shown, delta, today)
+        val editor = widgetPrefs(context).edit()
+        if (pin == null) {
+            editor.remove(pinnedKey(widgetId))
+        } else {
+            editor.putString(pinnedKey(widgetId), MonthWidgetModel.monthKey(pin))
+        }
+        editor.apply()
         AppWidgetManager.getInstance(context).updateAppWidget(widgetId, buildViews(context, widgetId))
     }
 
     override fun onDeleted(context: Context, widgetIds: IntArray) {
         val editor = widgetPrefs(context).edit()
         for (id in widgetIds) {
-            editor.remove(offsetKey(id))
+            editor.remove(pinnedKey(id))
+            editor.remove(legacyOffsetKey(id))
         }
         editor.apply()
     }

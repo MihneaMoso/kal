@@ -153,6 +153,14 @@ input[type="checkbox"] { accent-color: var(--accent); cursor: pointer; }
 .nav-label-short { display: none; }
 .view-tabs { display: flex; gap: 4px; align-items: center; }
 .view-tabs button { padding: 4px 10px; }
+.nav-arrows { display: flex; gap: 2px; align-items: center; }
+.nav-arrows > * {
+    width: 32px;
+    height: 32px;
+    font-size: 24px; /* ← this is what actually makes the arrow bigger */
+}
+.nav-arrows button:disabled { opacity: 0.35; cursor: default; }
+.nav-arrows button:disabled:hover { background: transparent; border-color: transparent; }
 
 .body { display: flex; flex: 1; min-height: 0; }
 

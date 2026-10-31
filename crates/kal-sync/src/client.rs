@@ -94,6 +94,95 @@ impl NodeCfg {
     }
 }
 
+/// This device's stable sync id, creating and persisting the per-device node
+/// config on first use. The live transport identifies itself with the same
+/// value, so a caller that falls back to another transport (the shared outbox
+/// folder) still speaks as one device across rounds.
+pub fn device_id(db_path: &Path) -> Option<ulid::Ulid> {
+    NodeCfg::load_or_create(db_path)?.device_id.parse().ok()
+}
+
+/// Device-local settings keys for the sync panel. The settings table is never
+/// part of the shared CRDT state, so both the peer history and the blocklist
+/// stay on this device (D37: revocation is a local device-id blocklist).
+pub const PEERS_KEY: &str = "sync-peers";
+pub const REVOKED_KEY: &str = "sync-revoked";
+
+/// One device the sync panel can list. `id` is the stable per-install device
+/// id carried in every envelope; `revoked` means this device ignores it.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct SyncDevice {
+    pub id: String,
+    pub revoked: bool,
+}
+
+/// Read one id list from the settings store. A missing or malformed value is an
+/// empty list: bookkeeping must never make a sync round fail.
+fn load_device_ids(db: &Database, key: &str) -> Vec<ulid::Ulid> {
+    let raw = db.get_setting(key).ok().flatten().unwrap_or_default();
+    let strings: Vec<String> = serde_json::from_str(&raw).unwrap_or_default();
+    let mut ids: Vec<ulid::Ulid> = strings.iter().filter_map(|s| s.parse().ok()).collect();
+    ids.sort_unstable();
+    ids.dedup();
+    ids
+}
+
+fn save_device_ids(db: &Database, key: &str, ids: &[ulid::Ulid]) -> Result<(), String> {
+    let strings: Vec<String> = ids.iter().map(ToString::to_string).collect();
+    let raw = serde_json::to_string(&strings).map_err(|e| e.to_string())?;
+    db.set_setting(key, &raw).map_err(|e| e.to_string())
+}
+
+/// Device ids whose envelopes this install has accepted.
+pub fn known_peers(db: &Database) -> Vec<ulid::Ulid> {
+    load_device_ids(db, PEERS_KEY)
+}
+
+/// Device ids the user removed; every round drops their envelopes.
+pub fn revoked_devices(db: &Database) -> Vec<ulid::Ulid> {
+    load_device_ids(db, REVOKED_KEY)
+}
+
+/// Remember the peers whose envelopes a round accepted.
+pub fn record_peers(
+    db: &Database,
+    peers: impl IntoIterator<Item = ulid::Ulid>,
+) -> Result<(), String> {
+    let mut ids = known_peers(db);
+    ids.extend(peers);
+    ids.sort_unstable();
+    ids.dedup();
+    save_device_ids(db, PEERS_KEY, &ids)
+}
+
+/// Block a device from this install. Idempotent: removing it twice leaves one
+/// entry, and a later round keeps ignoring its envelopes.
+pub fn revoke_device(db: &Database, id: ulid::Ulid) -> Result<(), String> {
+    let mut ids = revoked_devices(db);
+    ids.push(id);
+    ids.sort_unstable();
+    ids.dedup();
+    save_device_ids(db, REVOKED_KEY, &ids)
+}
+
+/// The rows the sync panel lists: every peer seen, plus any blocked id (which
+/// may predate this install's peer history). Newest ids sort last; the panel
+/// shows them in a stable order.
+pub fn devices(db: &Database) -> Result<Vec<SyncDevice>, String> {
+    let revoked = revoked_devices(db);
+    let mut ids = known_peers(db);
+    ids.extend(revoked.iter().copied());
+    ids.sort_unstable();
+    ids.dedup();
+    Ok(ids
+        .into_iter()
+        .map(|id| SyncDevice {
+            revoked: revoked.contains(&id),
+            id: id.to_string(),
+        })
+        .collect())
+}
+
 /// The live transport for `identity`, creating it on first use. Returns `None`
 /// when the chain changed or the transport could not start.
 ///
@@ -204,6 +293,9 @@ pub fn live_round_core(
         "live",
         SyncState::from_parts(calendars.clone(), items.clone()),
     );
+    // Load the user's blocklist before accepting envelopes so a removed device
+    // stays removed across restarts and rounds.
+    session.revoked = revoked_devices(db);
 
     let sealed = session.seal_state().map_err(|e| e.to_string())?;
     tracing::info!(sealed_bytes = sealed.len(), "live: sealed local state");
@@ -254,6 +346,11 @@ pub fn live_round_core(
         // ...then wait a little for more to arrive (self-broadcast echoes,
         // peer snapshots) until the window closes.
         std::thread::sleep(POLL);
+    }
+    // Remember who actually reached us, so the sync panel can offer a Remove
+    // action. A settings-write failure must not discard the data we just merged.
+    if let Err(e) = record_peers(db, session.peers.iter().copied()) {
+        tracing::warn!(error = %e, "live: could not persist the peer list");
     }
     if merged == 0 {
         tracing::info!("live: round done, nothing merged");
@@ -330,15 +427,26 @@ fn encode_hex(bytes: &[u8; 32]) -> String {
 }
 
 fn decode_hex(s: &str) -> Option<[u8; 32]> {
-    let mut out = [0u8; 32];
     let bytes = s.as_bytes();
     if bytes.len() != 64 {
         return None;
     }
-    for i in 0..32 {
-        out[i] = u8::from_str_radix(&s[i * 2..i * 2 + 2], 16).ok()?;
+    let mut out = [0u8; 32];
+    for (i, pair) in bytes.chunks_exact(2).enumerate() {
+        out[i] = hex_nibble(pair[0])? << 4 | hex_nibble(pair[1])?;
     }
     Some(out)
+}
+
+/// One ASCII hex digit as its value. Byte-based on purpose: slicing the `str`
+/// by byte offsets panics when a corrupted config contains multi-byte UTF-8.
+fn hex_nibble(b: u8) -> Option<u8> {
+    match b {
+        b'0'..=b'9' => Some(b - b'0'),
+        b'a'..=b'f' => Some(b - b'a' + 10),
+        b'A'..=b'F' => Some(b - b'A' + 10),
+        _ => None,
+    }
 }
 
 #[cfg(test)]
@@ -485,6 +593,17 @@ mod tests {
     /// a peer would broadcast. The event is attached to the seeded calendar so
     /// the in-memory DB's `items.calendar_id REFERENCES calendars(id)` FK holds.
     fn sealed_state_with(identity: &ChainIdentity, cal_name: &str, item_title: &str) -> Vec<u8> {
+        sealed_state_from(identity, ulid::Ulid::new(), cal_name, item_title)
+    }
+
+    /// As [`sealed_state_with`], with an explicit sender id so a test can refer
+    /// to the device the way the sync panel does.
+    fn sealed_state_from(
+        identity: &ChainIdentity,
+        device_id: ulid::Ulid,
+        cal_name: &str,
+        item_title: &str,
+    ) -> Vec<u8> {
         let mut s = SyncState::default();
         let cal_id = ulid::Ulid::new();
         let mut calendar = cal(cal_name);
@@ -494,7 +613,7 @@ mod tests {
             ulid::Ulid::new(),
             sample_item(cal_id, item_title, 1_700_000_000),
         );
-        let session = SyncSession::new(identity, ulid::Ulid::new(), "seeder", s);
+        let session = SyncSession::new(identity, device_id, "seeder", s);
         session.seal_state().unwrap()
     }
 
@@ -672,6 +791,66 @@ mod tests {
         assert!(cal_names.contains("CalB"));
     }
 
+    /// A peer that reaches us is listed for the panel; once removed, its id
+    /// stays blocked across rounds and its later snapshots never merge.
+    #[test]
+    fn removed_devices_are_blocked_and_seen_peers_are_listed() {
+        let identity = ChainIdentity::from_phrase(PHRASE).unwrap();
+        let mail = Mailboxes::default();
+        let peer_id = ulid::Ulid::new();
+        let phone_id = FakeSink::ulid();
+        let phone = FakeSink::new(&phone_id, mail.clone());
+        mail.push(
+            &phone_id,
+            peer_id.to_string(),
+            sealed_state_from(&identity, peer_id, "Work", "Standup"),
+        );
+
+        let db = empty_db();
+        let merged = live_round_core(&identity, &db, &phone).unwrap();
+        assert_eq!(merged, 1);
+        assert_eq!(
+            devices(&db).unwrap(),
+            vec![SyncDevice {
+                id: peer_id.to_string(),
+                revoked: false,
+            }]
+        );
+
+        revoke_device(&db, peer_id).unwrap();
+        assert_eq!(
+            devices(&db).unwrap(),
+            vec![SyncDevice {
+                id: peer_id.to_string(),
+                revoked: true,
+            }],
+            "a removed device stays listed as removed"
+        );
+
+        // A new snapshot from the same device is dropped, and the merge count
+        // does not pretend work happened.
+        mail.push(
+            &phone_id,
+            peer_id.to_string(),
+            sealed_state_from(&identity, peer_id, "Private", "Secret"),
+        );
+        let merged = live_round_core(&identity, &db, &phone).unwrap();
+        assert_eq!(merged, 0, "revoked envelopes are not merged");
+        assert!(
+            db.list_items(false)
+                .unwrap()
+                .iter()
+                .all(|i| i.title != "Secret"),
+            "the removed device's new event must not land"
+        );
+        assert!(revoked_devices(&db).contains(&peer_id));
+
+        // Revoking twice is idempotent, not a duplicate row.
+        revoke_device(&db, peer_id).unwrap();
+        assert_eq!(revoked_devices(&db), vec![peer_id]);
+        assert_eq!(devices(&db).unwrap().len(), 1);
+    }
+
     /// A fresh identity has no data, so an empty chain round is a clean
     /// no-op — the phone DB stays empty but the round must not error/panic.
     #[test]
@@ -683,6 +862,42 @@ mod tests {
         let merged = live_round_core(&identity, &db, &phone).unwrap();
         assert_eq!(merged, 0);
         assert_eq!(db.list_items(false).unwrap().len(), 0);
+    }
+
+    /// A corrupted `sync-node.json` may contain non-ASCII text whose byte
+    /// length is still 64. The old implementation sliced the `&str` by byte
+    /// offsets, which panics on a non-char-boundary; decoding bytes cannot.
+    #[test]
+    fn decode_hex_rejects_non_ascii_without_panicking() {
+        let mut corrupt = String::from("a");
+        corrupt.push_str(&"é".repeat(31));
+        corrupt.push('b');
+        assert_eq!(corrupt.len(), 64, "fixture is exactly the accepted length");
+        assert_eq!(decode_hex(&corrupt), None);
+
+        // Uppercase hex is still accepted, as before.
+        assert_eq!(decode_hex(&"AB".repeat(32)), Some([0xab; 32]));
+        // Wrong length or a stray character is rejected, never panicked on.
+        assert_eq!(decode_hex(""), None);
+        assert_eq!(decode_hex(&"g".repeat(64)), None);
+    }
+
+    /// The folder fallback must identify this device the same way every round.
+    /// A per-round ULID made it treat its own previous blob as a peer merge
+    /// (refreshing every view every round) and gave peers a new device id to
+    /// revoke each time.
+    #[test]
+    fn the_device_id_is_stable_for_a_database() {
+        let dir = tempfile::tempdir().unwrap();
+        let db_path = dir.path().join("kal.db");
+        let first = device_id(&db_path).expect("device id is created on first use");
+        let second = device_id(&db_path).expect("device id is reused after that");
+        assert_eq!(first, second);
+
+        // A different installation (data directory) is a different device.
+        let other_dir = tempfile::tempdir().unwrap();
+        let other = device_id(&other_dir.path().join("kal.db")).expect("device id");
+        assert_ne!(first, other);
     }
 
     /// The node-secret hex codec that keys the per-device transport must be a

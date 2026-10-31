@@ -111,9 +111,14 @@
                 android:resource="@xml/kal_month_widget_info" />
         </receiver>
 
+        <!--
+          Widgets keep their own boot refresher (the notify one re-arms alarms).
+          Not exported: BOOT_COMPLETED is a protected broadcast, which the
+          system still delivers to non-exported receivers.
+        -->
         <receiver
             android:name=".widgets.BootReceiver"
-            android:exported="true">
+            android:exported="false">
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
             </intent-filter>

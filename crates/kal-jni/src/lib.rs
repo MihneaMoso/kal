@@ -58,36 +58,47 @@ fn into_jstring(env: &JNIEnv, ptr: *mut c_char) -> jstring {
         .unwrap_or(ptr::null_mut())
 }
 
-/// Read a JVM string as a C string (NUL-safe: an interior NUL is rejected by
-/// `CString::new`, and we fall back to an empty value so the call fails loudly
-/// instead of acting on something unexpected).
-fn into_cstring(env: &mut JNIEnv, value: &JString) -> CString {
-    let text = env
-        .get_string(value)
-        .map(|s| s.to_string_lossy().into_owned())
-        .unwrap_or_default();
-    CString::new(text).unwrap_or_default()
+/// Read a JVM string as a C string.
+///
+/// Returns `None` when the JVM string cannot be read or contains an interior
+/// NUL byte. Callers then pass a NULL argument, so `kal-ffi` rejects the call
+/// through its error channel instead of silently acting on an empty value.
+fn into_cstring(env: &mut JNIEnv, value: &JString) -> Option<CString> {
+    let text = env.get_string(value).ok()?.to_string_lossy().into_owned();
+    cstring_from_text(text)
 }
 
-/// Run a query export against a handle, mapping "no handle" (0) to NULL.
+/// The pure half of [`into_cstring`]: `None` for any text a C string cannot
+/// carry (an interior NUL).
+fn cstring_from_text(text: String) -> Option<CString> {
+    CString::new(text).ok()
+}
+
+/// The C pointer for a converted argument. NULL means "the JVM string could not
+/// be represented", which every `kal-ffi` string argument reports as an error.
+fn arg_ptr(arg: &Option<CString>) -> *const c_char {
+    arg.as_ref().map_or(ptr::null(), |s| s.as_ptr())
+}
+
+/// Run a query export against a handle.
+///
+/// A zero handle is forwarded as NULL so `kal-ffi` records "null database
+/// handle" on the error channel; short-circuiting here would leave a stale
+/// error from an earlier call readable by the app.
 fn query_handle<F>(env: &JNIEnv, handle: jlong, query: F) -> jstring
 where
     F: FnOnce(*mut KalDb) -> *mut c_char,
 {
-    if handle == 0 {
-        return ptr::null_mut();
-    }
     into_jstring(env, query(handle as *mut KalDb))
 }
 
-/// Run a command export against a handle, mapping "no handle" (0) to -1.
+/// Run a command export against a handle. Zero is forwarded as NULL for the
+/// same reason as [`query_handle`]: the FFI, not the JNI glue, owns the error
+/// message.
 fn command_handle<F>(handle: jlong, command: F) -> jint
 where
     F: FnOnce(*mut KalDb) -> i32,
 {
-    if handle == 0 {
-        return -1;
-    }
     command(handle as *mut KalDb)
 }
 
@@ -118,11 +129,12 @@ pub extern "system" fn Java_com_kal_calendar_bridge_KalNative_open(
     _class: JClass,
     path: JString,
 ) -> jlong {
-    // Converted outside the guard: `into_cstring` returns Results, so it cannot
-    // panic, and the closure then only needs to carry the handle.
+    // Converted outside the guard: `into_cstring` cannot panic, and the closure
+    // then only needs to carry the handle. A string the JVM cannot represent
+    // becomes NULL, which `kal_open` reports instead of opening an empty path.
     let cpath = into_cstring(&mut env, &path);
     guard(0, move || {
-        let db = unsafe { kal_ffi::kal_open(cpath.as_ptr()) };
+        let db = unsafe { kal_ffi::kal_open(arg_ptr(&cpath)) };
         db as jlong
     })
 }
@@ -180,7 +192,7 @@ pub extern "system" fn Java_com_kal_calendar_bridge_KalNative_getSetting(
     let key = into_cstring(&mut env, &key);
     guard(ptr::null_mut(), move || {
         query_handle(&env, handle, |db| unsafe {
-            kal_ffi::kal_get_setting(db, key.as_ptr())
+            kal_ffi::kal_get_setting(db, arg_ptr(&key))
         })
     })
 }
@@ -198,7 +210,7 @@ pub extern "system" fn Java_com_kal_calendar_bridge_KalNative_setSetting(
     let value = into_cstring(&mut env, &value);
     guard(-1, move || {
         command_handle(handle, |db| unsafe {
-            kal_ffi::kal_set_setting(db, key.as_ptr(), value.as_ptr())
+            kal_ffi::kal_set_setting(db, arg_ptr(&key), arg_ptr(&value))
         })
     })
 }
@@ -214,7 +226,7 @@ pub extern "system" fn Java_com_kal_calendar_bridge_KalNative_upsertCalendarJson
     let json = into_cstring(&mut env, &json);
     guard(-1, move || {
         command_handle(handle, |db| unsafe {
-            kal_ffi::kal_upsert_calendar_json(db, json.as_ptr())
+            kal_ffi::kal_upsert_calendar_json(db, arg_ptr(&json))
         })
     })
 }
@@ -247,7 +259,7 @@ pub extern "system" fn Java_com_kal_calendar_bridge_KalNative_weekJson(
     let start = into_cstring(&mut env, &week_start);
     guard(ptr::null_mut(), move || {
         query_handle(&env, handle, |db| unsafe {
-            kal_ffi::kal_week_json(db, start.as_ptr())
+            kal_ffi::kal_week_json(db, arg_ptr(&start))
         })
     })
 }
@@ -263,7 +275,7 @@ pub extern "system" fn Java_com_kal_calendar_bridge_KalNative_dayJson(
     let date = into_cstring(&mut env, &date);
     guard(ptr::null_mut(), move || {
         query_handle(&env, handle, |db| unsafe {
-            kal_ffi::kal_day_json(db, date.as_ptr())
+            kal_ffi::kal_day_json(db, arg_ptr(&date))
         })
     })
 }
@@ -281,7 +293,7 @@ pub extern "system" fn Java_com_kal_calendar_bridge_KalNative_agendaJson(
     let from = into_cstring(&mut env, &from);
     guard(ptr::null_mut(), move || {
         query_handle(&env, handle, |db| unsafe {
-            kal_ffi::kal_agenda_json(db, from.as_ptr(), days, cap)
+            kal_ffi::kal_agenda_json(db, arg_ptr(&from), days, cap)
         })
     })
 }
@@ -318,7 +330,7 @@ pub extern "system" fn Java_com_kal_calendar_bridge_KalNative_importIcsJson(
     let calendar_name = into_cstring(&mut env, &calendar_name);
     guard(-1, move || {
         command_handle(handle, |db| unsafe {
-            kal_ffi::kal_import_ics_json(db, text.as_ptr(), calendar_name.as_ptr())
+            kal_ffi::kal_import_ics_json(db, arg_ptr(&text), arg_ptr(&calendar_name))
         })
     })
 }
@@ -335,7 +347,7 @@ pub extern "system" fn Java_com_kal_calendar_bridge_KalNative_exportIcsFile(
     let path = into_cstring(&mut env, &path);
     guard(-1, move || {
         command_handle(handle, |db| unsafe {
-            kal_ffi::kal_export_ics_file(db, path.as_ptr())
+            kal_ffi::kal_export_ics_file(db, arg_ptr(&path))
         })
     })
 }
@@ -353,7 +365,7 @@ pub extern "system" fn Java_com_kal_calendar_bridge_KalNative_checkUpdatesJson(
     let current_version = into_cstring(&mut env, &current_version);
     let dest_path = into_cstring(&mut env, &dest_path);
     let ptr = guard(ptr::null_mut(), move || unsafe {
-        kal_ffi::kal_check_updates_json(current_version.as_ptr(), dest_path.as_ptr())
+        kal_ffi::kal_check_updates_json(arg_ptr(&current_version), arg_ptr(&dest_path))
     });
     into_jstring(&env, ptr)
 }
@@ -370,7 +382,7 @@ pub extern "system" fn Java_com_kal_calendar_bridge_KalNative_itemJson(
     let id = into_cstring(&mut env, &id);
     guard(ptr::null_mut(), move || {
         query_handle(&env, handle, |db| unsafe {
-            kal_ffi::kal_item_json(db, id.as_ptr())
+            kal_ffi::kal_item_json(db, arg_ptr(&id))
         })
     })
 }
@@ -387,7 +399,7 @@ pub extern "system" fn Java_com_kal_calendar_bridge_KalNative_saveItemJson(
     let form_json = into_cstring(&mut env, &form_json);
     guard(-1, move || {
         command_handle(handle, |db| unsafe {
-            kal_ffi::kal_save_item_json(db, form_json.as_ptr())
+            kal_ffi::kal_save_item_json(db, arg_ptr(&form_json))
         })
     })
 }
@@ -404,7 +416,7 @@ pub extern "system" fn Java_com_kal_calendar_bridge_KalNative_toggleItemComplete
     let id = into_cstring(&mut env, &id);
     guard(-1, move || {
         command_handle(handle, |db| unsafe {
-            kal_ffi::kal_toggle_item_completed_json(db, id.as_ptr())
+            kal_ffi::kal_toggle_item_completed_json(db, arg_ptr(&id))
         })
     })
 }
@@ -422,7 +434,7 @@ pub extern "system" fn Java_com_kal_calendar_bridge_KalNative_softDeleteItem(
     let id = into_cstring(&mut env, &id);
     guard(-1, move || {
         command_handle(handle, |db| unsafe {
-            kal_ffi::kal_soft_delete_item(db, id.as_ptr())
+            kal_ffi::kal_soft_delete_item(db, arg_ptr(&id))
         })
     })
 }
@@ -440,7 +452,7 @@ pub extern "system" fn Java_com_kal_calendar_bridge_KalNative_deleteItemJson(
     let form_json = into_cstring(&mut env, &form_json);
     guard(-1, move || {
         command_handle(handle, |db| unsafe {
-            kal_ffi::kal_delete_item_json(db, form_json.as_ptr())
+            kal_ffi::kal_delete_item_json(db, arg_ptr(&form_json))
         })
     })
 }
@@ -487,7 +499,7 @@ pub extern "system" fn Java_com_kal_calendar_bridge_KalNative_syncJoinChainJson(
     let phrase = into_cstring(&mut env, &phrase);
     guard(ptr::null_mut(), move || {
         query_handle(&env, handle, |db| unsafe {
-            kal_ffi::kal_sync_join_chain_json(db, phrase.as_ptr())
+            kal_ffi::kal_sync_join_chain_json(db, arg_ptr(&phrase))
         })
     })
 }
@@ -533,6 +545,38 @@ pub extern "system" fn Java_com_kal_calendar_bridge_KalNative_syncRoundJson(
     })
 }
 
+/// `syncDevicesJson(handle: Long): String?` — `{devices:[{id, revoked}]}`, or
+/// null with the reason on `lastError()`.
+#[no_mangle]
+pub extern "system" fn Java_com_kal_calendar_bridge_KalNative_syncDevicesJson(
+    env: JNIEnv,
+    _class: JClass,
+    handle: jlong,
+) -> jstring {
+    guard(ptr::null_mut(), move || {
+        query_handle(&env, handle, |db| unsafe {
+            kal_ffi::kal_sync_devices_json(db)
+        })
+    })
+}
+
+/// `syncRevokeDevice(handle: Long, deviceId: String): Int` — add a device to
+/// the local blocklist; 0 on success, -1 on failure.
+#[no_mangle]
+pub extern "system" fn Java_com_kal_calendar_bridge_KalNative_syncRevokeDevice(
+    mut env: JNIEnv,
+    _class: JClass,
+    handle: jlong,
+    device_id: JString,
+) -> jint {
+    let device_id = into_cstring(&mut env, &device_id);
+    guard(-1, move || {
+        command_handle(handle, |db| unsafe {
+            kal_ffi::kal_sync_revoke_device(db, arg_ptr(&device_id))
+        })
+    })
+}
+
 // ---------------------------------------------------------------------------
 // Home-screen widgets (`com.kal.calendar.widgets.KalWidgets`)
 //
@@ -555,7 +599,7 @@ pub extern "system" fn Java_com_kal_calendar_widgets_KalWidgets_nativeSchedule(
 ) -> jstring {
     let cpath = into_cstring(&mut env, &path);
     guard(ptr::null_mut(), move || {
-        let db = unsafe { kal_ffi::kal_open(cpath.as_ptr()) };
+        let db = unsafe { kal_ffi::kal_open(arg_ptr(&cpath)) };
         if db.is_null() {
             return ptr::null_mut();
         }
@@ -579,7 +623,7 @@ pub extern "system" fn Java_com_kal_calendar_widgets_KalWidgets_nativeMonth(
 ) -> jstring {
     let cpath = into_cstring(&mut env, &path);
     guard(ptr::null_mut(), move || {
-        let db = unsafe { kal_ffi::kal_open(cpath.as_ptr()) };
+        let db = unsafe { kal_ffi::kal_open(arg_ptr(&cpath)) };
         if db.is_null() {
             return ptr::null_mut();
         }
@@ -600,7 +644,7 @@ mod tests {
     /// signature-compatibility gate.
     #[test]
     fn jni_exports_match_the_kotlin_declarations() {
-        let exports: [*const (); 30] = [
+        let exports: [*const (); 32] = [
             Java_com_kal_calendar_bridge_KalNative_bridgeVersion as *const (),
             Java_com_kal_calendar_bridge_KalNative_lastError as *const (),
             Java_com_kal_calendar_bridge_KalNative_open as *const (),
@@ -629,6 +673,8 @@ mod tests {
             Java_com_kal_calendar_bridge_KalNative_syncPhraseJson as *const (),
             Java_com_kal_calendar_bridge_KalNative_syncLeave as *const (),
             Java_com_kal_calendar_bridge_KalNative_syncRoundJson as *const (),
+            Java_com_kal_calendar_bridge_KalNative_syncDevicesJson as *const (),
+            Java_com_kal_calendar_bridge_KalNative_syncRevokeDevice as *const (),
             Java_com_kal_calendar_widgets_KalWidgets_nativeSchedule as *const (),
             Java_com_kal_calendar_widgets_KalWidgets_nativeMonth as *const (),
         ];
@@ -639,6 +685,23 @@ mod tests {
     /// change here must be a deliberate ABI bump.
     #[test]
     fn bridge_version_is_pinned() {
-        assert_eq!(KOTLIN_EXPECTS_BRIDGE_VERSION, 2);
+        assert_eq!(KOTLIN_EXPECTS_BRIDGE_VERSION, 3);
+    }
+
+    /// An interior NUL used to collapse to `""` (`unwrap_or_default`), so a
+    /// command could act on an empty key/path instead of failing. The argument
+    /// must now become NULL, which the FFI reports through `lastError`.
+    #[test]
+    fn strings_a_c_string_cannot_carry_become_null_arguments() {
+        assert!(cstring_from_text("a\0b".to_string()).is_none());
+        assert!(arg_ptr(&cstring_from_text("a\0b".to_string())).is_null());
+
+        let ok = cstring_from_text("kal".to_string());
+        assert!(ok.is_some());
+        assert!(!arg_ptr(&ok).is_null());
+        assert_eq!(
+            unsafe { CStr::from_ptr(arg_ptr(&ok)) }.to_str().unwrap(),
+            "kal"
+        );
     }
 }

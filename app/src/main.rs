@@ -58,6 +58,20 @@ impl WebNoopScheduler {
 /// App-wide shared handle to the SQLite database.
 pub type DbHandle = Arc<Database>;
 
+/// Identity + modification stamp for every item, ordered.
+///
+/// The reminder reconcile compares this between renders so it only runs on a
+/// real data change. The item count alone is not enough: adding, editing or
+/// clearing a reminder on an existing event leaves the count untouched.
+fn reminder_key(items: &[CalendarItem]) -> Vec<(ulid::Ulid, i64)> {
+    let mut key: Vec<(ulid::Ulid, i64)> = items
+        .iter()
+        .map(|i| (i.id, i.updated_at.timestamp()))
+        .collect();
+    key.sort_unstable();
+    key
+}
+
 /// Resolve the writable, app-private data directory for the current platform.
 ///
 /// Desktop: `~/.local/share` (or the platform equivalent).
@@ -440,26 +454,30 @@ fn App() -> Element {
     }
 
     // Reconcile scheduled reminders whenever items change (§5.3: reschedule
-    // on foreground / after mutations / after sync merges).
+    // on foreground / after mutations / after sync merges). Keyed on each
+    // item's identity *and* last-modified stamp: the item count alone misses
+    // edits that keep the count, so adding, changing or clearing a reminder on
+    // an existing event left the previously armed alarm in place.
     let db_sched = db.clone();
     let sched = use_context::<SchedulerHandle>();
-    let mut last_items_len = use_signal(|| 0usize);
+    let mut last_items_key = use_signal(Vec::<(ulid::Ulid, i64)>::new);
     use_effect(move || {
-        let version = items_res
-            .value()
-            .read()
-            .as_ref()
-            .map(|v| v.len())
-            .unwrap_or(0);
-        if version != *last_items_len.read() {
-            last_items_len.set(version);
-            if let Some(items) = items_res.value().read().as_ref() {
-                let from = Local::now().fixed_offset();
-                let firings = kal_core::reminders::compute_firings(items, from, 14);
-                sched.reschedule(&firings);
-                let _ = &db_sched; // reserved: per-item deep-link payload later
-            }
+        let resource = items_res.value();
+        let items_read = resource.read();
+        // Still loading: keep whatever is armed and reconcile when it lands.
+        let Some(items) = items_read.as_ref() else {
+            return;
+        };
+        let key = reminder_key(items);
+        let unchanged = *last_items_key.read() == key;
+        if unchanged {
+            return;
         }
+        last_items_key.set(key);
+        let from = Local::now().fixed_offset();
+        let firings = kal_core::reminders::compute_firings(items, from, 14);
+        sched.reschedule(&firings);
+        let _ = &db_sched; // reserved: per-item deep-link payload later
     });
 
     // Base stylesheet: injected once per render as a plain <style> tag.
@@ -527,7 +545,7 @@ fn App() -> Element {
 fn TopBar() -> Element {
     let mut layout = use_context::<Signal<ui::UiLayout>>();
     let mut view = use_context::<Signal<ui::ViewMode>>();
-    let cursor = use_context::<Signal<NaiveDate>>();
+    let mut cursor = use_context::<Signal<NaiveDate>>();
 
     let c = *cursor.read();
     let mode = *view.read();
@@ -583,6 +601,35 @@ fn TopBar() -> Element {
                 span { class: "nav-label-short", "{short_label}" }
             }
             div { class: "spacer" }
+            // Period arrows, back to the left of the view tabs on desktop. The
+            // phone shell navigates by swiping, so they stay out of the mobile
+            // layout. Agenda has no period to step (its list always starts
+            // today), so the arrows are disabled there rather than moving the
+            // cursor invisibly.
+            if !layout.read().mobile {
+                div { class: "nav-arrows",
+                    button {
+                        class: "icon-btn",
+                        "aria-label": "Previous period",
+                        disabled: mode == ui::ViewMode::Agenda,
+                        onclick: move |_| {
+                            let next = step_period(*view.read(), *cursor.read(), false);
+                            cursor.set(next);
+                        },
+                        "\u{2039}"
+                    }
+                    button {
+                        class: "icon-btn",
+                        "aria-label": "Next period",
+                        disabled: mode == ui::ViewMode::Agenda,
+                        onclick: move |_| {
+                            let next = step_period(*view.read(), *cursor.read(), true);
+                            cursor.set(next);
+                        },
+                        "\u{203A}"
+                    }
+                }
+            }
             div { class: "view-tabs",
                 for m in ui::ViewMode::ALL {
                     button {
@@ -876,6 +923,24 @@ fn Sidebar() -> Element {
 /// Pixels a horizontal pointer drag must travel to count as a period swipe.
 const SWIPE_MIN_PX: f64 = 70.0;
 
+/// One period step: Day ±1 day, Week ±7 days, Month and Agenda ±1 month.
+/// The month arithmetic is checked, so the ends of the supported range are a
+/// no-op instead of a panic. Shared by the swipe gesture and the desktop
+/// ‹ › buttons so both always move the same distance.
+fn step_period(view: ui::ViewMode, cursor: NaiveDate, forward: bool) -> NaiveDate {
+    match view {
+        ui::ViewMode::Day => cursor + chrono::Duration::days(if forward { 1 } else { -1 }),
+        ui::ViewMode::Week => cursor + chrono::Duration::days(if forward { 7 } else { -7 }),
+        _ => {
+            if forward {
+                cursor.checked_add_months(Months::new(1)).unwrap_or(cursor)
+            } else {
+                cursor.checked_sub_months(Months::new(1)).unwrap_or(cursor)
+            }
+        }
+    }
+}
+
 #[component]
 fn Content() -> Element {
     let view = use_context::<Signal<ui::ViewMode>>();
@@ -896,22 +961,7 @@ fn Content() -> Element {
             return;
         }
         let forward = dx < 0.0;
-        let next = match mode {
-            ui::ViewMode::Day => {
-                *cursor.read() + chrono::Duration::days(if forward { 1 } else { -1 })
-            }
-            ui::ViewMode::Week => {
-                *cursor.read() + chrono::Duration::days(if forward { 7 } else { -7 })
-            }
-            _ => {
-                let c = *cursor.read();
-                if forward {
-                    c.checked_add_months(Months::new(1)).unwrap_or(c)
-                } else {
-                    c.checked_sub_months(Months::new(1)).unwrap_or(c)
-                }
-            }
-        };
+        let next = step_period(mode, *cursor.read(), forward);
         cursor.set(next);
         slide.set(if forward { 1 } else { -1 });
         nav_serial.with_mut(|n| *n += 1);
@@ -1026,5 +1076,70 @@ mod tests {
         // Seeding never touches a non-empty DB (existing installs keep theirs).
         let before = ensure_default_calendars(&first);
         assert_eq!(before.len(), 2);
+    }
+
+    /// The top bar's ‹ › and the swipe gesture share one stepper, matching the
+    /// Kotlin shell: Day ±1, Week ±7, Month ±1 month, range ends clamped.
+    #[test]
+    fn period_step_matches_the_swipe_distance() {
+        let d = NaiveDate::from_ymd_opt(2026, 10, 30).unwrap();
+        assert_eq!(
+            step_period(ui::ViewMode::Day, d, true),
+            NaiveDate::from_ymd_opt(2026, 10, 31).unwrap()
+        );
+        assert_eq!(
+            step_period(ui::ViewMode::Day, d, false),
+            NaiveDate::from_ymd_opt(2026, 10, 29).unwrap()
+        );
+        assert_eq!(
+            step_period(ui::ViewMode::Week, d, true),
+            NaiveDate::from_ymd_opt(2026, 11, 6).unwrap()
+        );
+        assert_eq!(
+            step_period(ui::ViewMode::Month, d, true),
+            NaiveDate::from_ymd_opt(2026, 11, 30).unwrap()
+        );
+        assert_eq!(
+            step_period(ui::ViewMode::Agenda, d, false),
+            NaiveDate::from_ymd_opt(2026, 9, 30).unwrap()
+        );
+
+        // The ends of the supported range are a no-op, not an overflow.
+        assert_eq!(
+            step_period(ui::ViewMode::Month, NaiveDate::MAX, true),
+            NaiveDate::MAX
+        );
+    }
+
+    /// A reminder edit on an existing event must change the reconcile key even
+    /// though the item count is unchanged; keying on the count left the old
+    /// alarm armed until the next launch.
+    #[test]
+    fn reminder_key_tracks_edits_that_keep_the_count() {
+        use kal_core::models::{ItemKind, Reminder};
+
+        let cal = Calendar::local("Work", Color("#3366cc".into()));
+        let start = kal_core::models::datetime_from_parts(2026, 8, 24, 9, 0, 0).unwrap();
+        let mut item = CalendarItem::new(ItemKind::Event, "Standup", cal.id, start);
+        let before = reminder_key(std::slice::from_ref(&item));
+        assert_eq!(before, reminder_key(std::slice::from_ref(&item)));
+
+        item.reminders.push(Reminder::minutes_before(10));
+        item.updated_at = start + chrono::Duration::minutes(1);
+        let after = reminder_key(std::slice::from_ref(&item));
+        assert_ne!(before, after, "a reminder edit must trigger a reconcile");
+
+        // Clearing it is a change too.
+        item.reminders.clear();
+        item.updated_at = start + chrono::Duration::minutes(2);
+        assert_ne!(after, reminder_key(std::slice::from_ref(&item)));
+
+        // List order is not a change: the key is sorted by item id.
+        let mut other = CalendarItem::new(ItemKind::Event, "Review", cal.id, start);
+        other.updated_at = start + chrono::Duration::minutes(3);
+        assert_eq!(
+            reminder_key(&[item.clone(), other.clone()]),
+            reminder_key(&[other, item])
+        );
     }
 }

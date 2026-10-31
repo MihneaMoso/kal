@@ -1,6 +1,7 @@
 package com.kal.calendar.ui
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -22,6 +23,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.kal.calendar.bridge.SyncDevice
 import kotlinx.coroutines.launch
 
 /**
@@ -154,6 +156,26 @@ fun SyncPanel(state: ShellState) {
                 )
             }
             Spacer(Modifier.height(10.dp))
+            Text(
+                text = "Devices",
+                color = colors.fgMuted,
+                fontSize = KalDims.smallSize,
+            )
+            if (state.syncDevices.isEmpty()) {
+                Text(
+                    text = "No other devices seen yet.",
+                    color = colors.fgMuted,
+                    fontSize = KalDims.smallSize,
+                )
+            } else {
+                state.syncDevices.forEach { device ->
+                    SyncDeviceRow(
+                        device = device,
+                        onRemove = { state.removeSyncDevice(device.id) },
+                    )
+                }
+            }
+            Spacer(Modifier.height(10.dp))
             HorizontalDivider(color = colors.border)
             Spacer(Modifier.height(10.dp))
             LeaveSyncControls(onLeave = state::leaveSyncChain)
@@ -205,6 +227,50 @@ fun SyncPhraseDialog(phrase: SyncUi.ShowPhrase, onDone: () -> Unit) {
             primary = true,
             onClick = onDone,
         )
+    }
+}
+
+/** One peer row: its stable id, a Remove action, and the blocked status. */
+@Composable
+private fun SyncDeviceRow(device: SyncDevice, onRemove: () -> Unit) {
+    val colors = LocalKalColors.current
+    var confirm by remember(device.id) { mutableStateOf(false) }
+    Column(Modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Text(
+                text = device.id,
+                color = if (device.revoked) colors.fgMuted else colors.fg,
+                fontSize = KalDims.smallSize,
+                modifier = Modifier.weight(1f),
+            )
+            if (device.revoked) {
+                Text(
+                    text = "Removed",
+                    color = colors.fgMuted,
+                    fontSize = KalDims.smallSize,
+                )
+            } else if (!confirm) {
+                KalButton(
+                    label = "Remove\u2026",
+                    onClick = { confirm = true },
+                )
+            }
+        }
+        if (confirm && !device.revoked) {
+            Text(
+                text = "Ignore snapshots from this device?",
+                color = colors.fgMuted,
+                fontSize = KalDims.smallSize,
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                KalButton(label = "Remove", primary = true, onClick = onRemove)
+                KalButton(label = "Cancel", onClick = { confirm = false })
+            }
+        }
     }
 }
 

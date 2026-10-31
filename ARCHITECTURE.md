@@ -11,7 +11,7 @@ crates/
 │                   app AND linked into widget shims via kal-ffi.
 ├── kal-storage/    Storage backend, gated by platform: SQLite (rusqlite,
 │                   bundled) on native; in-memory IndexedDB-backed on wasm.
-│                   Same synchronous 13-method `Database` API on both.
+│                   Same synchronous `Database` API on both.
 │                   Append-only PRAGMA-versioned migrations. Repository exposes
 │                   upsert_* only (sync-ready) plus soft-delete tombstones.
 │                   scoped.rs holds the scoped-recurrence-edit algorithm once,
@@ -32,7 +32,9 @@ crates/
 ├── kal-import/     .ics export/import (icalendar crate) with round-trip
 │                   fidelity incl. VALARM reminders; Google Calendar read-only
 │                   import behind a Transport abstraction (RFC 8628 device
-│                   flow + REST v3 mapping).
+│                   flow + REST v3 mapping). The Google path is library-only
+│                   scaffolding: no UI, token storage or app call site wires it
+│                   up yet (STEP0 decision 15).
 ├── kal-update/     Release checking/staging shared by the desktop app and the
 │                   Android bridge: version arithmetic, GitHub latest-release
 │                   query and asset resolution, size-capped SHA-256-verified
@@ -48,7 +50,7 @@ crates/
 └── kal-jni/        JNI layer for the Android app: translates JVM↔C types and
                     statically links kal-ffi, so one library (libkal_jni.so)
                     carries both the Java_* entry points and the kal_* C ABI the
-                    Kotlin app and (later) the widgets load. Twenty-seven
+                    Kotlin app and widgets load. Thirty-two
                     catch_unwind-guarded exports; all logic stays in kal-ffi.
 
 app/                Dioxus 0.7 desktop shell (views, editor modal, settings,
@@ -91,8 +93,9 @@ android/app/         Owned Kotlin/Gradle Android app (the Dioxus → Kotlin rewr
                     or the KAL_* CI env vars (debug key as the fallback) — see
                     SIGNING.md. Phase 7 closes the last placeholder: the Sync
                     panel (start/join a chain, one-time 24-word phrase modal,
-                    fingerprint, reveal, Sync now, two-step leave) over six
-                    additive `kal_sync_*` exports. Android syncs live P2P only,
+                    fingerprint, reveal, Sync now, device list with Remove,
+                    two-step leave) over additive `kal_sync_*` exports. Android
+                    syncs live P2P only,
                     reuses the identity files the Dioxus build wrote, and runs a
                     round immediately plus every 10 s from an in-process
                     coroutine while paired. The Rust
@@ -162,7 +165,7 @@ carries `updated_at`; winners are chosen by
 
 1. newer `updated_at`,
 2. tombstone flag at equal timestamps (deletes propagate),
-3. lexicographic content tie-break (clock-skew safety).
+3. lexicographic whole-record tie-break (clock-skew safety).
 
 This total order makes convergence independent of delivery order/duplication,
 which is all a gossip network guarantees. Peers exchange full snapshots of
@@ -171,9 +174,11 @@ offline periods need no version-vector bookkeeping. Upgrade path: swap
 whole-record registers for field-level or Automerge/Yrs documents inside
 `SyncState::merge` without touching the wire envelope.
 
-**Revocation.** A device's fingerprint can be blocklisted by peers; its
-envelopes are then rejected before merge. Full key-rotation-with-repair UX is
-tracked as future work.
+**Revocation.** The sync panel lists the device ids whose envelopes have
+reached this install. Remove writes the id to a device-local blocklist; every
+sync round rejects that device's envelopes before merge, so the block survives
+restarts and applies to both the live and shared-folder transports. Full
+key-rotation-with-repair UX is tracked as future work.
 
 **Leaving the chain.** In the UI, "Leave sync chain" (below "Sync now", with a
 two-step inline confirm) deletes the local `sync-identity.json` and the local
@@ -182,9 +187,10 @@ gossip chain has no central membership, so this is purely local: other devices
 simply stop receiving snapshots from this one. The per-device `sync-node.json`
 (iroh identity) is kept — it belongs to the device, not the chain.
 
-**Sync on Android.** The sidebar's Sync panel is a thin view over six bridge
+**Sync on Android.** The sidebar's Sync panel is a thin view over eight bridge
 exports (`kal_sync_status_json`, `_start_chain_json`, `_join_chain_json`,
-`_phrase_json`, `_leave`, `_round_json`); no new permission is needed because
+`_phrase_json`, `_leave`, `_round_json`, `_devices_json`, `_revoke_device`);
+no new permission is needed because
 `INTERNET` already ships for the updater. Reading status never mints an
 identity — a fresh install stays unpaired until the user starts or joins a
 chain. A paired app runs one round immediately and then every 10 s from an

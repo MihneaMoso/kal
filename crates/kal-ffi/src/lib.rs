@@ -40,7 +40,7 @@ use kal_storage::Database;
 /// value at startup and refuses to run against an unknown ABI. Additive JSON
 /// fields do not need a bump; a new required entry point does. The compiled
 /// Kotlin app reads this at startup through [`kal_bridge_version`].
-pub const KAL_BRIDGE_VERSION: u32 = 2;
+pub const KAL_BRIDGE_VERSION: u32 = 3;
 
 /// Opaque database handle.
 pub struct KalDb {
@@ -455,9 +455,30 @@ pub unsafe extern "C" fn kal_settings_json(db: *mut KalDb) -> *mut c_char {
 // Expanded views (widget shims use these today; the app reuses them)
 // ---------------------------------------------------------------------------
 
+/// Items whose calendar is live and visible, for the frozen widget payloads.
+///
+/// The app-facing exports carry `calendarId` and let the client apply the
+/// visibility toggle; the widget shims have no calendar list, so the native side
+/// applies the same rule as the app's `use_visible_items`.
+fn widget_visible_items(items: Vec<CalendarItem>, calendars: &[Calendar]) -> Vec<CalendarItem> {
+    let hidden: std::collections::HashSet<Ulid> = calendars
+        .iter()
+        .filter(|c| !c.visible || c.deleted)
+        .map(|c| c.id)
+        .collect();
+    items
+        .into_iter()
+        .filter(|i| !hidden.contains(&i.calendar_id))
+        .collect()
+}
+
 /// Upcoming visible items overlapping `[from_epoch, to_epoch]` as a JSON
 /// array: `[{id,title,start,end,allDay,kind,color,age}]` sorted by start.
 /// `kind` ∈ event|task|birthday; `age` is set for birthdays only.
+///
+/// Items on hidden or deleted calendars are omitted here: the widget shims have
+/// no calendar list to filter with, unlike the app payloads that carry
+/// `calendarId`.
 ///
 /// # Safety
 /// `db` must be a live handle.
@@ -468,14 +489,14 @@ pub unsafe extern "C" fn kal_upcoming_json(
     to_epoch: i64,
 ) -> *mut c_char {
     with_db(db, |kal| {
-        let offset = *chrono::Local::now().offset();
-        let from = epoch_to_tz(from_epoch, offset);
-        let to = epoch_to_tz(to_epoch, offset);
+        let from = epoch_to_tz(from_epoch);
+        let to = epoch_to_tz(to_epoch);
         // Expand occurrences (recurring rules included) rather than querying
         // raw rows so yearly birthdays etc. surface correctly.
         let items = kal.db.list_items(false).map_err(|e| e.to_string())?;
 
         let calendars = kal.db.list_calendars().map_err(|e| e.to_string())?;
+        let items = widget_visible_items(items, &calendars);
         let cal_by_id: std::collections::HashMap<_, _> =
             calendars.iter().map(|c| (c.id, c)).collect();
 
@@ -515,6 +536,7 @@ pub unsafe extern "C" fn kal_upcoming_json(
 /// This is the **widget** shape and is frozen by the key-set assertions in
 /// `tests/bridge.rs`; the app shell calls [`kal_month_json`], which returns the
 /// richer shared entry (with `calendarId`, `kind` and a raw start instant).
+/// Items on hidden or deleted calendars are omitted, as in the schedule widget.
 ///
 /// # Safety
 /// `db` must be a live handle.
@@ -530,6 +552,7 @@ pub unsafe extern "C" fn kal_month_grid_json(
 
         let items = kal.db.list_items(false).map_err(|e| e.to_string())?;
         let calendars = kal.db.list_calendars().map_err(|e| e.to_string())?;
+        let items = widget_visible_items(items, &calendars);
         let cal_by_id = calendar_index(&calendars);
         let cells = month_occurrences(&items, year, month, first_weekday(first_dow));
 
@@ -776,9 +799,10 @@ pub unsafe extern "C" fn kal_day_json(db: *mut KalDb, date: *const c_char) -> *m
         let day_start = day
             .and_hms_opt(0, 0, 0)
             .unwrap()
-            .and_local_timezone(*chrono::Local::now().offset())
+            .and_local_timezone(chrono::Local)
             .single()
-            .unwrap_or_else(|| chrono::Utc::now().fixed_offset());
+            .map(|dt| dt.fixed_offset())
+            .unwrap_or_else(|| chrono::Local::now().fixed_offset());
         let positioned = kal_core::viewmodel::layout_day(timed, day_start, 0.02);
 
         let timed_json: Vec<serde_json::Value> = positioned
@@ -906,8 +930,11 @@ struct DeleteItemForm {
 }
 
 /// Read a form date/time the way the Dioxus editor did: an empty time means
-/// midnight, and the instant resolves in the device's current local offset
-/// (DST gaps/overlaps have no single answer, so they read as invalid).
+/// midnight, and the instant resolves in the device's local timezone on that
+/// date — not at today's offset. Using `Local::now().offset()` stored an August
+/// 09:00 event at +02:00 while the device was on winter time, so it read back as
+/// 08:00 and every cross-DST save shifted by an hour. DST gaps/overlaps have no
+/// single answer, so they still read as invalid.
 fn parse_form_when(date: &str, time: &str) -> Option<DateTimeTz> {
     use chrono::{NaiveDate, NaiveTime};
     let d = NaiveDate::parse_from_str(date, "%Y-%m-%d").ok()?;
@@ -917,7 +944,7 @@ fn parse_form_when(date: &str, time: &str) -> Option<DateTimeTz> {
         NaiveTime::parse_from_str(time, "%H:%M").ok()?
     };
     d.and_time(t)
-        .and_local_timezone(*chrono::Local::now().offset())
+        .and_local_timezone(chrono::Local)
         .single()
         .map(|dt| dt.fixed_offset())
 }
@@ -1407,15 +1434,48 @@ pub unsafe extern "C" fn kal_sync_round_json(db: *mut KalDb) -> *mut c_char {
     })
 }
 
+/// Devices seen on this chain, as the sync panel lists them:
+///
+///   {"devices":[{"id":"01…","revoked":false}, …]}
+///
+/// Includes blocked ids even when they predate this install's peer history.
+/// Empty when nothing has reached this device yet.
+///
+/// # Safety
+/// `db` must be a handle returned by [`kal_open`] (or NULL, which is refused).
+#[no_mangle]
+pub unsafe extern "C" fn kal_sync_devices_json(db: *mut KalDb) -> *mut c_char {
+    with_db(db, |kal| {
+        let devices = kal_sync::client::devices(&kal.db)?;
+        Ok(serde_json::json!({ "devices": devices }).to_string())
+    })
+}
+
+/// Remove a device: persist its id in the local blocklist so this device
+/// ignores every envelope it sends from now on. Returns 0 / -1. The id must be
+/// a well-formed device id (the strings [`kal_sync_devices_json`] returns).
+///
+/// # Safety
+/// `id` must be a NUL-terminated UTF-8 C string; `db` as above.
+#[no_mangle]
+pub unsafe extern "C" fn kal_sync_revoke_device(db: *mut KalDb, id: *const c_char) -> i32 {
+    with_db_status(db, |kal| {
+        let id = cstr_arg(id, "device id")?;
+        let id: Ulid = id.parse().map_err(|_| "Invalid device id".to_string())?;
+        kal_sync::client::revoke_device(&kal.db, id)
+    })
+}
+
 // ---------------------------------------------------------------------------
 // helpers
 // ---------------------------------------------------------------------------
 
-fn epoch_to_tz(epoch: i64, offset: chrono::FixedOffset) -> kal_core::models::DateTimeTz {
+fn epoch_to_tz(epoch: i64) -> kal_core::models::DateTimeTz {
     use chrono::TimeZone;
-    offset
+    chrono::Local
         .timestamp_opt(epoch, 0)
         .single()
+        .map(|dt| dt.fixed_offset())
         .unwrap_or_else(|| chrono::Utc::now().fixed_offset())
 }
 
@@ -1469,7 +1529,7 @@ mod tests {
     #[test]
     fn version_surface_is_stable() {
         assert_eq!(kal_bridge_version(), KAL_BRIDGE_VERSION);
-        assert_eq!(KAL_BRIDGE_VERSION, 2);
+        assert_eq!(KAL_BRIDGE_VERSION, 3);
     }
 
     /// NULL handles must set the error channel rather than dereferencing.
@@ -1488,7 +1548,7 @@ mod tests {
     /// project in phase 1; this is the Rust half of that gate.)
     #[test]
     fn exported_symbols_are_present() {
-        let exports: [*const (); 33] = [
+        let exports: [*const (); 35] = [
             kal_bridge_version as *const (),
             kal_last_error as *const (),
             kal_open as *const (),
@@ -1522,6 +1582,8 @@ mod tests {
             kal_sync_phrase_json as *const (),
             kal_sync_leave as *const (),
             kal_sync_round_json as *const (),
+            kal_sync_devices_json as *const (),
+            kal_sync_revoke_device as *const (),
         ];
         assert!(exports.iter().all(|p| !p.is_null()));
     }
