@@ -67,13 +67,23 @@ class ReminderAlarms(context: Context) {
      * other's notification. Without POST_NOTIFICATIONS the system drops it
      * silently — the alarm has already done its job by then.
      */
-    fun show(key: String, title: String) {
+    fun show(key: String, title: String, fireAt: String?, eventDateTime: String?) {
         ensureChannel()
         val manager = appContext.getSystemService(NotificationManager::class.java) ?: return
         val notification = Notification.Builder(appContext, REMINDER_CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle(notificationTitle(title))
             .setContentText(notificationBody(title))
+            .apply {
+                // Set the notification time to when the event is scheduled for
+                fireAt?.let { milliseconds ->
+                    setWhen(milliseconds.toLong())
+                }
+                // Add event date and hour as subtext
+                eventDateTime?.let {
+                    setSubText(it)
+                }
+            }
             .setAutoCancel(true)
             .setContentIntent(openApp())
             .build()
@@ -127,6 +137,12 @@ class ReminderAlarms(context: Context) {
             .putExtra(EXTRA_KEY, key)
         if (firing != null) {
             intent.putExtra(EXTRA_TITLE, firing.title)
+            // Format the fire_at timestamp as epoch milliseconds for the notification
+            val fireAtMillis = firing.fireAt.toInstant().toEpochMilli()
+            intent.putExtra(EXTRA_FIRE_AT, fireAtMillis.toString())
+            // Format the event date and hour
+            val eventDateTime = firing.fireAt.format(EVENT_FORMAT)
+            intent.putExtra(EXTRA_EVENT_DATE, eventDateTime)
         }
         return PendingIntent.getBroadcast(
             appContext,

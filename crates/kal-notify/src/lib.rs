@@ -20,6 +20,8 @@ use kal_core::reminders::ReminderFiring;
 /// Platform notification backend.
 pub trait Notifier: Send + Sync + 'static {
     fn show(&self, title: &str, body: &str);
+    /// Show a notification with timestamp and event date/hour.
+    fn show_with_details(&self, title: &str, body: &str, fire_at_secs: Option<u64>, event_date_hour: Option<String>);
 }
 
 /// No-op notifier (tests, CI, platforms without a backend yet).
@@ -28,6 +30,7 @@ pub struct NullNotifier;
 
 impl Notifier for NullNotifier {
     fn show(&self, _title: &str, _body: &str) {}
+    fn show_with_details(&self, _title: &str, _body: &str, _fire_at_secs: Option<u64>, _event_date_hour: Option<String>) {}
 }
 
 /// Desktop notifications via notify-rust (DBus/Windows/macOS).
@@ -42,6 +45,27 @@ impl Notifier for DesktopNotifier {
             .summary(title)
             .body(body)
             .appname("Kal")
+            .show();
+    }
+
+    fn show_with_details(&self, title: &str, body: &str, fire_at_secs: Option<u64>, event_date_hour: Option<String>) {
+        // Add timestamp to the body (not directly supported in notify-rust)
+        let mut body_with_time = body.to_string();
+        if let Some(time) = fire_at_secs {
+            let timestamp = chrono::DateTime::from_timestamp(time.try_into().unwrap(), 0)
+                .map(|dt| format!(" [at {}]", dt.format("%Y-%m-%d %H:%M:%S UTC")))
+                .unwrap_or_default();
+            body_with_time.push_str(&timestamp);
+        }
+
+        // Use subtitle for event date/hour in friendly format: "24 Oct 2026 9:00"
+        let subtitle = event_date_hour.as_deref().unwrap_or("");
+
+        let _ = notify_rust::Notification::new()
+            .summary(title)
+            .body(&body_with_time)
+            .appname("Kal")
+            .subtitle(subtitle)
             .show();
     }
 }
@@ -96,6 +120,10 @@ impl<N: Notifier> ReminderScheduler for ThreadScheduler<N> {
             let fire_at_utc = firing.fire_at.with_timezone(&chrono::Utc);
             let title = format!("Kal — {}", firing.title);
             let body = firing.title.clone();
+            let fire_at_secs = Some(firing.fire_at.timestamp() as u64);
+            let event_date_hour_str = fire_at_utc.format("%d %b %Y %H:%M").to_string();
+            // Store in Arc so we can borrow it in the thread
+            let event_date_hour = Arc::new(event_date_hour_str);
             let now_fn = &self.now;
 
             // Compute sleep duration up-front against the injected clock so
@@ -105,6 +133,8 @@ impl<N: Notifier> ReminderScheduler for ThreadScheduler<N> {
                 .unwrap_or(Duration::ZERO);
 
             cancels.insert(key, cancel);
+            // Store Arc in the closure so we can borrow from it
+            let event_date_hour_arc = event_date_hour.clone();
             thread::spawn(move || {
                 // Sleep in small slices so cancellation is responsive.
                 let mut remaining = delay;
@@ -114,7 +144,12 @@ impl<N: Notifier> ReminderScheduler for ThreadScheduler<N> {
                     remaining -= slice;
                 }
                 if !cancelled.load(Ordering::Relaxed) {
-                    notifier.show(&title, &body);
+                    // We need to extract the String from Arc<String>
+                    // Just clone the String from the Arc
+                    let date_hour_str = Arc::try_unwrap(event_date_hour_arc)
+                        .map(|s| s)
+                        .unwrap_or_else(|arc| (*arc.as_ref()).clone());
+                    notifier.show_with_details(&title, &body, fire_at_secs, Some(date_hour_str));
                 }
             });
         }
@@ -155,6 +190,9 @@ mod tests {
 
     impl Notifier for CollectingNotifier {
         fn show(&self, title: &str, _body: &str) {
+            self.0.lock().unwrap().push(title.to_string());
+        }
+        fn show_with_details(&self, title: &str, _body: &str, _fire_at_secs: Option<u64>, _event_date_hour: Option<String>) {
             self.0.lock().unwrap().push(title.to_string());
         }
     }

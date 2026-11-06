@@ -1,6 +1,7 @@
 package com.kal.calendar.notify
 
 import com.kal.calendar.bridge.ReminderFiring
+import java.time.format.DateTimeFormatter
 
 /**
  * Reminder scheduling policy, kept free of Android so the JVM tests can pin it.
@@ -14,6 +15,15 @@ import com.kal.calendar.bridge.ReminderFiring
 const val ACTION_REMINDER = "com.kal.calendar.action.REMINDER"
 const val EXTRA_KEY = "com.kal.calendar.extra.REMINDER_KEY"
 const val EXTRA_TITLE = "com.kal.calendar.extra.REMINDER_TITLE"
+const val EXTRA_FIRE_AT = "com.kal.calendar.extra.REMINDER_FIRE_AT"
+const val EXTRA_EVENT_DATE = "com.kal.calendar.extra.REMINDER_EVENT_DATE"
+const val EXTRA_EVENT_HOUR = "com.kal.calendar.extra.REMINDER_EVENT_HOUR"
+
+/** Formatter for the notification timestamp (when the notification was sent). */
+private val NOTIFICATION_TIME_FORMAT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")
+
+/** Formatter for the event date and hour in friendly format: "24 Oct 2026 9:00". */
+internal val EVENT_FORMAT = DateTimeFormatter.ofPattern("d MMM yyyy H:mm")
 
 /** Notification channel the platform shows reminders on. */
 const val REMINDER_CHANNEL_ID = "reminders"
@@ -71,3 +81,18 @@ fun notificationTitle(title: String): String = "Kal — $title"
 
 /** The desktop scheduler's body: the item title itself. */
 fun notificationBody(title: String): String = title
+
+/**
+ * Format the timestamp of when the notification will fire (the alarm trigger time).
+ */
+fun formatNotificationTime(fireAt: java.time.Instant): String {
+    return fireAt.atZone(java.time.ZoneOffset.UTC).format(NOTIFICATION_TIME_FORMAT)
+}
+
+/**
+ * Format the date and hour of the event being reminded about.
+ * Friendly format: "24 Oct 2026 9:00".
+ */
+fun formatEventDateTime(fireAt: java.time.Instant): String {
+    return fireAt.atZone(java.time.ZoneOffset.UTC).format(EVENT_FORMAT)
+}

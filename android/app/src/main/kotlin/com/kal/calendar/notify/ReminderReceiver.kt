@@ -14,6 +14,8 @@ class ReminderReceiver : BroadcastReceiver() {
         if (intent.action != ACTION_REMINDER) return
         val key = intent.getStringExtra(EXTRA_KEY) ?: return
         val title = intent.getStringExtra(EXTRA_TITLE) ?: return
-        ReminderAlarms(context).show(key, title)
+        val fireAt = intent.getStringExtra(EXTRA_FIRE_AT)
+        val eventDateTime = intent.getStringExtra(EXTRA_EVENT_DATE)
+        ReminderAlarms(context).show(key, title, fireAt, eventDateTime)
     }
 }
