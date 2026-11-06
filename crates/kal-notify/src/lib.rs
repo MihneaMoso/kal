@@ -21,7 +21,13 @@ use kal_core::reminders::ReminderFiring;
 pub trait Notifier: Send + Sync + 'static {
     fn show(&self, title: &str, body: &str);
     /// Show a notification with timestamp and event date/hour.
-    fn show_with_details(&self, title: &str, body: &str, fire_at_secs: Option<u64>, event_date_hour: Option<String>);
+    fn show_with_details(
+        &self,
+        title: &str,
+        body: &str,
+        fire_at_secs: Option<u64>,
+        event_date_hour: Option<String>,
+    );
 }
 
 /// No-op notifier (tests, CI, platforms without a backend yet).
@@ -30,7 +36,14 @@ pub struct NullNotifier;
 
 impl Notifier for NullNotifier {
     fn show(&self, _title: &str, _body: &str) {}
-    fn show_with_details(&self, _title: &str, _body: &str, _fire_at_secs: Option<u64>, _event_date_hour: Option<String>) {}
+    fn show_with_details(
+        &self,
+        _title: &str,
+        _body: &str,
+        _fire_at_secs: Option<u64>,
+        _event_date_hour: Option<String>,
+    ) {
+    }
 }
 
 /// Desktop notifications via notify-rust (DBus/Windows/macOS).
@@ -48,7 +61,13 @@ impl Notifier for DesktopNotifier {
             .show();
     }
 
-    fn show_with_details(&self, title: &str, body: &str, fire_at_secs: Option<u64>, event_date_hour: Option<String>) {
+    fn show_with_details(
+        &self,
+        title: &str,
+        body: &str,
+        fire_at_secs: Option<u64>,
+        event_date_hour: Option<String>,
+    ) {
         // Add timestamp to the body (not directly supported in notify-rust)
         let mut body_with_time = body.to_string();
         if let Some(time) = fire_at_secs {
@@ -192,7 +211,13 @@ mod tests {
         fn show(&self, title: &str, _body: &str) {
             self.0.lock().unwrap().push(title.to_string());
         }
-        fn show_with_details(&self, title: &str, _body: &str, _fire_at_secs: Option<u64>, _event_date_hour: Option<String>) {
+        fn show_with_details(
+            &self,
+            title: &str,
+            _body: &str,
+            _fire_at_secs: Option<u64>,
+            _event_date_hour: Option<String>,
+        ) {
             self.0.lock().unwrap().push(title.to_string());
         }
     }
