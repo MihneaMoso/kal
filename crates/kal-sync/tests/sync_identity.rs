@@ -1,15 +1,15 @@
 //! Tests for sync identity generation and recovery phrase handling.
 
 use kal_sync::{ChainIdentity, SyncKeys};
-use rand::{thread_rng, Rng, RngCore, seq::SliceRandom};
+use rand::{seq::SliceRandom, thread_rng, Rng, RngCore};
 
 /// BIP-39 English wordlist subset used for testing.
 /// We don't include the full list; we just test that generated words are
 /// non-empty and the phrase has 24 words.
 const BIP39_SAMPLE_WORDS: &[&str] = &[
-    "abandon", "ability", "able", "about", "above", "absent", "absorb", "abstract",
-    "absurd", "abuse", "access", "accident", "account", "accuse", "achieve", "acid",
-    "acoustic", "acquire", "across", "act", "action", "actor", "actress", "actual",
+    "abandon", "ability", "able", "about", "above", "absent", "absorb", "abstract", "absurd",
+    "abuse", "access", "accident", "account", "accuse", "achieve", "acid", "acoustic", "acquire",
+    "across", "act", "action", "actor", "actress", "actual",
 ];
 
 #[test]
@@ -37,7 +37,9 @@ fn chain_identity_rejects_incomplete_phrase() {
 
     // Generate exactly 23 words (one short)
     for _ in 0..23 {
-        phrase_words.push(BIP39_SAMPLE_WORDS[rng.next_u64() as usize % BIP39_SAMPLE_WORDS.len()].to_string());
+        phrase_words.push(
+            BIP39_SAMPLE_WORDS[rng.next_u64() as usize % BIP39_SAMPLE_WORDS.len()].to_string(),
+        );
     }
 
     let short_phrase = phrase_words.join(" ");
@@ -51,9 +53,7 @@ fn chain_identity_rejects_incomplete_phrase() {
 fn chain_identity_rejects_invalid_word() {
     let mut rng = thread_rng();
     let phrase_words: Vec<String> = (0..24)
-        .map(|_| {
-            BIP39_SAMPLE_WORDS[rng.gen_range(0..BIP39_SAMPLE_WORDS.len())].to_string()
-        })
+        .map(|_| BIP39_SAMPLE_WORDS[rng.gen_range(0..BIP39_SAMPLE_WORDS.len())].to_string())
         .collect();
 
     // Replace one word with an invalid one

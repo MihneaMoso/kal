@@ -1,6 +1,6 @@
 //! Tests for sync operations - chain management, identity, and state handling.
 
-use kal_sync::{ChainIdentity, SyncKeys, SyncSession, SyncState, SyncError};
+use kal_sync::{ChainIdentity, SyncError, SyncKeys, SyncSession, SyncState};
 use std::collections::BTreeMap;
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -51,8 +51,8 @@ fn sync_state_with_data() {
     state.calendars.insert(cal_id, calendar);
 
     let item_id = ulid::Ulid::new();
-    use kal_core::models::{CalendarItem, ItemKind};
     use chrono::TimeZone;
+    use kal_core::models::{CalendarItem, ItemKind};
     let start = chrono::Utc
         .timestamp_opt(1_700_000_000, 0)
         .single()

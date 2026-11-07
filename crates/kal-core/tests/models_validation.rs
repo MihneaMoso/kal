@@ -1,9 +1,9 @@
 //! Tests for model validation and error handling in kal-core.
 
+use chrono::DateTime;
 use kal_core::models::{
     Calendar, CalendarItem, CalendarSource, Color, DateTimeTz, ItemKind, Reminder, ReminderOffset,
 };
-use chrono::DateTime;
 
 fn sample_datetime() -> DateTimeTz {
     DateTime::parse_from_rfc3339("2026-01-01T10:00:00+00:00").unwrap()
@@ -134,21 +134,30 @@ fn item_validation_tasks_with_end_must_be_valid_times() {
 fn reminder_validation_minutes_before_accepts_positive_values() {
     let reminder = Reminder::minutes_before(10);
     // Reminder doesn't have validate() - validation is at construction
-    assert_eq!(reminder.offset, ReminderOffset::MinutesBefore { minutes: 10 });
+    assert_eq!(
+        reminder.offset,
+        ReminderOffset::MinutesBefore { minutes: 10 }
+    );
 }
 
 #[test]
 fn reminder_validation_minutes_before_rejects_zero() {
     // Current implementation allows 0 - no validation at construction
     let reminder = Reminder::minutes_before(0);
-    assert_eq!(reminder.offset, ReminderOffset::MinutesBefore { minutes: 0 });
+    assert_eq!(
+        reminder.offset,
+        ReminderOffset::MinutesBefore { minutes: 0 }
+    );
 }
 
 #[test]
 fn reminder_validation_minutes_before_rejects_negative() {
     // Current implementation allows negative - no validation at construction
     let reminder = Reminder::minutes_before(-10);
-    assert_eq!(reminder.offset, ReminderOffset::MinutesBefore { minutes: -10 });
+    assert_eq!(
+        reminder.offset,
+        ReminderOffset::MinutesBefore { minutes: -10 }
+    );
 }
 
 #[test]
@@ -173,10 +182,7 @@ fn item_with_invalid_reminders_fails_validation() {
         sample_datetime(),
     );
     // Reminder::custom doesn't exist - use minutes_before with negative
-    item.reminders = vec![
-        Reminder::minutes_before(10),
-        Reminder::minutes_before(-5),
-    ];
+    item.reminders = vec![Reminder::minutes_before(10), Reminder::minutes_before(-5)];
 
     // Current validation doesn't check reminder values
     assert!(item.validate().is_ok());
