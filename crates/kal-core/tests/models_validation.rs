@@ -238,10 +238,25 @@ fn default_calendars_have_correct_ids() {
     assert_eq!(kal_core::DEFAULT_PERSONAL_ID.len(), 26);
     assert_eq!(kal_core::DEFAULT_BIRTHDAYS_ID.len(), 26);
 
-    let personal = kal_core::models::Calendar::local("Personal", sample_color());
-    // Calendar::birthdays() doesn't exist - create manually
+    // The DEFAULT_PERSONAL_ID and DEFAULT_BIRTHDAYS_ID constants should be valid ULIDs
+    // that can be used to create calendars with known IDs for seeding.
+    let personal_id = kal_core::DEFAULT_PERSONAL_ID.parse::<ulid::Ulid>().unwrap();
+    let birthdays_id = kal_core::DEFAULT_BIRTHDAYS_ID
+        .parse::<ulid::Ulid>()
+        .unwrap();
+
+    // Create calendars with the well-known IDs (simulating seeding)
+    let personal = kal_core::models::Calendar {
+        id: personal_id,
+        name: "Personal".to_string(),
+        color: sample_color(),
+        source: CalendarSource::Local,
+        visible: true,
+        deleted: false,
+        updated_at: sample_datetime(),
+    };
     let birthdays = kal_core::models::Calendar {
-        id: ulid::Ulid::from_string(kal_core::DEFAULT_BIRTHDAYS_ID).unwrap(),
+        id: birthdays_id,
         name: "Birthdays".to_string(),
         color: sample_color(),
         source: CalendarSource::Birthdays,
