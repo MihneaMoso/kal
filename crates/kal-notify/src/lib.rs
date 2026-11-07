@@ -164,9 +164,7 @@ impl<N: Notifier> ReminderScheduler for ThreadScheduler<N> {
                 }
                 if !cancelled.load(Ordering::Relaxed) {
                     // We need to extract the String from Arc<String>
-                    // Just clone the String from the Arc
                     let date_hour_str = Arc::try_unwrap(event_date_hour_arc)
-                        .map(|s| s)
                         .unwrap_or_else(|arc| (*arc.as_ref()).clone());
                     notifier.show_with_details(&title, &body, fire_at_secs, Some(date_hour_str));
                 }

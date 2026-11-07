@@ -12,6 +12,7 @@ use chacha20poly1305::{
     aead::{Aead, AeadCore, KeyInit, OsRng},
     XChaCha20Poly1305, XNonce,
 };
+use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use x25519_dalek::{PublicKey, StaticSecret};
 
@@ -44,6 +45,7 @@ impl Clone for ChainIdentity {
 
 /// Derived material, safe to persist (the phrase itself should stay
 /// user-memorized / securely stored).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SyncKeys {
     /// Hex-encoded X25519 public key — the device fingerprint shown in UI.
     pub fingerprint_hex: String,
