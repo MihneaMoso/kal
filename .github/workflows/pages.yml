@@ -30,6 +30,10 @@ permissions:
   contents: read
   pages: write
   id-token: write
+  # deploy-pages lists this run's artifacts via the Actions API; an explicit
+  # permissions block sets every unlisted scope to `none`, so without this the
+  # listing is denied and deploy-pages reports "no artifacts named github-pages".
+  actions: read
 
 concurrency:
   group: pages
