@@ -463,7 +463,6 @@ fn row_to_calendar(row: &rusqlite::Row<'_>) -> rusqlite::Result<Calendar> {
     // v2 columns may be absent in legacy rows, and rows written before v2
     // carry the migration DEFAULT '' here. Both must fall back to epoch 0
     // instead of failing the whole read ("premature end of input").
-    let _upd_e: Option<i64> = row.get(5).ok();
     let upd_s: Option<String> = row.get(7).ok();
     let updated_at = upd_s
         .as_deref()

@@ -71,7 +71,7 @@ fn item_validation_rejects_end_before_start() {
 }
 
 #[test]
-fn item_validation_all_day_items_cannot_have_times() {
+fn item_validation_does_not_reject_all_day_times() {
     let mut item = CalendarItem::new(
         ItemKind::Event,
         "Test".to_string(),
@@ -87,7 +87,7 @@ fn item_validation_all_day_items_cannot_have_times() {
 }
 
 #[test]
-fn item_validation_all_day_items_must_be_on_same_date() {
+fn item_validation_does_not_reject_multi_day_all_day_items() {
     let mut item = CalendarItem::new(
         ItemKind::Event,
         "Test".to_string(),
@@ -141,7 +141,7 @@ fn reminder_validation_minutes_before_accepts_positive_values() {
 }
 
 #[test]
-fn reminder_validation_minutes_before_rejects_zero() {
+fn reminder_validation_allows_zero_minutes() {
     // Current implementation allows 0 - no validation at construction
     let reminder = Reminder::minutes_before(0);
     assert_eq!(
@@ -151,7 +151,7 @@ fn reminder_validation_minutes_before_rejects_zero() {
 }
 
 #[test]
-fn reminder_validation_minutes_before_rejects_negative() {
+fn reminder_validation_allows_negative_minutes() {
     // Current implementation allows negative - no validation at construction
     let reminder = Reminder::minutes_before(-10);
     assert_eq!(
@@ -174,7 +174,7 @@ fn item_with_valid_reminders_passes_validation() {
 }
 
 #[test]
-fn item_with_invalid_reminders_fails_validation() {
+fn item_with_negative_reminders_passes_validation() {
     let mut item = CalendarItem::new(
         ItemKind::Event,
         "Test".to_string(),

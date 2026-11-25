@@ -1,7 +1,7 @@
 //! Tests for sync identity generation and recovery phrase handling.
 
 use kal_sync::{ChainIdentity, SyncKeys};
-use rand::{seq::SliceRandom, thread_rng, Rng, RngCore};
+use rand::{thread_rng, Rng, RngCore};
 
 /// BIP-39 English wordlist subset used for testing.
 /// We don't include the full list; we just test that generated words are
@@ -68,22 +68,18 @@ fn chain_identity_rejects_invalid_word() {
 }
 
 #[test]
-fn chain_identity_rejects_duplicate_words() {
-    let mut rng = thread_rng();
-    let mut phrase_words = Vec::new();
+fn chain_identity_accepts_a_valid_phrase_with_repeated_words() {
+    // BIP-39 allows the same word more than once; only the checksum matters.
+    let phrase = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
+    let identity = ChainIdentity::from_phrase(phrase).unwrap();
 
-    // Generate 24 unique words from sample
-    for word in BIP39_SAMPLE_WORDS.iter().take(24) {
-        phrase_words.push(word.to_string());
-    }
-
-    // Shuffle to create duplicates
-    phrase_words.shuffle(&mut rng);
-
-    let phrase = phrase_words.join(" ");
-    assert!(
-        ChainIdentity::from_phrase(&phrase).is_err(),
-        "should reject duplicate words"
+    assert_eq!(
+        identity
+            .phrase()
+            .split_whitespace()
+            .filter(|word| *word == "abandon")
+            .count(),
+        11
     );
 }
 

@@ -148,10 +148,23 @@ fn truncate_rule_before(base: &CalendarItem, split: DateTimeTz) -> Option<String
         Some(end) if end.timestamp() < split.timestamp() => end,
         _ => cutoff,
     };
-    let until = bound
-        .with_timezone(&Utc)
-        .format("%Y%m%dT%H%M%SZ")
-        .to_string();
+    replace_rule_end(rule, bound)
+}
+
+/// Carry the original series' end onto the new tail.
+///
+/// The dialog shows the series' own rule, so the tail may arrive carrying the
+/// original `COUNT`/`UNTIL` verbatim. Those bounds describe the old whole
+/// series, not the tail; replace them with the original end captured before the
+/// split. (The UI has no end-date field, so no user-authored bound is lost.)
+fn with_tail_end(rule: &str, end: DateTimeTz) -> String {
+    replace_rule_end(rule, end).unwrap_or_else(|| rule.to_string())
+}
+
+/// Replace any `UNTIL`/`COUNT` bound in `rule` with a single UTC `UNTIL` naming
+/// `end`. Returns `None` when the rule has no non-bound parts left.
+fn replace_rule_end(rule: &str, end: DateTimeTz) -> Option<String> {
+    let until = end.with_timezone(&Utc).format("%Y%m%dT%H%M%SZ").to_string();
     let mut parts: Vec<String> = rule
         .split(';')
         .filter(|part| {
@@ -165,29 +178,6 @@ fn truncate_rule_before(base: &CalendarItem, split: DateTimeTz) -> Option<String
     }
     parts.push(format!("UNTIL={until}"));
     Some(parts.join(";"))
-}
-
-/// Carry the original series' end onto the new tail.
-///
-/// The dialog shows the series' own rule, so the tail may arrive carrying the
-/// original `COUNT`/`UNTIL` verbatim. Those bounds describe the old whole
-/// series, not the tail; replace them with the original end captured before the
-/// split. (The UI has no end-date field, so no user-authored bound is lost.)
-fn with_tail_end(rule: &str, end: DateTimeTz) -> String {
-    let until = end.with_timezone(&Utc).format("%Y%m%dT%H%M%SZ").to_string();
-    let mut parts: Vec<String> = rule
-        .split(';')
-        .filter(|part| {
-            let upper = part.to_ascii_uppercase();
-            !part.is_empty() && !upper.starts_with("UNTIL=") && !upper.starts_with("COUNT=")
-        })
-        .map(str::to_string)
-        .collect();
-    if parts.is_empty() {
-        return rule.to_string();
-    }
-    parts.push(format!("UNTIL={until}"));
-    parts.join(";")
 }
 
 /// Whether `list` already contains `instant`. Compare instants rather than the

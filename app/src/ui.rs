@@ -228,6 +228,8 @@ fn MonthCell(
 ) -> Element {
     let db = use_context::<DbHandle>();
     let db_new = db.clone();
+    let items_by_id: std::collections::HashMap<_, _> =
+        items.iter().map(|item| (item.id, item)).collect();
 
     let class = if date == today {
         "month-cell today"
@@ -243,7 +245,7 @@ fn MonthCell(
             span { class: "day-num", "{date.day()}" }
             for occ in occurrences.iter().cloned() {
                 {
-                    let item = items.iter().find(|i| i.id == occ.item_id).cloned();
+                    let item = items_by_id.get(&occ.item_id).copied().cloned();
                     match item {
                         Some(it) => rsx! { EventChip { item: it, occ_start: occ.start } },
                         None => rsx! {},
@@ -393,13 +395,14 @@ pub fn DayView() -> Element {
     let d = *cursor.read();
     let map = viewmodel::occurrences_by_date(&items, d, d);
     let day_occs = map.get(&d).cloned().unwrap_or_default();
+    let items_by_id: std::collections::HashMap<_, _> =
+        items.iter().map(|item| (item.id, item)).collect();
 
     // Split all-day vs timed; timed get grid positions.
     let (all_day, timed): (Vec<Occurrence>, Vec<Occurrence>) =
         day_occs.iter().cloned().partition(|o| {
-            items
-                .iter()
-                .find(|i| i.id == o.item_id)
+            items_by_id
+                .get(&o.item_id)
                 .map(|i| i.all_day)
                 .unwrap_or(false)
         });
@@ -445,7 +448,7 @@ pub fn DayView() -> Element {
                     span { class: "when", "All-day" }
                     for o in all_day.iter() {
                         {
-                            let it = items.iter().find(|i| i.id == o.item_id).cloned();
+                            let it = items_by_id.get(&o.item_id).copied().cloned();
                             match it {
                                 Some(it) => rsx! { EventChip { item: it, occ_start: o.start } },
                                 None => rsx! {},
@@ -467,7 +470,7 @@ pub fn DayView() -> Element {
                         }
                         for p in positioned.iter() {
                             {
-                                let found = items.iter().find(|i| i.id == p.occ.item_id).cloned();
+                                let found = items_by_id.get(&p.occ.item_id).copied().cloned();
                                 match found {
                                     Some(it) => {
                                         let bg = it
@@ -590,10 +593,12 @@ pub fn AgendaView() -> Element {
     let items = use_visible_items();
     let today = Local::now().date_naive();
     let map = viewmodel::occurrences_by_date(&items, today, today + chrono::Duration::days(30));
+    let items_by_id: std::collections::HashMap<_, _> =
+        items.iter().map(|item| (item.id, item)).collect();
     let mut rows: Vec<(NaiveDate, Occurrence, CalendarItem)> = Vec::new();
     for (d, occs) in &map {
         for o in occs {
-            if let Some(it) = items.iter().find(|i| i.id == o.item_id).cloned() {
+            if let Some(it) = items_by_id.get(&o.item_id).copied().cloned() {
                 rows.push((*d, o.clone(), it));
             }
         }

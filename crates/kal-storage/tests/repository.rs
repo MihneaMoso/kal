@@ -330,16 +330,6 @@ fn migration_v4_dedupes_default_calendars_and_repoints_items() {
     }
 
     let db = Database::open(&path).unwrap(); // applies v4
-    {
-        let c = rusqlite::Connection::open(&path).unwrap();
-        let uv: i64 = c
-            .query_row("PRAGMA user_version", [], |r| r.get(0))
-            .unwrap();
-        let n: i64 = c
-            .query_row("SELECT COUNT(*) FROM calendars", [], |r| r.get(0))
-            .unwrap();
-        eprintln!("DEBUG user_version={uv} calendar_rows={n}");
-    }
     let mut cals = db.list_calendars().unwrap();
     cals.sort_by(|a, b| a.name.cmp(&b.name));
     let names: Vec<_> = cals.iter().map(|c| c.name.as_str()).collect();

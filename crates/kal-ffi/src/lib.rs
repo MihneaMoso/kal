@@ -499,6 +499,7 @@ pub unsafe extern "C" fn kal_upcoming_json(
         let items = widget_visible_items(items, &calendars);
         let cal_by_id: std::collections::HashMap<_, _> =
             calendars.iter().map(|c| (c.id, c)).collect();
+        let item_by_id = item_index(&items);
 
         let occs =
             kal_core::viewmodel::occurrences_by_date(&items, from.date_naive(), to.date_naive());
@@ -506,7 +507,7 @@ pub unsafe extern "C" fn kal_upcoming_json(
         let mut entries: Vec<serde_json::Value> = Vec::new();
         for day_occs in occs.values() {
             for occ in day_occs {
-                if let Some(item) = items.iter().find(|i| i.id == occ.item_id) {
+                if let Some(item) = item_by_id.get(&occ.item_id).copied() {
                     let color = item
                         .effective_color(cal_by_id.get(&item.calendar_id).copied())
                         .map(|c| c.to_string())
@@ -554,6 +555,7 @@ pub unsafe extern "C" fn kal_month_grid_json(
         let calendars = kal.db.list_calendars().map_err(|e| e.to_string())?;
         let items = widget_visible_items(items, &calendars);
         let cal_by_id = calendar_index(&calendars);
+        let item_by_id = item_index(&items);
         let cells = month_occurrences(&items, year, month, first_weekday(first_dow));
 
         let mut rows = Vec::with_capacity(cells.len());
@@ -563,7 +565,7 @@ pub unsafe extern "C" fn kal_month_grid_json(
                 let items_json: Vec<serde_json::Value> = occs
                     .iter()
                     .filter_map(|o| {
-                        items.iter().find(|i| i.id == o.item_id).map(|i| {
+                        item_by_id.get(&o.item_id).copied().map(|i| {
                             serde_json::json!({
                                 "id": i.id.to_string(),
                                 "title": i.title,
@@ -604,6 +606,12 @@ pub unsafe extern "C" fn kal_month_grid_json(
 /// Index calendars by id so an entry can resolve its effective colour.
 fn calendar_index(calendars: &[Calendar]) -> std::collections::HashMap<Ulid, &Calendar> {
     calendars.iter().map(|c| (c.id, c)).collect()
+}
+
+/// Index items by id so every expanded occurrence is joined in O(1), not by a
+/// linear scan of the whole library per occurrence.
+fn item_index(items: &[CalendarItem]) -> std::collections::HashMap<Ulid, &CalendarItem> {
+    items.iter().map(|i| (i.id, i)).collect()
 }
 
 /// Map the wire convention `first_dow` (0 = Monday … 6 = Sunday) to a weekday.
@@ -671,15 +679,15 @@ fn display_entry(
 
 /// Shape occurrences into display entries, skipping ids with no live item.
 fn display_entries(
-    items: &[CalendarItem],
+    items_by_id: &std::collections::HashMap<Ulid, &CalendarItem>,
     occs: &[Occurrence],
     cals: &std::collections::HashMap<Ulid, &Calendar>,
 ) -> Vec<serde_json::Value> {
     occs.iter()
         .filter_map(|o| {
-            items
-                .iter()
-                .find(|i| i.id == o.item_id)
+            items_by_id
+                .get(&o.item_id)
+                .copied()
                 .map(|i| display_entry(i, o, cals))
         })
         .collect()
@@ -710,6 +718,7 @@ pub unsafe extern "C" fn kal_month_json(
         let items = kal.db.list_items(false).map_err(|e| e.to_string())?;
         let calendars = kal.db.list_calendars().map_err(|e| e.to_string())?;
         let cals = calendar_index(&calendars);
+        let items_by_id = item_index(&items);
         let cells = month_occurrences(&items, year, month, first_weekday(first_dow));
 
         let rows: Vec<Vec<serde_json::Value>> = cells
@@ -720,7 +729,7 @@ pub unsafe extern "C" fn kal_month_json(
                         serde_json::json!({
                             "date": date.format("%Y-%m-%d").to_string(),
                             "inMonth": date.month() == month,
-                            "items": display_entries(&items, occs, &cals),
+                            "items": display_entries(&items_by_id, occs, &cals),
                         })
                     })
                     .collect()
@@ -743,6 +752,7 @@ pub unsafe extern "C" fn kal_week_json(db: *mut KalDb, week_start: *const c_char
         let items = kal.db.list_items(false).map_err(|e| e.to_string())?;
         let calendars = kal.db.list_calendars().map_err(|e| e.to_string())?;
         let cals = calendar_index(&calendars);
+        let items_by_id = item_index(&items);
 
         let map = kal_core::viewmodel::occurrences_by_date(
             &items,
@@ -755,7 +765,7 @@ pub unsafe extern "C" fn kal_week_json(db: *mut KalDb, week_start: *const c_char
                 let occs = map.get(&date).cloned().unwrap_or_default();
                 serde_json::json!({
                     "date": date.format("%Y-%m-%d").to_string(),
-                    "items": display_entries(&items, &occs, &cals),
+                    "items": display_entries(&items_by_id, &occs, &cals),
                 })
             })
             .collect();
@@ -778,6 +788,7 @@ pub unsafe extern "C" fn kal_day_json(db: *mut KalDb, date: *const c_char) -> *m
         let items = kal.db.list_items(false).map_err(|e| e.to_string())?;
         let calendars = kal.db.list_calendars().map_err(|e| e.to_string())?;
         let cals = calendar_index(&calendars);
+        let items_by_id = item_index(&items);
 
         let occs = kal_core::viewmodel::occurrences_by_date(&items, day, day)
             .get(&day)
@@ -787,9 +798,8 @@ pub unsafe extern "C" fn kal_day_json(db: *mut KalDb, date: *const c_char) -> *m
         // All-day items render in their own strip; timed ones get grid
         // positions (minimum height 0.02 of the canvas, as before).
         let is_all_day = |o: &Occurrence| {
-            items
-                .iter()
-                .find(|i| i.id == o.item_id)
+            items_by_id
+                .get(&o.item_id)
                 .map(|i| i.all_day)
                 .unwrap_or(false)
         };
@@ -807,7 +817,7 @@ pub unsafe extern "C" fn kal_day_json(db: *mut KalDb, date: *const c_char) -> *m
 
         let timed_json: Vec<serde_json::Value> = positioned
             .iter()
-            .filter_map(|p| items.iter().find(|i| i.id == p.occ.item_id).map(|i| (i, p)))
+            .filter_map(|p| items_by_id.get(&p.occ.item_id).copied().map(|i| (i, p)))
             .map(|(item, p)| {
                 serde_json::json!({
                     "item": display_entry(item, &p.occ, &cals),
@@ -821,7 +831,7 @@ pub unsafe extern "C" fn kal_day_json(db: *mut KalDb, date: *const c_char) -> *m
 
         let payload = serde_json::json!({
             "date": day.format("%Y-%m-%d").to_string(),
-            "allDay": display_entries(&items, &all_day, &cals),
+            "allDay": display_entries(&items_by_id, &all_day, &cals),
             "timed": timed_json,
         });
         serde_json::to_string(&payload).map_err(|e| e.to_string())
@@ -849,13 +859,14 @@ pub unsafe extern "C" fn kal_agenda_json(
         let items = kal.db.list_items(false).map_err(|e| e.to_string())?;
         let calendars = kal.db.list_calendars().map_err(|e| e.to_string())?;
         let cals = calendar_index(&calendars);
+        let items_by_id = item_index(&items);
 
         // A BTreeMap gives date order; each day's list is already time-sorted.
         let map = kal_core::viewmodel::occurrences_by_date(&items, from_date, to_date);
         let mut rows: Vec<serde_json::Value> = Vec::new();
         'row: for (date, occs) in &map {
             for occ in occs {
-                let Some(item) = items.iter().find(|i| i.id == occ.item_id) else {
+                let Some(item) = items_by_id.get(&occ.item_id).copied() else {
                     continue;
                 };
                 if rows.len() == cap {
